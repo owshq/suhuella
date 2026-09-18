@@ -1,0 +1,8 @@
+# Local Wrangler secrets for `wrangler dev` / `opennextjs-cloudflare preview`.
+# Copy to .dev.vars and fill in values. Never commit .dev.vars.
+
+NEXTJS_ENV=development
+NEXT_PUBLIC_STRIPE_PAYMENT_LINK=
+STRIPE_SECRET_KEY=
+INSTALLER_WINDOWS_URL=
+INSTALLER_MAC_URL=

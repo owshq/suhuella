@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SuHuella
 
-## Getting Started
+Paid desktop utility that suggests the right folder when a Save / Save As dialog appears. Monorepo: public site + Electron app.
 
-First, run the development server:
+## Architecture (frozen)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+Architecture is frozen.
+
+Do not introduce new folders.
+Do not introduce new frameworks.
+Do not rename existing concepts.
+Do not move files.
+Only implement the requested slice.
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**SuHuella never owns the Save operation. It only assists.** It recommends a folder; the user confirms with the native Save button. Settings and Suggestion never appear together. The desktop app has no login, payments, cloud, or analytics. Internet is never required in the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**SuHuella must feel invisible.** Never open windows unexpectedly. Never interrupt the user’s flow. Respond in under ~200 ms. Disappear immediately after a folder is chosen. Use almost no resources while idle.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+SITE (site/)
+  Landing → Stripe → /download?session_id=… → verify → installers
 
-## Learn More
+DESKTOP — Main Process (desktop/electron/)
+  Tray · Windows · IPC · Settings store · Recommendation engine · Suggestion controller
 
-To learn more about Next.js, take a look at the following resources:
+DESKTOP — Renderer (desktop/src/)
+  Onboarding · Settings · Suggestion
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+DESKTOP — Native (Phase 3, not built)
+  Windows detector · Folder navigator
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+STORAGE
+  {userData}/settings.json
 
-## Deploy on Vercel
+FUTURE
+  ONNX · Local learning · Auto-update
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Package-level detail: [desktop/README.md](desktop/README.md) · [site/README.md](site/README.md)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Repository structure
+
+```text
+suhuella/
+├── site/          Next.js — landing, Stripe, download, legal
+├── desktop/       Electron — tray, settings, suggestion
+├── package.json   Convenience scripts only (no dependencies)
+├── README.md
+└── LICENSE
+```
+
+Root `package.json` has no dependencies — only shortcuts. Each package keeps its own `package.json`, install, and build. No Turborepo, Nx, Lerna, `shared/`, `core/`, or `packages/`.
+
+## Development
+
+From the repo root:
+
+```bash
+npm run dev       # Next.js site — http://localhost:3000
+npm run site      # same as npm run dev
+npm run desktop   # Electron app
+```
+
+First-time setup (once per package):
+
+```bash
+cd site && cp .env.example .env.local && npm install
+cd desktop && npm install
+```
+
+Or run directly inside each package:
+
+```bash
+cd site && npm run dev
+cd desktop && npm run dev
+```
+
+Build:
+
+```bash
+npm run build:site
+npm run build:desktop
+```
+
+## Current roadmap
+
+```text
+suhuella.com → Landing → Stripe → Download → Installer → Tray → Wizard → Preview Suggestions
+```
+
+Then: Cloudflare + domain + Stripe in production → desktop polish → rules engine → Windows detector → ONNX (same I/O contract).
+
+| Step | Status |
+| --- | --- |
+| Site live on `suhuella.com` | **Now** — Cloudflare, Stripe, verified `/download` |
+| Desktop polish | Next — tray, onboarding, settings, suggestion UI |
+| Recommendation engine | After polish — spec in [desktop/README.md](desktop/README.md) |
+| Windows detector + navigation | Later — do not start until requested |
+
+Do not implement Windows UI Automation, macOS Accessibility, or ONNX before their step.
+
+## Rules for AI agents
+
+1. Read this file first.
+2. Then read only the package README for your task — do not re-read the same facts elsewhere.
+3. Each fact lives in exactly one place:
+
+| Topic | Source |
+| --- | --- |
+| Frozen architecture, roadmap, repo layout | This file |
+| Desktop IPC, settings, recommendation engine, build | [desktop/README.md](desktop/README.md) |
+| Landing, Stripe, Cloudflare, env vars | [site/README.md](site/README.md) |
+
+4. Do not duplicate content across README files.
+5. Do not invent new folders, frameworks, or renames.
