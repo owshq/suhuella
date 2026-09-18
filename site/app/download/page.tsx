@@ -6,6 +6,7 @@ import { SuccessContent } from "@/components/SuccessContent";
 import { getRequestLocale } from "@/lib/i18n/detect-locale-server";
 import { getDictionary } from "@/lib/i18n/dictionary";
 import { getPageTitle } from "@/lib/i18n/page-title";
+import { getStripeCheckoutUrl } from "@/lib/stripe";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
@@ -18,6 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function DownloadPage() {
+  const checkoutUrl = getStripeCheckoutUrl();
+
   return (
     <PageShell>
       <Suspense
@@ -25,7 +28,7 @@ export default function DownloadPage() {
           <PaymentVerificationLoader message="Verifying payment..." />
         }
       >
-        <SuccessContent />
+        <SuccessContent checkoutUrl={checkoutUrl} />
       </Suspense>
     </PageShell>
   );

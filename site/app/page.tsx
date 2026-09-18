@@ -1,10 +1,11 @@
 import { LandingContent } from "@/components/LandingContent";
 import { PageShell } from "@/components/PageShell";
+import { getStripeCheckoutUrl } from "@/lib/stripe";
 
 export default function Home() {
   return (
     <PageShell landing>
-      <LandingContent />
+      <LandingContent checkoutUrl={getStripeCheckoutUrl()} />
     </PageShell>
   );
 }

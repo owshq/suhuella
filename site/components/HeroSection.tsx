@@ -1,11 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { GlowButton } from "@/components/GlowButton";
+import { DownloadCtaButton } from "@/components/DownloadCtaButton";
 import { SuhuellaLogo } from "@/components/icons/SuhuellaLogo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLocale } from "@/components/providers/LocaleProvider";
-import { formatAppVersion, getHeroDownloadCta } from "@/lib/release";
+import { formatAppVersion } from "@/lib/release";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -16,7 +16,11 @@ const fadeUp = {
   }),
 };
 
-export function HeroSection() {
+type HeroSectionProps = {
+  checkoutUrl: string;
+};
+
+export function HeroSection({ checkoutUrl }: HeroSectionProps) {
   const { locale, t } = useLocale();
   const { badge } = t.hero;
   const version = formatAppVersion();
@@ -81,7 +85,7 @@ export function HeroSection() {
         variants={fadeUp}
         className="mt-10 flex flex-wrap items-center gap-3"
       >
-        <GlowButton href="#descarga">{getHeroDownloadCta(locale)}</GlowButton>
+        <DownloadCtaButton locale={locale} checkoutUrl={checkoutUrl} />
         <LanguageSwitcher inline />
       </motion.div>
     </section>

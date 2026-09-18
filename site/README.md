@@ -67,7 +67,9 @@ Stripe Dashboard checklist:
 1. Product → one-time price **€5.00 EUR**
 2. Payment Link → enable **Adaptive pricing**
 3. After payment URL → `https://suhuella.com/download?session_id={CHECKOUT_SESSION_ID}`
-4. Copy live link → `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` (build variable + `.env.local`)
+4. Copy live link → Worker var `STRIPE_PAYMENT_LINK` (no redeploy needed when changed in dashboard)
+5. `wrangler secret put STRIPE_SECRET_KEY` — **required** or `/download` verification always fails
+6. `wrangler secret put INSTALLER_WINDOWS_URL` and `INSTALLER_MAC_URL`
 
 ### Sandbox test
 
@@ -152,8 +154,9 @@ Copy from `.env.example` into `.env.local` (Next.js dev) or `.dev.vars` (Wrangle
 | Variable | Scope | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_APP_VERSION` | Public (build time) | Landing badge + “Descargar vX.Y.Z” — sync with `desktop/package.json` |
-| `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` | Public (build time) | Download buttons → Stripe Checkout |
-| `STRIPE_SECRET_KEY` | Server only | `/api/verify-session` |
+| `STRIPE_PAYMENT_LINK` | Public (runtime var) | Download buttons → Stripe Checkout — set in `wrangler.jsonc` vars or dashboard |
+| `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` | Public (build time) | Fallback for local `next dev` only |
+| `STRIPE_SECRET_KEY` | **Secret (required prod)** | `/api/verify-session` — `wrangler secret put` |
 | `INSTALLER_WINDOWS_URL` | Server only | Windows `.exe` after verified payment |
 | `INSTALLER_MAC_URL` | Server only | macOS `.dmg` after verified payment |
 

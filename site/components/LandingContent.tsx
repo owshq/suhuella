@@ -9,12 +9,16 @@ import { HowItWorksSection } from "@/components/HowItWorksSection";
 import { PrivacySection } from "@/components/PrivacySection";
 import { SiteFooter } from "@/components/SiteFooter";
 
-export function LandingContent() {
+type LandingContentProps = {
+  checkoutUrl: string;
+};
+
+export function LandingContent({ checkoutUrl }: LandingContentProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-x-clip">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-16 px-6 pt-24 lg:flex-row lg:items-start lg:pt-32">
         <div className="w-full pt-10 lg:w-5/12">
-          <HeroSection />
+          <HeroSection checkoutUrl={checkoutUrl} />
         </div>
 
         <div className="flex w-full flex-col items-center lg:w-7/12">
@@ -27,7 +31,7 @@ export function LandingContent() {
             <AppMockup />
 
             <div className="mt-2 w-full md:mt-3">
-              <DownloadSection compact />
+              <DownloadSection compact checkoutUrl={checkoutUrl} />
             </div>
           </motion.div>
         </div>

@@ -11,7 +11,6 @@ import { SuccessIcon } from "@/components/icons/SuccessIcon";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PaymentVerificationLoader } from "@/components/PaymentVerificationLoader";
 import { useLocale } from "@/components/providers/LocaleProvider";
-import { STRIPE_CHECKOUT_URL } from "@/lib/stripe";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 type InstallerUrls = {
@@ -33,7 +32,11 @@ const fadeUp = {
   }),
 };
 
-export function SuccessContent() {
+type SuccessContentProps = {
+  checkoutUrl: string;
+};
+
+export function SuccessContent({ checkoutUrl }: SuccessContentProps) {
   const { t } = useLocale();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
@@ -139,14 +142,16 @@ export function SuccessContent() {
               variants={fadeUp}
               className="relative mt-10 flex flex-col items-center gap-4"
             >
-              <GlowButton
-                href={STRIPE_CHECKOUT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full max-w-sm text-center"
-              >
-                {t.success.retryPurchase}
-              </GlowButton>
+              {checkoutUrl ? (
+                <GlowButton
+                  href={checkoutUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full max-w-sm text-center"
+                >
+                  {t.success.retryPurchase}
+                </GlowButton>
+              ) : null}
 
               <Link
                 href="/"

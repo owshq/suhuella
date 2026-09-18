@@ -9,9 +9,9 @@ import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 import type { Dictionary } from "@/lib/i18n/types";
 import { formatAppVersion } from "@/lib/release";
-import { STRIPE_CHECKOUT_URL } from "@/lib/stripe";
 
 type DownloadSectionProps = {
+  checkoutUrl?: string;
   showPurchaseLink?: boolean;
   compact?: boolean;
   installerUrls?: {
@@ -88,12 +88,14 @@ function PurchaseLink({ t }: { t: Dictionary }) {
 }
 
 export function DownloadSection({
+  checkoutUrl = "",
   showPurchaseLink = false,
   compact = false,
   installerUrls,
 }: DownloadSectionProps) {
   const { t } = useLocale();
   const version = formatAppVersion();
+  const purchaseUrl = checkoutUrl || "#";
 
   const installers: Installer[] = installerUrls
     ? [
@@ -112,18 +114,18 @@ export function DownloadSection({
       ]
     : [
         {
-          href: STRIPE_CHECKOUT_URL,
+          href: purchaseUrl,
           label: t.download.windows,
           ext: ".exe",
           icon: WindowsIcon,
-          external: true,
+          external: Boolean(checkoutUrl),
         },
         {
-          href: STRIPE_CHECKOUT_URL,
+          href: purchaseUrl,
           label: t.download.mac,
           ext: ".dmg",
           icon: AppleIcon,
-          external: true,
+          external: Boolean(checkoutUrl),
         },
       ];
 
@@ -143,7 +145,7 @@ export function DownloadSection({
   return (
     <section
       id="descarga"
-      className={compact ? "w-full scroll-mt-28" : "mx-auto max-w-3xl scroll-mt-28 px-6"}
+      className={`rounded-2xl transition-shadow duration-300 ${compact ? "w-full scroll-mt-28" : "mx-auto max-w-3xl scroll-mt-28 px-6"}`}
     >
       {!compact && (
         <div className="mb-8 text-center">
