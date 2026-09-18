@@ -8,6 +8,7 @@ import { WindowsIcon } from "@/components/icons/WindowsIcon";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 import type { Dictionary } from "@/lib/i18n/types";
+import { formatAppVersion } from "@/lib/release";
 import { STRIPE_CHECKOUT_URL } from "@/lib/stripe";
 
 type DownloadSectionProps = {
@@ -92,6 +93,7 @@ export function DownloadSection({
   installerUrls,
 }: DownloadSectionProps) {
   const { t } = useLocale();
+  const version = formatAppVersion();
 
   const installers: Installer[] = installerUrls
     ? [
@@ -132,14 +134,17 @@ export function DownloadSection({
           key={item.label}
           item={item}
           index={index}
-          version={t.download.version}
+          version={version}
         />
       ))}
     </div>
   );
 
   return (
-    <section className={compact ? "w-full" : "mx-auto max-w-3xl px-6"}>
+    <section
+      id="descarga"
+      className={compact ? "w-full scroll-mt-28" : "mx-auto max-w-3xl scroll-mt-28 px-6"}
+    >
       {!compact && (
         <div className="mb-8 text-center">
           <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">

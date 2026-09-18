@@ -35,6 +35,7 @@ yarn-error.log*
 
 site/.open-next
 site/.wrangler
+.wrangler/
 
 # electron
 desktop/*.log

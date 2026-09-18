@@ -21,6 +21,9 @@
 		"binding": "IMAGES"
 	},
 	"workers_dev": true,
+	"vars": {
+		"NEXT_PUBLIC_APP_VERSION": "0.1.0"
+	},
 	"routes": [
 		{
 			"pattern": "suhuella.com",

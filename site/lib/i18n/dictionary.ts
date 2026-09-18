@@ -4,7 +4,7 @@ const es: Dictionary = {
   meta: {
     title: "SuHuella — Guarda cada archivo en su sitio",
     description:
-      "Utilidad de escritorio ultraligera que sugiere dónde guardar facturas y documentos. 100% privada, instantánea y pago único de 5€.",
+      "Utilidad de escritorio ultraligera que sugiere dónde guardar facturas y documentos. 100% privada e instantánea. Compra única.",
   },
   pageTitles: {
     download: "Descarga",
@@ -31,12 +31,10 @@ const es: Dictionary = {
       name: "SuHuella",
       latency: "Instantáneo",
       memory: "<50 MB RAM",
-      version: "v1.0",
     },
     title: "Guarda tus archivos en la carpeta correcta. Al instante.",
     subtitle:
       "Una utilidad de escritorio ultraligera que aprende de tus hábitos y sugiere dónde guardar cada factura o documento sin salir de tu Mac o PC.",
-    cta: "Comprar por 5€",
   },
   features: {
     eyebrow: "Por qué SuHuella",
@@ -53,9 +51,9 @@ const es: Dictionary = {
           "Aparece justo cuando vas a guardar un archivo, sin esperas ni configuraciones complejas.",
       },
       {
-        title: "Pago Único",
+        title: "Compra única",
         description:
-          "5€ una sola vez. Sin suscripciones, sin sorpresas.",
+          "Un solo pago, sin suscripciones. El importe se muestra en el checkout de Stripe.",
       },
     ],
   },
@@ -64,7 +62,6 @@ const es: Dictionary = {
     subtitle: "Instaladores firmados y listos para usar.",
     windows: "Windows",
     mac: "macOS",
-    version: "v1.0.0",
     orBuy: "¿Aún no has comprado?",
     trayNote:
       "Funciona en silencio en la bandeja del sistema y solo aparece cuando lo necesitas.",
@@ -116,7 +113,7 @@ const es: Dictionary = {
       "Para cualquier duda: support@suhuella.com",
     ],
     termsParagraphs: [
-      "SuHuella es una compra digital de pago único. El precio actual es de 5 €, sin suscripción.",
+      "SuHuella es una compra digital de pago único, sin suscripción. El importe final se muestra en el checkout de Stripe antes de pagar.",
       "Esta versión es un MVP inicial. El producto puede cambiar y algunas aplicaciones pueden no ser compatibles todavía.",
       "No garantizamos que SuHuella detecte el diálogo Guardar / Guardar como en todos los programas.",
       "La app solo sugiere una carpeta de destino. Tú confirmas el guardado con el botón nativo de Windows o macOS.",
@@ -151,7 +148,7 @@ const en: Dictionary = {
   meta: {
     title: "SuHuella — Save every file in the right place",
     description:
-      "Ultra-light desktop utility that suggests where to save invoices and documents. 100% private, instant, one-time €5 payment.",
+      "Ultra-light desktop utility that suggests where to save invoices and documents. 100% private and instant. One-time purchase.",
   },
   pageTitles: {
     download: "Download",
@@ -178,12 +175,10 @@ const en: Dictionary = {
       name: "SuHuella",
       latency: "Instant",
       memory: "<50 MB RAM",
-      version: "v1.0",
     },
     title: "Save files to the right folder. Instantly.",
     subtitle:
       "An ultra-light desktop utility that learns your habits and suggests where to save every invoice or document without leaving your Mac or PC.",
-    cta: "Get for €5",
   },
   features: {
     eyebrow: "Why SuHuella",
@@ -200,8 +195,9 @@ const en: Dictionary = {
           "Appears right when you're about to save a file — no waiting, no complex setup.",
       },
       {
-        title: "One-time Payment",
-        description: "€5 once. No subscriptions, no surprises.",
+        title: "One-time purchase",
+        description:
+          "Pay once, no subscription. The amount is shown in Stripe checkout.",
       },
     ],
   },
@@ -210,7 +206,6 @@ const en: Dictionary = {
     subtitle: "Signed installers, ready to use.",
     windows: "Windows",
     mac: "macOS",
-    version: "v1.0.0",
     orBuy: "Haven't purchased yet?",
     trayNote:
       "Runs quietly in your system tray and only appears when you need it.",
@@ -262,7 +257,7 @@ const en: Dictionary = {
       "Questions: support@suhuella.com",
     ],
     termsParagraphs: [
-      "SuHuella is a one-time digital purchase. The current price is €5, with no subscription.",
+      "SuHuella is a one-time digital purchase with no subscription. The final amount is shown in Stripe checkout before you pay.",
       "This version is an early MVP. The product may change, and some applications may not be compatible yet.",
       "We do not guarantee that SuHuella will detect the Save / Save As dialog in every application.",
       "The app only suggests a destination folder. You confirm the save with the native Windows or macOS Save button.",

@@ -2,10 +2,10 @@
 
 import { motion } from "framer-motion";
 import { GlowButton } from "@/components/GlowButton";
-import { STRIPE_CHECKOUT_URL } from "@/lib/stripe";
 import { SuhuellaLogo } from "@/components/icons/SuhuellaLogo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLocale } from "@/components/providers/LocaleProvider";
+import { formatAppVersion, getHeroDownloadCta } from "@/lib/release";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
@@ -17,8 +17,9 @@ const fadeUp = {
 };
 
 export function HeroSection() {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const { badge } = t.hero;
+  const version = formatAppVersion();
 
   return (
     <section className="relative z-10 flex w-full flex-col items-start text-left">
@@ -48,7 +49,7 @@ export function HeroSection() {
           <span className="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden />
 
           <span className="rounded-full bg-[#0084FF]/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#0084FF]">
-            {badge.version}
+            {version}
           </span>
         </span>
       </motion.div>
@@ -80,13 +81,7 @@ export function HeroSection() {
         variants={fadeUp}
         className="mt-10 flex flex-wrap items-center gap-3"
       >
-        <GlowButton
-          href={STRIPE_CHECKOUT_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {t.hero.cta}
-        </GlowButton>
+        <GlowButton href="#descarga">{getHeroDownloadCta(locale)}</GlowButton>
         <LanguageSwitcher inline />
       </motion.div>
     </section>

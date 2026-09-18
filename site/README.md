@@ -27,6 +27,8 @@ site/
 
 ## Stripe
 
+The landing **never shows a price**. Copy uses “Descargar vX.Y.Z”; Windows/macOS buttons open a single Payment Link. Stripe Checkout shows the amount and currency.
+
 Payment Link **after payment** URL:
 
 ```text
@@ -36,14 +38,40 @@ https://suhuella.com/download?session_id={CHECKOUT_SESSION_ID}
 Flow:
 
 ```text
-Checkout → /download?session_id=cs_… → GET /api/verify-session → installer buttons
+Landing → Download buttons → Stripe Checkout → /download?session_id=cs_… → verify → installers
 ```
 
 Verification: `app/api/verify-session/route.ts` uses `STRIPE_SECRET_KEY` server-side. Installers shown only when session exists, `mode === "payment"`, and `payment_status === "paid"`. Missing or invalid session → error, no download links. Installer URLs (`INSTALLER_WINDOWS_URL`, `INSTALLER_MAC_URL`) are server-only and returned only from `/api/verify-session` after successful verification — never exposed as public env vars.
 
+### Pricing & currency (Adaptive Pricing)
+
+One product, one Payment Link, **EUR base price for Spain/EU**:
+
+| Setting | Value |
+| --- | --- |
+| Base currency | **EUR** |
+| Base price (minimum) | **€5.00** one-time |
+| Adaptive Pricing | **On** (Stripe Dashboard → Payment Link → Adaptive pricing) |
+| Landing copy | No amounts — legal text says price is shown at checkout |
+
+Why this setup:
+
+- **Spain / EU customers** see **€5** at checkout (your floor price).
+- **Other countries** see a local amount converted by Stripe Adaptive Pricing from the EUR base.
+- **Price changes** happen only in Stripe — no code or landing updates.
+
+Do **not** create separate Payment Links per currency. Do **not** hardcode prices in `dictionary.ts` or components.
+
+Stripe Dashboard checklist:
+
+1. Product → one-time price **€5.00 EUR**
+2. Payment Link → enable **Adaptive pricing**
+3. After payment URL → `https://suhuella.com/download?session_id={CHECKOUT_SESSION_ID}`
+4. Copy live link → `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` (build variable + `.env.local`)
+
 ### Sandbox test
 
-1. `sk_test_...` + test Payment Link
+1. `sk_test_...` + test Payment Link (Adaptive pricing can stay on)
 2. Complete checkout → redirect with `cs_test_...`
 3. Page shows “Verifying payment…”, then Windows / Mac buttons
 4. `/download` without `session_id` → buttons hidden
@@ -123,10 +151,20 @@ Copy from `.env.example` into `.env.local` (Next.js dev) or `.dev.vars` (Wrangle
 
 | Variable | Scope | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` | Public | Buy CTA href |
+| `NEXT_PUBLIC_APP_VERSION` | Public (build time) | Landing badge + “Descargar vX.Y.Z” — sync with `desktop/package.json` |
+| `NEXT_PUBLIC_STRIPE_PAYMENT_LINK` | Public (build time) | Download buttons → Stripe Checkout |
 | `STRIPE_SECRET_KEY` | Server only | `/api/verify-session` |
 | `INSTALLER_WINDOWS_URL` | Server only | Windows `.exe` after verified payment |
 | `INSTALLER_MAC_URL` | Server only | macOS `.dmg` after verified payment |
+
+`NEXT_PUBLIC_*` vars must be set as **Cloudflare build variables** (Workers Git → Settings → Build variables), not only as runtime Worker vars — Next.js inlines them at build time.
+
+Example build variables:
+
+```text
+NEXT_PUBLIC_APP_VERSION=0.1.0
+NEXT_PUBLIC_STRIPE_PAYMENT_LINK=https://buy.stripe.com/...
+```
 
 ## Development
 

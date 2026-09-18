@@ -32,11 +32,9 @@ export type Dictionary = {
       name: string;
       latency: string;
       memory: string;
-      version: string;
     };
     title: string;
     subtitle: string;
-    cta: string;
   };
   features: {
     eyebrow: string;
@@ -51,7 +49,6 @@ export type Dictionary = {
     subtitle: string;
     windows: string;
     mac: string;
-    version: string;
     orBuy: string;
     trayNote: string;
   };
