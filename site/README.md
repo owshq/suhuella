@@ -60,10 +60,28 @@ Deployed as a **Cloudflare Worker** named `suhuella` via `@opennextjs/cloudflare
 
 ### Deploy
 
+From the repo root (Cloudflare Git integration, root directory `/`):
+
+| Setting | Value |
+| --- | --- |
+| Build command | `npm run cf:build` |
+| Deploy command | `npm run cf:deploy` |
+
+Equivalent manual commands:
+
+```bash
+cd site && npm ci && npx opennextjs-cloudflare build   # build
+cd site && npx wrangler deploy                         # deploy
+```
+
+Local one-shot:
+
 ```bash
 cd site
 npm run deploy    # Build + deploy to Cloudflare Workers
 ```
+
+**Important:** both build and deploy must run inside `site/`. Deploying from the repo root publishes the wrong app (the desktop `index.html`).
 
 ### Custom domain
 

@@ -33,9 +33,6 @@ yarn-error.log*
 !.env.example
 !site/.env.example
 
-# vercel
-.vercel
-
 site/.open-next
 site/.wrangler
 
