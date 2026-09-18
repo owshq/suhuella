@@ -1,0 +1,30 @@
+{
+	"$schema": "./site/node_modules/wrangler/config-schema.json",
+	"main": "site/.open-next/worker.js",
+	"name": "suhuella",
+	"compatibility_date": "2026-09-17",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": "site/.open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "suhuella"
+		}
+	],
+	"images": {
+		"binding": "IMAGES"
+	},
+	"workers_dev": true,
+	"routes": [
+		{
+			"pattern": "suhuella.com",
+			"custom_domain": true
+		}
+	]
+}

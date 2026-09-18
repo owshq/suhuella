@@ -65,7 +65,7 @@ From the repo root (Cloudflare Git integration, root directory `/`):
 | Setting | Value |
 | --- | --- |
 | Build command | `npm run cf:build` |
-| Deploy command | `npm run cf:deploy` |
+| Deploy command | `npm run cf:deploy` (uses root `wrangler.jsonc`) |
 
 Equivalent manual commands:
 
@@ -81,7 +81,11 @@ cd site
 npm run deploy    # Build + deploy to Cloudflare Workers
 ```
 
-**Important:** both build and deploy must run inside `site/`. Deploying from the repo root publishes the wrong app (the desktop `index.html`).
+**Important:** the build must compile OpenNext inside `site/`. Deploy uses the root `wrangler.jsonc`, which points at `site/.open-next/`.
+
+### www.suhuella.com
+
+Delete the DNS record `www CNAME suhuella.com` first, then redeploy so Wrangler can attach `www` as a Worker custom domain.
 
 ### Custom domain
 
