@@ -1,0 +1,9 @@
+{
+  "brandId": "suhuella",
+  "operatorId": "self",
+  "status": "production",
+  "publicDomain": "suhuella.com",
+  "workerName": "suhuella",
+  "releaseManifest": "brands/suhuella/release.json",
+  "notes": "Current production Worker. Secrets stay in the deployment environment."
+}

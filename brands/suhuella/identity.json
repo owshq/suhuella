@@ -1,0 +1,34 @@
+{
+  "id": "suhuella",
+  "operatorId": "self",
+  "displayName": "SuHuella",
+  "primaryDomain": "suhuella.com",
+  "supportEmail": "support@suhuella.com",
+  "salesEmail": "sales@suhuella.com",
+  "emails": {
+    "licenses": "licenses@suhuella.com",
+    "support": "support@suhuella.com",
+    "sales": "sales@suhuella.com",
+    "partners": "partners@suhuella.com",
+    "billing": "billing@suhuella.com",
+    "privacy": "privacy@suhuella.com",
+    "security": "security@suhuella.com",
+    "operations": "operations@suhuella.com"
+  },
+  "theme": {
+    "accent": "#0084FF",
+    "onAccent": "#FFFFFF"
+  },
+  "paidCheckoutEnabled": true,
+  "releaseRemoteEnabled": true,
+  "desktopProductName": "SuHuella",
+  "desktopAppId": "com.suhuella.desktop",
+  "desktopProtocol": "suhuella",
+  "pwa": {
+    "backgroundColor": "#A7D8F9",
+    "themeColor": "#A7D8F9",
+    "icon512": "/suhuella-icon-512.png",
+    "icon256": "/suhuella-icon-256.png",
+    "logoSvg": "/suhuella-logo.svg"
+  }
+}

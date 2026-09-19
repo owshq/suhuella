@@ -1,0 +1,8 @@
+{
+  "name": "@suhuella/brand",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./.build/entry.ts"
+  }
+}

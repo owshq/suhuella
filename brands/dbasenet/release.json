@@ -1,0 +1,9 @@
+{
+  "brandId": "dbasenet",
+  "version": "0.1.0-pre-rc",
+  "channel": "stable",
+  "minimumVersion": "0.1.0-pre-rc",
+  "mandatory": false,
+  "windows": "",
+  "mac": ""
+}
