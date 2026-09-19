@@ -1,0 +1,46 @@
+name: Desktop Windows Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix desktop
+          npm ci --prefix site
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build Windows installer
+        run: npm run package:win --prefix desktop
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuHuella-Setup-windows
+          path: desktop/.build/suhuella/release/SuHuella-Setup-*.exe
+          retention-days: 14
+
+      - name: Attach to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $exe = Get-ChildItem -Path desktop/.build/suhuella/release -Filter "SuHuella-Setup-*.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Installer not found" }
+          gh release upload v0.1.0-pre-rc $exe.FullName --clobber
