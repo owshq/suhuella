@@ -1,4 +1,10 @@
 import { brand } from "@suhuella/brand";
+import {
+  getOperationsAccessConfigStatus,
+  getSuperadminEmails,
+  isOperationsAccessConfigured,
+  type OperationsAccessConfigStatus,
+} from "./access-config";
 import { verifyCloudflareAccessJwt } from "./access-jwt";
 import { isProductionRuntime } from "./auth-runtime";
 import { normalizeEmail } from "./catalog";
@@ -7,12 +13,21 @@ import type { OperationsAuthMethod } from "./session";
 import type { OperationsActor } from "./types";
 
 export { isProductionRuntime } from "./auth-runtime";
+export {
+  getOperationsAccessConfigStatus,
+  getSuperadminEmails,
+  isOperationsAccessConfigured,
+  missingOperationsAccessConfig,
+  type OperationsAccessConfigKey,
+  type OperationsAccessConfigStatus,
+} from "./access-config";
 
 export type OperationsAuthFailure = {
   ok: false;
   status: 401 | 403 | 503;
   error: "unauthorized" | "forbidden" | "access_unconfigured";
   message: string;
+  config?: OperationsAccessConfigStatus;
 };
 
 export type OperationsAuthSuccess = {
@@ -25,13 +40,6 @@ export type OperationsAuthResult = OperationsAuthSuccess | OperationsAuthFailure
 
 function readEnv(name: string): string {
   return process.env[name]?.trim() ?? "";
-}
-
-export function getSuperadminEmails(): string[] {
-  return readEnv("SUPERADMIN_EMAILS")
-    .split(",")
-    .map((value) => normalizeEmail(value))
-    .filter(Boolean);
 }
 
 function isSuperadmin(email: string): boolean {
@@ -58,8 +66,9 @@ function deny(
   status: OperationsAuthFailure["status"],
   error: OperationsAuthFailure["error"],
   message: string,
+  config?: OperationsAccessConfigStatus,
 ): OperationsAuthFailure {
-  return { ok: false, status, error, message };
+  return { ok: false, status, error, message, ...(config ? { config } : {}) };
 }
 
 function success(
@@ -72,17 +81,26 @@ function success(
 async function authenticateProduction(
   headers: Headers,
 ): Promise<OperationsAuthResult> {
-  const teamDomain = readEnv("CF_ACCESS_TEAM_DOMAIN");
-  const audience = readEnv("CF_ACCESS_AUD");
-  const allowlist = getSuperadminEmails();
+  const config = getOperationsAccessConfigStatus();
 
-  if (!teamDomain || !audience || allowlist.length === 0) {
+  if (!isOperationsAccessConfigured(config)) {
+    if (isProductionRuntime()) {
+      return deny(
+        503,
+        "access_unconfigured",
+        "Operations temporarily unavailable. Contact the administrator.",
+      );
+    }
     return deny(
       503,
       "access_unconfigured",
-      "Operations access is not configured. Set SUPERADMIN_EMAILS, CF_ACCESS_TEAM_DOMAIN, and CF_ACCESS_AUD, and put Cloudflare Access in front of /_ops.",
+      "Operations production access is incomplete. Set the missing Worker secrets below. Cloudflare Access must protect ops.suhuella.com. Secret values are never shown here.",
+      config,
     );
   }
+
+  const teamDomain = readEnv("CF_ACCESS_TEAM_DOMAIN");
+  const audience = readEnv("CF_ACCESS_AUD");
 
   const token = headerJwt(headers);
   if (!token) {

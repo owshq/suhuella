@@ -1,4 +1,8 @@
-import { authenticateOperations, operationsAuthHeaders } from "@/lib/operations/auth";
+import {
+  authenticateOperations,
+  isProductionRuntime,
+  operationsAuthHeaders,
+} from "@/lib/operations/auth";
 import type { OperationsActor } from "@/lib/operations/types";
 
 export async function requireOperationsActor(
@@ -12,7 +16,14 @@ export async function requireOperationsActor(
     return {
       ok: false,
       response: Response.json(
-        { ok: false, error: result.error, message: result.message },
+        {
+          ok: false,
+          error: result.error,
+          message: result.message,
+          ...(result.config && !isProductionRuntime()
+            ? { config: result.config }
+            : {}),
+        },
         { status: result.status, headers: operationsAuthHeaders() },
       ),
     };

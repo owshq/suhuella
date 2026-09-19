@@ -5,6 +5,10 @@ const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const desktopSrc = path.join(monorepoRoot, "desktop/src");
 const desktopSrcTurbopack = path.relative(monorepoRoot, desktopSrc);
 
+const operationsBaseUrl =
+  process.env.OPS_BASE_URL?.trim().replace(/\/$/, "") ||
+  "https://ops.suhuella.com";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: monorepoRoot,
@@ -52,13 +56,13 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/admin",
-        destination: "/_ops",
-        permanent: false,
+        destination: operationsBaseUrl,
+        permanent: true,
       },
       {
         source: "/admin/:path*",
-        destination: "/_ops/:path*",
-        permanent: false,
+        destination: operationsBaseUrl,
+        permanent: true,
       },
       {
         source: "/success",
