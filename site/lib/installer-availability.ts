@@ -1,0 +1,53 @@
+import type { InstallerUrls } from "./downloads.ts";
+
+export type VisibleInstallers = {
+  windows?: string;
+  mac?: string;
+};
+
+function httpsInstallerUrl(value: string | undefined): string | undefined {
+  const url = value?.trim() ?? "";
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return undefined;
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") return undefined;
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+export function visibleInstallers(
+  urls?: Partial<InstallerUrls> | null,
+): VisibleInstallers {
+  const windows = httpsInstallerUrl(urls?.windows);
+  const mac = httpsInstallerUrl(urls?.mac);
+  return {
+    ...(windows ? { windows } : {}),
+    ...(mac ? { mac } : {}),
+  };
+}
+
+export function hasDownloadableInstaller(urls?: Partial<InstallerUrls> | null): boolean {
+  const shown = visibleInstallers(urls);
+  return Boolean(shown.windows || shown.mac);
+}
+
+export function publicReleasePayload(release: {
+  version: string;
+  channel: "stable" | "beta";
+  minimumVersion: string;
+  mandatory: boolean;
+  windows: string;
+  mac: string;
+}) {
+  const shown = visibleInstallers(release);
+  return {
+    version: release.version,
+    channel: release.channel,
+    minimumVersion: release.minimumVersion,
+    mandatory: release.mandatory,
+    ...shown,
+  };
+}
