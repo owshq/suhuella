@@ -62,7 +62,7 @@ internal static class Program
         "confirm save",
     };
 
-    static readonly string[] OpenTitleTokens = {
+    static readonly string[] OpenTitleTokens =
     {
         "open",
         "abrir",
