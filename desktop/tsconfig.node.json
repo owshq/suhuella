@@ -18,7 +18,8 @@
     "noFallthroughCasesInSwitch": true,
     "strict": true,
     "paths": {
-      "@suhuella/brand": ["../brands/.build/entry.ts"]
+      "@suhuella/brand": ["../brands/.build/entry.ts"],
+      "@suhuella/product/*": ["../packages/product/src/*"]
     }
   },
   "include": ["vite.config.ts", "electron/**/*.ts"]

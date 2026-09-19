@@ -122,6 +122,8 @@ export type SearchHit = {
   workflowId?: string
   workflowName?: string
   activityRunId?: string
+  sourceAvailable?: boolean
+  sourceName?: string
 }
 
 export type SearchQuery = {
@@ -273,11 +275,22 @@ export type IndexedLocationStatus =
   | 'unavailable'
   | 'permission_denied'
   | 'external_drive_disconnected'
+  | 'missing'
+  | 'error'
   | 'not_indexed'
   | 'needs_refresh'
   | 'cancelled'
 
 export type LocationUsefulness = 'very_useful' | 'useful' | 'rarely_used' | 'unknown'
+
+import type { SourceAvailabilityReason } from './lib/source-health.ts'
+import type { SourceRecommendedAction } from './lib/source-actions.ts'
+import type { SourceCapabilities } from './lib/source-capabilities.ts'
+
+export type { SourceAvailabilityReason } from './lib/source-health.ts'
+export type { SourceRecommendedAction } from './lib/source-actions.ts'
+export type { SourcePermissionState } from './lib/source-handle.ts'
+export type { SourceCapabilities } from './lib/source-capabilities.ts'
 
 export type IndexedLocationSummary = {
   path: string
@@ -290,6 +303,14 @@ export type IndexedLocationSummary = {
   exists: boolean
   /** Browser catalog token (suhuella:documents) when connected from a grant card */
   catalogKey?: string | null
+  lastCheckedAt?: string | null
+  lastStateChangeAt?: string | null
+  availabilityReason?: SourceAvailabilityReason | null
+  recommendedAction?: SourceRecommendedAction
+  detailMessage?: string | null
+  capabilities?: SourceCapabilities
+  /** Only DTO React should read. Hosts attach this so UI never derives lifecycle. */
+  presentation?: import('./lib/source-presentation.ts').SourcePresentation
 }
 
 export type FoldersKnowledgeQuality = 'excellent' | 'good' | 'learning' | 'needs_more'
@@ -734,6 +755,9 @@ export type ActivityTrigger =
   | 'workflow'
   | 'autopilot'
   | 'undo'
+  | 'source_event'
+
+export type SourceLifecycleEventKind = 'connected' | 'removed' | 'restored' | 'unavailable' | 'transition'
 
 export type ActivityItemStatus = 'moved' | 'skipped' | 'failed'
 
@@ -786,6 +810,14 @@ export type ActivityRun = {
   workflowName?: string
   /** What the workflow does. Stored so Activity still explains a deleted workflow. */
   workflowSummary?: string
+  sourceEvent?: {
+    kind: SourceLifecycleEventKind
+    sourceName: string
+    message: string
+    fromStatus?: string | null
+    toStatus?: string
+    transition?: string
+  }
 }
 
 export type UndoExecutionRequest = {

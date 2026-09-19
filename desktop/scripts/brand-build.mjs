@@ -51,6 +51,8 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
   const config = {
     appId: identity.desktopAppId,
     productName: identity.desktopProductName,
+    // Use npm-installed Electron instead of electron-builder download/extract (avoids corrupted dist).
+    electronDist: "node_modules/electron/dist",
     directories: {
       output: path.join(".build", brandId, "release"),
     },
@@ -79,7 +81,7 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
         CFBundleDisplayName: identity.desktopProductName,
         CFBundleName: identity.desktopProductName,
       },
-      target: ["dmg", "zip"],
+      target: ["dmg"],
     },
     dmg: {
       artifactName: "${productName}-${version}.${ext}",

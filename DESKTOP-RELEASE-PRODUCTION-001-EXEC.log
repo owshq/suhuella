@@ -1,0 +1,12 @@
+DESKTOP-RELEASE-PRODUCTION-001
+
+✓ Package   2026-09-19 — Gate 1 PASS (visual + SHA256)
+  SuHuella-0.1.0-pre-rc.dmg · 131,423,445 bytes
+  sha256 bae4dce06a0cda28c261abf2df1561ece54fcf086c3f42658a27133283be4d95
+  tag artifact/desktop-mac/v0.1.0-pre-rc
+□ Publish
+□ Verify
+□ Deploy
+□ Smoke
+□ Download
+□ Install

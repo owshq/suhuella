@@ -2,5 +2,18 @@
   "name": "@suhuella/product",
   "private": true,
   "type": "module",
-  "description": "Shared SuHuella product UI and browser host — consumed by site and desktop."
+  "description": "Shared SuHuella product UI and browser host — consumed by site and desktop.",
+  "dependencies": {
+    "@suhuella/brand": "file:../../brands",
+    "lucide-react": "^1.47.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "typescript": "~6.0.2"
+  }
 }
