@@ -16,4 +16,8 @@ function run(relativeScript) {
 }
 
 run("brands/project-release.mjs");
+if (process.env.SUHUELLA_DESKTOP_CI === "1") {
+  console.log("[release] desktop CI — skipping site/wrangler version matrix check");
+  process.exit(0);
+}
 run("brands/release-version-check.mjs");

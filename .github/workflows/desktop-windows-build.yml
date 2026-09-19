@@ -14,6 +14,8 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      SUHUELLA_DESKTOP_CI: "1"
     steps:
       - uses: actions/checkout@v4
         with:
