@@ -2,6 +2,11 @@ name: Desktop Windows Build
 
 on:
   workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Branch or tag to build
+        required: false
+        default: operations-access-closeout-001
 
 permissions:
   contents: write
@@ -11,20 +16,21 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref || 'operations-access-closeout-001' }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install desktop dependencies
-        run: npm install --prefix desktop
-
-      - name: Install site dependencies
-        run: npm install --prefix site
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+
+      - name: Install brands + desktop
+        run: |
+          npm install --prefix brands
+          npm install --prefix desktop --ignore-scripts
 
       - name: Build Windows installer
         run: npm run package:win --prefix desktop
@@ -39,6 +45,7 @@ jobs:
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: pwsh
         run: |
           $exe = Get-ChildItem -Path desktop/.build/suhuella/release -Filter "SuHuella-Setup-*.exe" | Select-Object -First 1
           if (-not $exe) { throw "Installer not found" }
