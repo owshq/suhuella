@@ -1,16 +1,36 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import electronPath from 'electron'
 import { createServer } from 'vite'
+import { desktopRoot, prepareDesktopPublic, selectedBrandId } from './brand-build.mjs'
 import { buildElectron } from './electron-esbuild.mjs'
 
-await buildElectron()
+const brandId = selectedBrandId()
+const brandProjection = spawnSync('node', ['brands/project-site.mjs'], {
+  cwd: path.resolve(desktopRoot, '..'),
+  stdio: 'inherit',
+})
+if (brandProjection.status !== 0) process.exit(brandProjection.status ?? 1)
 
-const vite = await createServer()
-await vite.listen()
+await prepareDesktopPublic(brandId)
+await buildElectron({ watch: true })
+
+let vite
+try {
+  vite = await createServer()
+  await vite.listen()
+} catch (error) {
+  if (error instanceof Error && error.message.includes('already in use')) {
+    console.error('\nPort 5173 is in use — a previous desktop session is still running.')
+    console.error('Run from repo root: npm run desktop:stop\n')
+  }
+  throw error
+}
 const urls = vite.resolvedUrls
 const devServerUrl = urls?.local[0] ?? 'http://localhost:5173'
 
-console.log(`SuHuella renderer: ${devServerUrl}`)
+console.log(`${brandId} renderer: ${devServerUrl}`)
 
 const child = spawn(String(electronPath), ['.', '--remote-debugging-port=9222'], {
   stdio: 'inherit',

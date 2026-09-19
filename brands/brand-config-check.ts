@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -26,6 +26,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+const LEGACY_LUPA_MARKERS = ['circle cx="10.5" cy="10.5"', 'd="M15.2 15.2L20 20"'];
+
+function assertNoLegacyLupa(relativePath: string): void {
+  const content = readText(relativePath);
+  for (const marker of LEGACY_LUPA_MARKERS) {
+    assert(!content.includes(marker), `${relativePath} must not contain legacy magnifying-glass logo`);
+  }
 }
 
 function readText(relativePath: string): string {
@@ -140,11 +149,11 @@ function run(): void {
   assert(dbasenetIdentity.emails === null, "Dbasenet has no invented mailboxes");
   assert(dbasenetIdentity.paidCheckoutEnabled === false, "Dbasenet paid checkout is disabled");
   assert(dbasenetIdentity.releaseRemoteEnabled === false, "Dbasenet remote release is disabled");
-  assert(suhuellaRelease.brandId === "suhuella", "SuHuella release is Brand-scoped");
+  assert(!suhuellaRelease.brandId, "SuHuella authority release.json has no brandId field");
   assert(dbasenetRelease.brandId === "dbasenet", "Dbasenet release is Brand-scoped");
   assert(suhuellaRelease.version === dbasenetRelease.version, "release versions share current desktop authority");
-  const publicVersion = suhuella.release.version;
-  assert(publicVersion === "0.1.0-pre-rc", "public version authority is 0.1.0-pre-rc until tagged rc1");
+  const publicVersion = suhuellaRelease.version;
+  assert(suhuella.release.version === publicVersion, "BrandConfig.release derives from release.json");
   assert(suhuella.release.minimumVersion === publicVersion, "SuHuella BrandConfig minimumVersion matches public version");
   assert(dbasenet.release.version === publicVersion, "Dbasenet BrandConfig version matches public version");
   assert(dbasenet.release.minimumVersion === publicVersion, "Dbasenet BrandConfig minimumVersion matches public version");
@@ -307,6 +316,74 @@ function run(): void {
   const manifest = readText("site/app/manifest.ts");
   assert(manifest.includes("brand.pwa"), "PWA manifest uses BrandConfig");
 
+  const siteLogo = readText("site/components/icons/SuhuellaLogo.tsx");
+  const siteMark = readText("site/components/icons/BrandMark.tsx");
+  const overlayFrame = readText("site/components/web/RouteOverlayFrame.tsx");
+  const downloadCatalog = readText("site/components/DownloadCatalogContent.tsx");
+  const settingsWindow = readText("desktop/src/windows/SettingsWindow.tsx");
+  assert(siteLogo.includes("BrandMark"), "site SuhuellaLogo uses BrandConfig mark");
+  assert(
+    siteMark.includes("brand.logo.publicSvg") || siteMark.includes("BrandMarkGlyph"),
+    "site BrandMark reads BrandConfig logo",
+  );
+  const desktopBrandMark = readText("desktop/src/components/BrandMark.tsx");
+  const desktopBrandWordmark = readText("desktop/src/components/BrandWordmark.tsx");
+  assert(desktopBrandMark.includes("identity: EffectiveBrandIdentity"), "BrandMark paints identity.logo");
+  assert(!desktopBrandMark.includes("useEffectiveBrandIdentity"), "BrandMark never decides");
+  assert(!desktopBrandWordmark.includes("useEffectiveBrandIdentity"), "BrandWordmark never decides");
+  assert(
+    readText("desktop/src/lib/branding/PartnerProductMark.tsx").includes("INTERNAL ONLY"),
+    "partner/product mark is internal-only",
+  );
+  assert(
+    !readText("desktop/src/components/IdentityCard.tsx").includes("PartnerProductMark"),
+    "UI components do not import PartnerProductMark",
+  );
+  assert(
+    readText("desktop/src/components/AppBrandingContext.tsx").includes("useEffectiveBrandIdentity"),
+    "app branding exposes ADR-003 hook",
+  );
+  assert(
+    readText("desktop/src/components/BrandMark.tsx").includes("PartnerProductMark"),
+    "BrandMark falls back to partner/product mark",
+  );
+  assert(
+    readText("desktop/src/lib/effective-brand-identity.ts").includes("identityVersion"),
+    "EffectiveBrandIdentity contract is versioned",
+  );
+  assert(
+    readText("desktop/src/lib/effective-brand-identity.ts").includes("deriveProductBrandView"),
+    "product brand is a derived view not a parallel resolver",
+  );
+  assert(
+    readText("desktop/src/components/AppBrandingContext.tsx").includes("useProductBrandIdentity"),
+    "product brand hook derives from base resolver",
+  );
+  assert(
+    readText("docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md").includes(
+      "Components never resolve branding directly",
+    ),
+    "ADR-003 consumer rule is documented",
+  );
+  assert(
+    readText("docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md").includes("Layer stack"),
+    "ADR-003 layer stack is documented",
+  );
+  assert(!desktopBrandMark.includes("@suhuella/brand"), "BrandMark does not read BrandConfig");
+  assert(!desktopBrandWordmark.includes("@suhuella/brand"), "BrandWordmark does not read BrandConfig");
+  assert(!desktopBrandMark.includes("resolveEffectiveBrandIdentity"), "BrandMark does not call resolver");
+  const appBranding = readText("desktop/src/components/AppBrandingContext.tsx");
+  assert(appBranding.includes("resolveEffectiveBrandIdentity"), "hooks layer owns resolver calls");
+  assert(!appBranding.includes("<BrandMark"), "identity hooks do not render presenters");
+  assert(
+    settingsWindow.includes("AppBrandingProvider"),
+    "app shell provides business branding context",
+  );
+  assert(overlayFrame.includes("SuhuellaWordmark"), "public overlays show brand name and logo");
+  assert(downloadCatalog.includes("brand.displayName"), "download catalog shows BrandConfig name");
+  assert(downloadCatalog.includes("BrandMark"), "download catalog shows BrandConfig logo");
+  assert(settingsWindow.includes("SuhuellaWordmark"), "app sidebar shows brand name and logo");
+
   assert(resolveEffectiveBranding("https://evil.example/logo.png") === null, "Business branding still rejects remote URLs");
   assert(
     resolveEffectiveBranding("data:image/png;base64,abc") === "data:image/png;base64,abc",
@@ -361,6 +438,19 @@ function run(): void {
   };
   assert(exampleShape.operatorId === "self", "a future brand can carry operatorId without catalog entry");
   assert(!knownBrandIds().includes("example" as never), "example brand is not in the live catalog");
+
+  for (const relativePath of [
+    "site/app/icon.svg",
+    "site/public/suhuella-logo.svg",
+    "brands/suhuella/assets/public/suhuella-logo.svg",
+    "desktop/public/favicon.svg",
+  ]) {
+    assertNoLegacyLupa(relativePath);
+  }
+  for (const relativePath of ["site/app/favicon.ico", "site/public/favicon.ico"]) {
+    assert(existsSync(path.join(root, relativePath)), `${relativePath} is projected`);
+    assert(statSync(path.join(root, relativePath)).size > 0, `${relativePath} is non-empty`);
+  }
 
   console.log(`MULTIBRAND-SECOND-BRAND-PROOF-001 check passed for ${brand.id}`);
 }

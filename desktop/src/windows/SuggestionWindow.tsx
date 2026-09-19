@@ -1,10 +1,12 @@
 import { Folder, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getSuhuellaApi } from '../lib/api'
+import { HOST_ACTION_COPY } from '../lib/host-action-copy'
 import type { SuggestionPayload } from '../types'
 
 export function SuggestionWindow() {
   const [payload, setPayload] = useState<SuggestionPayload | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
     try {
@@ -41,19 +43,32 @@ export function SuggestionWindow() {
               <button
                 key={item.folder}
                 type="button"
-                onClick={() => void getSuhuellaApi().chooseRecommendedFolder(item.folder)}
+                onClick={() => {
+                  void getSuhuellaApi()
+                    .chooseRecommendedFolder(item.folder)
+                    .then((result) => {
+                      if (result.ok) {
+                        setNotice(null)
+                        return
+                      }
+                      setNotice(result.error ?? HOST_ACTION_COPY.saveAsPreviewOnly)
+                    })
+                    .catch(() => {
+                      setNotice(HOST_ACTION_COPY.saveAsPreviewOnly)
+                    })
+                }}
                 className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition hover:bg-white/8"
               >
                 <Folder
-                  className={`h-4 w-4 shrink-0 ${index === 0 ? 'text-[#0084FF]' : 'text-slate-500'}`}
-                  fill={index === 0 ? '#0084FF' : 'none'}
+                  className={`h-4 w-4 shrink-0 ${index === 0 ? 'text-[var(--brand-accent)]' : 'text-slate-500'}`}
+                  fill={index === 0 ? 'var(--brand-accent)' : 'none'}
                 />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-slate-100">
                   {item.label}
                 </span>
                 <span
                   className={`shrink-0 font-mono text-[12px] ${
-                    index === 0 ? 'text-[#7EC8FF]' : 'text-slate-500'
+                    index === 0 ? 'text-[color-mix(in_srgb,var(--brand-accent)_55%,white)]' : 'text-slate-500'
                   }`}
                 >
                   {item.score}%
@@ -62,9 +77,10 @@ export function SuggestionWindow() {
             ))
           ) : (
             <p className="px-2 py-6 text-center text-xs text-slate-500">
-              Add favourite folders to see suggestions.
+              Add a source to see suggestions.
             </p>
           )}
+          {notice ? <p className="px-2 py-2 text-xs leading-relaxed text-amber-200">{notice}</p> : null}
         </div>
 
         <div className="mx-4 border-t border-white/10" />
@@ -74,7 +90,7 @@ export function SuggestionWindow() {
           onClick={() => void getSuhuellaApi().chooseAnotherFolder()}
           className="no-drag px-4 py-2.5 text-left text-[13px] text-slate-400 transition hover:text-slate-200"
         >
-          Choose another folder...
+          Choose another folder
         </button>
       </div>
     </div>

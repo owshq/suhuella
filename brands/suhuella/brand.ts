@@ -1,4 +1,6 @@
 import type { BrandConfig } from "../types.ts";
+import { brandReleaseFromManifest } from "../release-manifest.ts";
+import suhuellaRelease from "./release.json" with { type: "json" };
 
 /** Current SuHuella commercial identity. Persistent IDs must stay exactly these values. */
 export const suhuellaBrand = {
@@ -29,6 +31,7 @@ export const suhuellaBrand = {
     publicPng: "/suhuella-logo.png",
   },
   icon: {
+    public192: "/suhuella-icon-192.png",
     public256: "/suhuella-icon-256.png",
     public512: "/suhuella-icon-512.png",
   },
@@ -56,9 +59,9 @@ export const suhuellaBrand = {
         purpose: "any",
       },
       {
-        src: "/suhuella-logo.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: "/suhuella-icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
         purpose: "any",
       },
     ],
@@ -67,12 +70,5 @@ export const suhuellaBrand = {
     macArtifactName: "${productName}-${version}.${ext}",
     windowsArtifactName: "${productName}-Setup-${version}.${ext}",
   },
-  release: {
-    version: "0.1.0-pre-rc",
-    channel: "stable",
-    minimumVersion: "0.1.0-pre-rc",
-    mandatory: false,
-    windows: "",
-    mac: "",
-  },
-} as const satisfies BrandConfig;
+  release: brandReleaseFromManifest(suhuellaRelease),
+} satisfies BrandConfig;

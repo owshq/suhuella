@@ -1,0 +1,29 @@
+type BrandMarkGlyphProps = {
+  className?: string
+  size?: number
+}
+
+/** SuHuella bracket mark — uses brand accent directly so it stays visible in all hosts. */
+export function BrandMarkGlyph({ className = '', size = 20 }: BrandMarkGlyphProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className={`block shrink-0 ${className}`.trim()}
+      role="presentation"
+    >
+      <g fill="var(--brand-accent, #0084FF)">
+        <rect x="10.4" y="2" width="3.2" height="20" />
+        <path d="M7.6 17.5V6.5H6.9Q4.4 6.5 4.4 9.3V14.7Q4.4 17.5 6.9 17.5H7.6Z" />
+        <rect x="7.6" y="6.5" width="2.8" height="3.2" />
+        <rect x="7.6" y="14.3" width="2.8" height="3.2" />
+        <path d="M16.4 17.5V6.5H17.1Q19.6 6.5 19.6 9.3V14.7Q19.6 17.5 17.1 17.5H16.4Z" />
+        <rect x="13.6" y="6.5" width="2.8" height="3.2" />
+        <rect x="13.6" y="14.3" width="2.8" height="3.2" />
+      </g>
+    </svg>
+  )
+}

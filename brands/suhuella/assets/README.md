@@ -2,6 +2,7 @@ SuHuella brand binaries stay in their current public locations so this slice doe
 
 - `site/public/suhuella-logo.svg`
 - `site/public/suhuella-logo.png`
+- `site/public/suhuella-icon-192.png`
 - `site/public/suhuella-icon-256.png`
 - `site/public/suhuella-icon-512.png`
 - `desktop/assets/*`

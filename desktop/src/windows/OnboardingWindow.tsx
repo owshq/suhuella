@@ -1,11 +1,16 @@
-import { Sparkles } from 'lucide-react'
+import { FolderPlus, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { FavouriteFoldersList } from '../components/FavouriteFoldersList'
 import { SuhuellaLogo } from '../components/SuhuellaLogo'
 import { getSuhuellaApi } from '../lib/api'
+import { productCopy } from '../lib/product-copy'
 import type { AppSettings } from '../types'
 
 const STEPS = 3
+
+function sourceName(path: string): string {
+  const parts = path.split(/[/\\]+/).filter(Boolean)
+  return parts.at(-1) ?? path
+}
 
 export function OnboardingWindow() {
   const [step, setStep] = useState(0)
@@ -21,17 +26,22 @@ export function OnboardingWindow() {
     }
   }, [])
 
-  async function addFolder() {
+  async function addSource() {
     setBusy(true)
     try {
-      setSettings(await getSuhuellaApi().addFavouriteFolder())
+      setSettings(await getSuhuellaApi().addIndexedLocation())
     } finally {
       setBusy(false)
     }
   }
 
-  async function removeFolder(folder: string) {
-    setSettings(await getSuhuellaApi().removeFavouriteFolder(folder))
+  async function removeSource(path: string) {
+    setBusy(true)
+    try {
+      setSettings(await getSuhuellaApi().removeIndexedLocation(path))
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function toggleLaunchAtLogin(enabled: boolean) {
@@ -41,7 +51,7 @@ export function OnboardingWindow() {
   async function testAssistant() {
     setBusy(true)
     try {
-      await getSuhuellaApi().testSuggestion()
+      await getSuhuellaApi().previewSuggestions()
     } finally {
       setBusy(false)
     }
@@ -57,69 +67,104 @@ export function OnboardingWindow() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col overflow-y-auto bg-[#A7D8F9] text-slate-900">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-transparent text-[var(--app-fg)]">
       <div className="drag-region h-11 shrink-0" />
 
       <main className="no-drag mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6 pb-6">
-        <header className="mb-5">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-sm font-semibold shadow-sm backdrop-blur">
+        <header className="mb-5 mt-10">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--sidebar-line)] bg-[var(--app-bg)] px-3 py-1.5 text-sm font-semibold shadow-sm">
             <SuhuellaLogo className="h-4 w-4" />
-            SuHuella
+            {productCopy('SuHuella')}
           </div>
-          <h1 className="text-[1.65rem] font-semibold tracking-[-0.04em] text-slate-900">
-            Welcome to SuHuella
+          <h1 className="text-[28px] font-bold tracking-tight text-[var(--app-fg)]">
+            {productCopy('Welcome to SuHuella')}
           </h1>
-          <p className="mt-1 text-sm text-slate-600">1 minute setup</p>
         </header>
 
         <div className="mb-4 flex gap-1.5">
           {Array.from({ length: STEPS }, (_, index) => (
             <div
               key={index}
-              className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-[#0084FF]' : 'bg-white/60'}`}
+              className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-[var(--brand-accent)]' : 'bg-[var(--sidebar-line)]'}`}
             />
           ))}
         </div>
 
-        <section className="flex flex-1 flex-col rounded-[1.6rem] border border-white/60 bg-white/55 p-5 shadow-xl shadow-blue-900/5 backdrop-blur-xl">
+        <section className="flex flex-1 flex-col rounded-[1.6rem] border border-[var(--sidebar-line)] bg-[var(--app-bg)] p-5 shadow-xl">
           {step === 0 && (
             <>
-              <h2 className="text-base font-semibold text-slate-900">
-                Where do you usually save your files?
-              </h2>
-              <p className="mt-1 mb-4 text-xs text-slate-500">
-                Add the folders SuHuella should recommend. Nothing is pre-selected.
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">Sources</h2>
+              <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
+                {productCopy('What can SuHuella see? Add a folder. Your documents stay on this device.')}
               </p>
-              <FavouriteFoldersList
-                folders={settings?.favouriteFolders ?? []}
-                busy={busy}
-                onAdd={() => void addFolder()}
-                onRemove={(folder) => void removeFolder(folder)}
-              />
+              {(settings?.indexedLocations ?? []).length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void addSource()}
+                  disabled={busy}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                >
+                  <FolderPlus className="h-4 w-4" />
+                  Add
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  {(settings?.indexedLocations ?? []).map((path) => (
+                    <div
+                      key={path}
+                      className="flex items-center gap-3 rounded-2xl border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-3 py-2.5"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[var(--app-fg)]">
+                          {sourceName(path)}
+                        </p>
+                        <p className="text-[11px] text-[var(--app-fg)] opacity-50">Indexed</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void removeSource(path)}
+                        disabled={busy}
+                        className="rounded-full p-2 text-[var(--app-fg)] opacity-40 transition hover:bg-rose-50 hover:text-rose-500 hover:opacity-100 disabled:opacity-40"
+                        aria-label={`Remove ${sourceName(path)}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => void addSource()}
+                    disabled={busy}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    <FolderPlus className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+              )}
             </>
           )}
 
           {step === 1 && (
             <>
-              <h2 className="text-base font-semibold text-slate-900">
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">
                 Enable automatic startup
               </h2>
-              <p className="mt-1 mb-5 text-xs leading-relaxed text-slate-500">
-                SuHuella stays in the tray and waits silently. You can change this later in
-                Settings.
+              <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
+                {productCopy('SuHuella opens when you sign in. Close the window to keep it in the menu bar.')}
               </p>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/80 bg-white/80 px-4 py-3.5 shadow-sm">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-4 py-3.5 shadow-sm hover:opacity-90 transition">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0084FF] accent-[#0084FF]"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--brand-accent)] accent-[var(--brand-accent)]"
                   checked={settings?.launchAtLogin ?? true}
                   onChange={(event) => void toggleLaunchAtLogin(event.target.checked)}
                 />
                 <span>
-                  <span className="block text-sm font-medium text-slate-800">
-                    Launch SuHuella when I sign in
+                  <span className="block text-sm font-medium text-[var(--app-fg)]">
+                    {productCopy('Launch SuHuella when I sign in')}
                   </span>
-                  <span className="mt-0.5 block text-xs text-slate-500">
+                  <span className="mt-0.5 block text-xs text-[var(--app-fg)] opacity-60">
                     Enabled by default. You can disable it anytime.
                   </span>
                 </span>
@@ -129,15 +174,15 @@ export function OnboardingWindow() {
 
           {step === 2 && (
             <>
-              <h2 className="text-base font-semibold text-slate-900">Preview suggestions</h2>
-              <p className="mt-1 mb-5 text-xs leading-relaxed text-slate-500">
-                Optional. See how SuHuella appears when you save. It never saves the file for you.
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">Preview suggestions</h2>
+              <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
+                {productCopy('Optional. See how SuHuella appears when you save. It never saves the file for you.')}
               </p>
               <button
                 type="button"
                 onClick={() => void testAssistant()}
                 disabled={busy}
-                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 <Sparkles className="h-4 w-4" />
                 Preview Suggestions
@@ -150,33 +195,27 @@ export function OnboardingWindow() {
           {step > 0 ? (
             <button
               type="button"
-              onClick={() => setStep((current) => current - 1)}
-              className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900"
+              onClick={() => setStep((s) => s - 1)}
+              disabled={busy}
+              className="px-2 py-1 text-sm font-semibold text-[var(--app-fg)] opacity-60 transition hover:opacity-100 disabled:opacity-40"
             >
               Back
             </button>
           ) : (
-            <span />
+            <div />
           )}
 
-          {step < STEPS - 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((current) => current + 1)}
-              className="rounded-full bg-[#0084FF] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-10px_rgba(0,132,255,0.7)] hover:bg-[#0076e6]"
-            >
-              {step === 0 ? 'Continue' : 'Next'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void finish()}
-              disabled={busy}
-              className="rounded-full bg-[#0084FF] px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_20px_-10px_rgba(0,132,255,0.7)] hover:bg-[#0076e6] disabled:opacity-60"
-            >
-              Finish
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (step < STEPS - 1) setStep((s) => s + 1)
+              else void finish()
+            }}
+            disabled={busy}
+            className="rounded-full bg-[var(--brand-accent)] px-5 py-2 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+          >
+            {step < STEPS - 1 ? 'Continue' : busy ? 'Starting…' : productCopy('Start using SuHuella')}
+          </button>
         </div>
       </main>
     </div>

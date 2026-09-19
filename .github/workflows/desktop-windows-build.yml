@@ -28,25 +28,58 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Install brands + desktop
+        shell: pwsh
         run: |
           npm install --prefix brands
           npm install --prefix desktop --ignore-scripts
 
+      - name: Prepare brand entry
+        run: node brands/project-site.mjs
+
+      - name: Read release version
+        id: release
+        shell: pwsh
+        run: |
+          $manifest = Get-Content brands/suhuella/release.json | ConvertFrom-Json
+          "version=$($manifest.version)" >> $env:GITHUB_OUTPUT
+          "win_name=SuHuella-Setup-$($manifest.version).exe" >> $env:GITHUB_OUTPUT
+          "tag=v$($manifest.version)" >> $env:GITHUB_OUTPUT
+
       - name: Build Windows installer
         run: npm run package:win --prefix desktop
+
+      - name: Locate installer
+        id: installer
+        shell: pwsh
+        run: |
+          $patterns = @(
+            "desktop/.build/suhuella/release/SuHuella-Setup-*.exe",
+            "desktop/release/SuHuella Setup *.exe",
+            "desktop/release/SuHuella-Setup-*.exe"
+          )
+          $exe = $null
+          foreach ($p in $patterns) {
+            $dir = Split-Path $p -Parent
+            $filter = Split-Path $p -Leaf
+            if (Test-Path $dir) {
+              $found = Get-ChildItem -Path $dir -Filter $filter -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) { $exe = $found; break }
+            }
+          }
+          if (-not $exe) { throw "Installer not found under desktop/" }
+          $dest = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.win_name }}"
+          Copy-Item $exe.FullName $dest
+          "path=$dest" >> $env:GITHUB_OUTPUT
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: SuHuella-Setup-windows
-          path: desktop/.build/suhuella/release/SuHuella-Setup-*.exe
+          path: ${{ steps.installer.outputs.path }}
           retention-days: 14
 
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: |
-          $exe = Get-ChildItem -Path desktop/.build/suhuella/release -Filter "SuHuella-Setup-*.exe" | Select-Object -First 1
-          if (-not $exe) { throw "Installer not found" }
-          gh release upload v0.1.0-pre-rc $exe.FullName --clobber
+        run: gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber

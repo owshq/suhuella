@@ -60,6 +60,7 @@ export type BrandConfig = {
     publicPng: string;
   };
   icon: {
+    public192: string;
     public256: string;
     public512: string;
   };

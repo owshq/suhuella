@@ -1,0 +1,127 @@
+:root {
+  --promo-bg: rgba(220, 235, 250, 0.82);
+  --promo-bg-active: rgba(210, 228, 248, 0.92);
+  --promo-title: #174ea6;
+  --promo-body: #185abc;
+  --promo-hint: #5f6368;
+  --promo-primary-bg: #1a73e8;
+  --promo-primary-fg: #ffffff;
+  --promo-primary-hover: #1765cc;
+  --promo-secondary-bg: rgba(60, 64, 67, 0.08);
+  --promo-secondary-fg: #3c4043;
+  --promo-secondary-hover: rgba(60, 64, 67, 0.12);
+  --promo-btn-radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --promo-bg: rgba(40, 46, 56, 0.72);
+    --promo-bg-active: rgba(48, 56, 68, 0.88);
+    --promo-title: #93c5fd;
+    --promo-body: #cbd5e1;
+    --promo-hint: #94a3b8;
+    --promo-primary-bg: #0a84ff;
+    --promo-primary-fg: #ffffff;
+    --promo-primary-hover: #409cff;
+    --promo-secondary-bg: rgba(255, 255, 255, 0.1);
+    --promo-secondary-fg: #e2e8f0;
+    --promo-secondary-hover: rgba(255, 255, 255, 0.14);
+  }
+}
+
+.feature-promo-card {
+  border: none;
+  border-radius: 1.125rem;
+  background: var(--promo-bg);
+  padding: 1.25rem 1.375rem 1.125rem;
+  letter-spacing: -0.015em;
+  transition: background-color 140ms ease;
+}
+
+.feature-promo-card-active {
+  background: var(--promo-bg-active);
+}
+
+.feature-promo-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--promo-title);
+}
+
+.feature-promo-body {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--promo-body);
+}
+
+.feature-promo-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--promo-hint);
+}
+
+.feature-promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.625rem;
+  margin-top: 1.125rem;
+}
+
+.feature-promo-btn {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 7.5rem;
+  border: none;
+  border-radius: var(--promo-btn-radius);
+  padding: 0.5625rem 1rem;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.feature-promo-actions .feature-promo-btn-primary {
+  flex: 1.15 1 0;
+}
+
+.feature-promo-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feature-promo-btn-primary {
+  background-color: var(--promo-primary-bg);
+  color: var(--promo-primary-fg);
+}
+
+.feature-promo-btn-primary:hover:not(:disabled) {
+  background-color: var(--promo-primary-hover);
+}
+
+.feature-promo-btn-secondary {
+  background-color: var(--promo-secondary-bg);
+  color: var(--promo-secondary-fg);
+  font-weight: 500;
+}
+
+.feature-promo-btn-secondary:hover:not(:disabled) {
+  background-color: var(--promo-secondary-hover);
+}

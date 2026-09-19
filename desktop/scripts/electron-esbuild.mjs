@@ -1,4 +1,10 @@
 import * as esbuild from 'esbuild'
+import path from 'node:path'
+import { brandBuildDir, desktopRoot, selectedBrandEntry } from './brand-build.mjs'
+
+const brandEntry = selectedBrandEntry()
+const outDir = path.join(brandBuildDir(), 'dist-electron')
+const buildVersion = process.env.SUHUELLA_BUILD ?? 'local'
 
 const shared = {
   bundle: true,
@@ -7,21 +13,28 @@ const shared = {
   target: 'node20',
   external: ['electron'],
   logLevel: 'info',
+  alias: {
+    '@suhuella/brand': brandEntry,
+  },
+  define: {
+    __SUHUELLA_BUILD__: JSON.stringify(buildVersion),
+  },
 }
 
 export async function buildElectron({ watch = false, minify = false } = {}) {
+  const electronDir = watch ? path.join(desktopRoot, 'dist-electron') : outDir
   const options = [
     {
       ...shared,
       entryPoints: ['electron/main.ts'],
-      outfile: 'dist-electron/main.cjs',
+      outfile: path.join(electronDir, 'main.cjs'),
       minify,
       sourcemap: !minify,
     },
     {
       ...shared,
       entryPoints: ['electron/preload.ts'],
-      outfile: 'dist-electron/preload.js',
+      outfile: path.join(electronDir, 'preload.js'),
       minify,
       sourcemap: !minify,
     },

@@ -1,4 +1,6 @@
 import type { BrandConfig } from "../types.ts";
+import { brandReleaseFromManifest } from "../release-manifest.ts";
+import dbasenetRelease from "./release.json" with { type: "json" };
 
 /** Birth identity for the Dbasenet Brand. Operator remains "self". */
 export const dbasenetBrand = {
@@ -20,6 +22,7 @@ export const dbasenetBrand = {
     publicPng: "/dbasenet-logo.png",
   },
   icon: {
+    public192: "/dbasenet-icon-192.png",
     public256: "/dbasenet-icon-256.png",
     public512: "/dbasenet-icon-512.png",
   },
@@ -47,9 +50,9 @@ export const dbasenetBrand = {
         purpose: "any",
       },
       {
-        src: "/dbasenet-logo.svg",
-        sizes: "any",
-        type: "image/svg+xml",
+        src: "/dbasenet-icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
         purpose: "any",
       },
     ],
@@ -58,12 +61,5 @@ export const dbasenetBrand = {
     macArtifactName: "${productName}-${version}.${ext}",
     windowsArtifactName: "${productName}-Setup-${version}.${ext}",
   },
-  release: {
-    version: "0.1.0-pre-rc",
-    channel: "stable",
-    minimumVersion: "0.1.0-pre-rc",
-    mandatory: false,
-    windows: "",
-    mac: "",
-  },
-} as const satisfies BrandConfig;
+  release: brandReleaseFromManifest(dbasenetRelease),
+} satisfies BrandConfig;
