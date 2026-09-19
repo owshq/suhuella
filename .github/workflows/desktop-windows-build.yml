@@ -15,13 +15,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
       - name: Install dependencies
         run: |
-          npm ci
-          npm ci --prefix desktop
-          npm ci --prefix site
+          npm install --prefix desktop
+          if [ -f site/package-lock.json ]; then npm ci --prefix site; else npm install --prefix site; fi
 
       - uses: actions/setup-dotnet@v4
         with:
