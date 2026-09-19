@@ -7,6 +7,7 @@
     "skipLibCheck": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -15,7 +16,10 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "strict": true
+    "strict": true,
+    "paths": {
+      "@suhuella/brand": ["../brands/.build/entry.ts"]
+    }
   },
   "include": ["vite.config.ts", "electron/**/*.ts"]
 }

@@ -1,14 +1,17 @@
+import { brand } from "@suhuella/brand";
 import type { Locale } from "@/lib/i18n/types";
 
-/** Keep in sync with desktop/package.json when cutting releases. */
-export const APP_VERSION =
-  process.env.NEXT_PUBLIC_APP_VERSION?.trim() || "0.1.0";
+/** Public version follows BrandConfig / release metadata, not a stale Next env. */
+export const APP_VERSION = brand.release.version;
 
 export function formatAppVersion(version = APP_VERSION): string {
   return version.startsWith("v") ? version : `v${version}`;
 }
 
-export function getHeroDownloadCta(locale: Locale, version = APP_VERSION): string {
-  const label = formatAppVersion(version);
-  return locale === "es" ? `Descargar ${label}` : `Download ${label}`;
+export function getHeroDownloadCta(locale: Locale): string {
+  return locale === "es" ? `Descargar ${brand.displayName}` : `Download ${brand.displayName}`;
+}
+
+export function getHeroOpenCta(locale: Locale): string {
+  return locale === "es" ? `Abrir ${brand.displayName}` : `Open ${brand.displayName}`;
 }

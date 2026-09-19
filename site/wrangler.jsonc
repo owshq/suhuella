@@ -24,5 +24,19 @@
 		// see https://opennext.js.org/cloudflare/howtos/image
 		"binding": "IMAGES"
 	},
-	"workers_dev": true
+	"workers_dev": true,
+	"d1_databases": [
+		{
+			"binding": "LICENSE_DB",
+			"database_name": "suhuella-license",
+			"database_id": "a4c8e624-977f-4498-b6c0-7024f3ed5672",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vars": {
+		"NEXT_PUBLIC_APP_VERSION": "0.1.0-pre-rc",
+		"NEXT_PRIVATE_MINIMAL_MODE": "1",
+		"PAID_CHECKOUT_ENABLED": "false",
+		"RESEND_FROM": "SuHuella <licenses@suhuella.com>"
+	}
 }

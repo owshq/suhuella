@@ -18,15 +18,15 @@ export function PrivacySection() {
         transition={{ duration: 0.6 }}
       >
         <GlassCard className="relative overflow-hidden p-8 md:p-10">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#0084FF]/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] blur-3xl" />
 
           <div className="relative flex flex-col items-start gap-6 md:flex-row md:items-center md:gap-8">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#0084FF] text-white shadow-lg shadow-[#0084FF]/25">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[var(--brand-accent)] text-[var(--brand-on-accent)] shadow-lg shadow-[color-mix(in_srgb,var(--brand-accent)_25%,transparent)]">
               <ShieldCheck className="h-7 w-7" strokeWidth={1.75} />
             </div>
 
             <div className="flex-1">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-[#0084FF]">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-[var(--brand-accent)]">
                 <Lock className="h-3.5 w-3.5" strokeWidth={2} />
                 {t.privacy.eyebrow}
               </div>
@@ -38,7 +38,7 @@ export function PrivacySection() {
               </p>
               <Link
                 href="/privacy"
-                className="mt-4 inline-block text-sm font-semibold text-[#0084FF] transition-colors hover:text-slate-900"
+                className="mt-4 inline-block text-sm font-semibold text-[var(--brand-accent)] transition-colors hover:text-slate-900"
               >
                 {t.footer.privacy}
               </Link>

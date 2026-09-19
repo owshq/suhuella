@@ -1,0 +1,22 @@
+{
+  "version": "0.1.0-pre-rc",
+  "channel": "stable",
+  "mandatory": false,
+  "downloads": {
+    "web": {
+      "available": true,
+      "url": null
+    },
+    "mac": {
+      "available": true,
+      "url": "https://download.suhuella.com/latest/mac"
+    },
+    "windows": {
+      "available": true,
+      "url": "https://download.suhuella.com/latest/win"
+    }
+  },
+  "minimumVersion": "0.1.0-pre-rc",
+  "releaseDate": "2026-09-19",
+  "notes": ""
+}

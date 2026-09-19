@@ -1,0 +1,26 @@
+{
+  "id": "dbasenet",
+  "operatorId": "self",
+  "displayName": "Dbasenet",
+  "primaryDomain": "dbasenet.com",
+  "supportEmail": null,
+  "salesEmail": null,
+  "emails": null,
+  "theme": {
+    "accent": "#0B5F63",
+    "onAccent": "#FFFFFF"
+  },
+  "paidCheckoutEnabled": false,
+  "releaseRemoteEnabled": false,
+  "desktopProductName": "Dbasenet",
+  "desktopAppId": "com.dbasenet.desktop",
+  "desktopProtocol": "dbasenet",
+  "pwa": {
+    "backgroundColor": "#D7EEEA",
+    "themeColor": "#0B5F63",
+    "icon512": "/dbasenet-icon-512.png",
+    "icon256": "/dbasenet-icon-256.png",
+    "icon192": "/dbasenet-icon-192.png",
+    "logoSvg": "/dbasenet-logo.svg"
+  }
+}

@@ -29,7 +29,7 @@ export function LanguageSwitcher({ inline = false }: LanguageSwitcherProps) {
             onClick={() => setLocale(option)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide uppercase transition-all duration-200 ${
               active
-                ? "bg-[#0084FF] text-white shadow-sm"
+                ? "bg-[var(--nav-active-bg)] text-[var(--nav-active-fg)] shadow-sm"
                 : "text-slate-500 hover:text-slate-800"
             }`}
             aria-pressed={active}

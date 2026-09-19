@@ -9,13 +9,13 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { detectDeviceLocale } from "@/lib/i18n/detect-locale";
+import {
+  readAppLocale,
+  subscribeAppLocale,
+  writeAppLocale,
+} from "@suhuella/product/lib/app-locale";
 import { getDictionary } from "@/lib/i18n/dictionary";
 import type { Dictionary, Locale } from "@/lib/i18n/types";
-
-const LOCALE_KEY = "suhuella-locale";
-const LOCALE_USER_KEY = "suhuella-locale-user";
-const LOCALE_EVENT = "suhuella-locale-change";
 
 type LocaleContextValue = {
   locale: Locale;
@@ -26,25 +26,7 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 function readLocale(): Locale {
-  if (typeof window === "undefined") return "es";
-
-  const userSet = localStorage.getItem(LOCALE_USER_KEY) === "true";
-  if (userSet) {
-    const stored = localStorage.getItem(LOCALE_KEY);
-    if (stored === "es" || stored === "en") return stored;
-  }
-
-  return detectDeviceLocale();
-}
-
-function subscribeLocale(onStoreChange: () => void) {
-  const handler = () => onStoreChange();
-  window.addEventListener(LOCALE_EVENT, handler);
-  window.addEventListener("storage", handler);
-  return () => {
-    window.removeEventListener(LOCALE_EVENT, handler);
-    window.removeEventListener("storage", handler);
-  };
+  return readAppLocale();
 }
 
 function getServerSnapshot(): Locale {
@@ -53,7 +35,7 @@ function getServerSnapshot(): Locale {
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const locale = useSyncExternalStore(
-    subscribeLocale,
+    subscribeAppLocale,
     readLocale,
     getServerSnapshot,
   );
@@ -63,10 +45,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    localStorage.setItem(LOCALE_KEY, next);
-    localStorage.setItem(LOCALE_USER_KEY, "true");
-    document.documentElement.lang = next;
-    window.dispatchEvent(new Event(LOCALE_EVENT));
+    writeAppLocale(next);
   }, []);
 
   const value = useMemo<LocaleContextValue>(

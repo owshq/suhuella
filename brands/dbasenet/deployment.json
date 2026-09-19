@@ -1,0 +1,9 @@
+{
+  "brandId": "dbasenet",
+  "operatorId": "self",
+  "status": "build-only",
+  "publicDomain": "dbasenet.com",
+  "workerName": "dbasenet",
+  "releaseManifest": "brands/dbasenet/release.json",
+  "notes": "BUILD PROVEN, NOT PRODUCTION-COMMERCE-ENABLED. Do not attach DNS, deploy this Worker, configure Stripe, or configure Resend."
+}

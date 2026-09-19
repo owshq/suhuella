@@ -1,0 +1,13 @@
+# BROWSER-SOURCE-INDEX-SEARCH-001
+
+```text
+STATUS = CLOSED · PASS
+TYPE = Production blocker
+SCOPE = SuHuella Web / Browser sources / Search
+DATE = 2026-09-19
+WORKER = 4babd6bf-f2f8-4d37-8f51-942f96f816ff
+```
+
+Same slice as [BROWSER-SOURCES-BRAND-FLOW-001.md](BROWSER-SOURCES-BRAND-FLOW-001.md) — **CLOSED · PASS**.
+
+[FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md) may resume.

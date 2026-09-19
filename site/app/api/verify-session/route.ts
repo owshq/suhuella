@@ -1,10 +1,25 @@
-import { getInstallerUrls } from "@/lib/downloads";
+import { clientIpFromRequest } from "@/lib/client-ip";
+import { fulfillLicenseFromCheckout } from "@/lib/license-fulfillment";
+import {
+  getReleaseManifest,
+  manifestToInstallerUrls,
+} from "@/lib/release-manifest";
+import { rejectIfDurableLicenseStateUnavailable, rejectIfRateLimited } from "@/lib/service-capability-guard";
 import { verifyStripeCheckoutSession } from "@/lib/verify-stripe-session";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const durable = await rejectIfDurableLicenseStateUnavailable("checkout");
+  if (durable) return durable;
+
+  const clientIp = clientIpFromRequest(request);
+  const rateLimited = await rejectIfRateLimited(
+    clientIp ? [{ key: `verify-session:ip:${clientIp}`, limit: 20 }] : [],
+  );
+  if (rateLimited) return rateLimited;
+
   const sessionId = request.nextUrl.searchParams.get("session_id");
 
   if (!sessionId) {
@@ -17,20 +32,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
 
-  if (!secretKey) {
-    console.error("STRIPE_SECRET_KEY is not configured");
-    return Response.json(
-      { ok: false, error: "server_error" },
-      {
-        status: 500,
-        headers: { "Cache-Control": "no-store" },
-      },
-    );
-  }
-
-  const result = await verifyStripeCheckoutSession(sessionId, secretKey);
+  const result = await verifyStripeCheckoutSession(sessionId, secretKey, request.nextUrl.origin);
 
   if (!result.ok) {
     const status =
@@ -49,10 +53,30 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const license = await fulfillLicenseFromCheckout(result.session);
+
+  const release = await getReleaseManifest();
+  const installers = release ? manifestToInstallerUrls(release) : { windows: "", mac: "" };
+
+  if (!installers.windows || !installers.mac) {
+    console.error(
+      "Release manifest missing installer URLs after verified payment",
+    );
+  }
+
   return Response.json(
     {
       ok: true,
-      installers: getInstallerUrls(),
+      installers,
+      license,
+      release: release
+        ? {
+            version: release.version,
+            channel: release.channel,
+            minimumVersion: release.minimumVersion,
+            mandatory: release.mandatory,
+          }
+        : null,
     },
     {
       status: 200,

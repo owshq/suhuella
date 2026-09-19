@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { SiteFooter } from "@/components/SiteFooter";
-import { SuhuellaLogo } from "@/components/icons/SuhuellaLogo";
+import { SuhuellaWordmark } from "@/components/icons/SuhuellaWordmark";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 type LegalArticleProps = {
@@ -20,8 +20,10 @@ export function LegalArticle({ title, updated, paragraphs }: LegalArticleProps) 
           href="/"
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900"
         >
-          <SuhuellaLogo className="h-6 w-6" />
-            SuHuella
+          <SuhuellaWordmark
+            glyphClassName="h-6 w-6"
+            textClassName="text-sm font-semibold tracking-[-0.02em] text-slate-900"
+          />
         </Link>
         <LanguageSwitcher inline />
       </div>

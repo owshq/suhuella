@@ -245,7 +245,7 @@ export function AppMockup() {
   return (
     <div className="relative mx-auto flex w-full max-w-3xl items-center justify-center pt-6 pb-2 md:pt-8 md:pb-3">
       <motion.div
-        className="absolute top-1/2 left-1/2 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0084FF] md:h-[400px] md:w-[400px] lg:h-[440px] lg:w-[440px]"
+        className="absolute top-1/2 left-1/2 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--brand-accent)] md:h-[400px] md:w-[400px] lg:h-[440px] lg:w-[440px]"
         animate={{ scale: [1, 1.04, 1] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -293,7 +293,7 @@ export function AppMockup() {
                   transition={{ duration: 0.22, ease: snapEase }}
                   className="absolute inset-0 flex flex-col items-center justify-center"
                 >
-                  <CheckCircle2 className="mb-2 h-9 w-9 text-[#0084FF]" />
+                  <CheckCircle2 className="mb-2 h-9 w-9 text-[var(--brand-accent)]" />
                   <p className="text-center text-xs font-semibold text-slate-600">
                     {t.mockup.allOrganized}
                   </p>
@@ -331,17 +331,17 @@ export function AppMockup() {
                     animate={{
                       scale: isReceiving ? 1.05 : isHovered ? 1.02 : 1,
                       backgroundColor: isReceiving
-                        ? "rgba(0,132,255,0.24)"
+                        ? "color-mix(in srgb, var(--brand-accent) 24%, transparent)"
                         : isHovered
                           ? "rgba(255,255,255,0.12)"
                           : "rgba(255,255,255,0.05)",
                       borderColor: isReceiving
-                        ? "rgba(0,132,255,0.55)"
+                        ? "color-mix(in srgb, var(--brand-accent) 55%, transparent)"
                         : isHovered
                           ? "rgba(255,255,255,0.2)"
                           : "rgba(255,255,255,0.06)",
                       boxShadow: isReceiving
-                        ? "0 0 32px -4px rgba(0,132,255,0.6)"
+                        ? "0 0 32px -4px color-mix(in srgb, var(--brand-accent) 60%, transparent)"
                         : isHovered
                           ? "0 10px 28px -10px rgba(0,0,0,0.45)"
                           : "none",
@@ -352,10 +352,10 @@ export function AppMockup() {
                     <Folder
                       className={`h-4 w-4 shrink-0 md:h-[18px] md:w-[18px] ${
                         isReceiving || isHovered
-                          ? "text-[#0084FF]"
+                          ? "text-[var(--brand-accent)]"
                           : "text-slate-500"
                       }`}
-                      fill={isReceiving ? "#0084FF" : "none"}
+                      fill={isReceiving ? "var(--brand-accent)" : "none"}
                     />
 
                     <span
@@ -379,11 +379,11 @@ export function AppMockup() {
                       }}
                       className={`shrink-0 rounded-lg px-1.5 py-0.5 font-mono text-[9px] font-semibold md:px-2 md:text-[10px] ${
                         isTopMatch
-                          ? "bg-[#0084FF]/25 text-[#7EC8FF] ring-1 ring-[#0084FF]/40"
+                          ? "bg-[color-mix(in_srgb,var(--brand-accent)_25%,transparent)] text-[color-mix(in_srgb,var(--brand-accent)_55%,white)] ring-1 ring-[color-mix(in_srgb,var(--brand-accent)_40%,transparent)]"
                           : "bg-white/5 text-slate-500"
                       }`}
                     >
-                      {folder.match}% {t.mockup.matchLabel}
+                      {folder.match}%{t.mockup.matchLabel ? ` ${t.mockup.matchLabel}` : ""}
                     </motion.span>
 
                     {isClicked && (
@@ -391,7 +391,7 @@ export function AppMockup() {
                         initial={{ scale: 0, opacity: 0.8 }}
                         animate={{ scale: 2.4, opacity: 0 }}
                         transition={{ duration: 0.35, ease: "easeOut" }}
-                        className="pointer-events-none absolute inset-0 rounded-2xl bg-[#0084FF]/30"
+                        className="pointer-events-none absolute inset-0 rounded-2xl bg-[color-mix(in_srgb,var(--brand-accent)_30%,transparent)]"
                       />
                     )}
                   </motion.div>
@@ -441,13 +441,13 @@ export function AppMockup() {
                         initial={{ scale: 0, opacity: 0.9 }}
                         animate={{ scale: [0, 1.8, 2.4], opacity: [0.9, 0.4, 0] }}
                         transition={{ duration: 0.38, ease: "easeOut" }}
-                        className="absolute -bottom-2 -left-2 h-5 w-5 rounded-full border-2 border-[#0084FF] bg-[#0084FF]/20"
+                        className="absolute -bottom-2 -left-2 h-5 w-5 rounded-full border-2 border-[var(--brand-accent)] bg-[color-mix(in_srgb,var(--brand-accent)_20%,transparent)]"
                       />
                       <motion.span
                         initial={{ scale: 0, opacity: 0.6 }}
                         animate={{ scale: [0, 2.8, 3.6], opacity: [0.6, 0.2, 0] }}
                         transition={{ duration: 0.45, ease: "easeOut", delay: 0.03 }}
-                        className="absolute -bottom-3 -left-3 h-6 w-6 rounded-full border border-[#0084FF]/50"
+                        className="absolute -bottom-3 -left-3 h-6 w-6 rounded-full border border-[color-mix(in_srgb,var(--brand-accent)_50%,transparent)]"
                       />
                     </>
                   )}
@@ -456,7 +456,7 @@ export function AppMockup() {
                     <motion.span
                       animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.15, 1] }}
                       transition={{ duration: 0.9, repeat: Infinity }}
-                      className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full bg-[#0084FF]/40 blur-[2px]"
+                      className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_40%,transparent)] blur-[2px]"
                     />
                   )}
                 </motion.div>

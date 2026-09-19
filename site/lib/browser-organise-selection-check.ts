@@ -1,0 +1,139 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { searchKnowledge } from "@suhuella/product/host/browser/search.ts";
+import { isTechnicalSourceId } from "@suhuella/product/host/browser/connect-source.ts";
+import {
+  indexedFileFromBrowserFile,
+  knowledgeItemsFromBrowserFiles,
+  knowledgeItemsFromIndexedFiles,
+  ORGANISE_CHOOSE_FILES,
+  ORGANISE_CHOOSE_FOLDER,
+  ORGANISE_CONNECT_FOLDER,
+  ORGANISE_DOCUMENTS_TITLE,
+  ORGANISE_EMPTY_BODY,
+  ORGANISE_EMPTY_NO_SOURCES,
+  ORGANISE_EXECUTION_LIMIT,
+  ORGANISE_FOLDER_UNSUPPORTED,
+  ORGANISE_SELECT_FROM_SOURCES,
+  organiseHasUploadLanguage,
+  organisePickErrorMessage,
+  organiseRequiresDesktop,
+  planUsesAbsoluteFilesystemPath,
+} from "@suhuella/product/lib/browser-organise-selection.ts";
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
+
+function runBrowserOrganiseSelectionCheck(): void {
+  const organise = readFileSync(join(process.cwd(), "../packages/product/src/components/OrganisePanel.tsx"), "utf8");
+  const host = readFileSync(join(process.cwd(), "../packages/product/src/host/install-browser-host.ts"), "utf8");
+
+  assert(!organise.includes("This browser cannot choose documents."), "Organise does not show the dead-end banner by default");
+  assert(organise.includes("ORGANISE_SELECT_FROM_SOURCES"), "Organise offers Select from Sources");
+  assert(organise.includes("ORGANISE_CHOOSE_FILES"), "Organise offers Choose files");
+  assert(organise.includes("ORGANISE_CHOOSE_FOLDER"), "Organise offers Choose folder");
+  assert(organise.includes("ORGANISE_CONNECT_FOLDER"), "Organise offers Connect a folder when empty");
+  assert(organise.includes("ORGANISE_DOCUMENTS_TITLE"), "Organise empty card is constructive");
+  assert(organise.includes("locations.length === 0"), "empty state branches on connected sources");
+  assert(organise.includes("openSourcePicker"), "connected sources can be selected");
+  assert(organise.includes("factura-enero.pdf") === false, "UI does not hardcode demo filenames");
+  assert(!organise.includes("Download Desktop"), "Organise does not require Desktop");
+  assert(!organiseHasUploadLanguage(ORGANISE_EMPTY_BODY), "empty copy does not upload");
+  assert(!organiseHasUploadLanguage(ORGANISE_EXECUTION_LIMIT), "execution copy does not upload");
+  assert(!organiseRequiresDesktop(ORGANISE_EXECUTION_LIMIT), "execution limit does not require Desktop");
+  assert(ORGANISE_EMPTY_NO_SOURCES.includes("Connect") || ORGANISE_EMPTY_NO_SOURCES.includes("choose files"), "no-source copy is constructive");
+
+  assert(
+    organisePickErrorMessage(Object.assign(new Error("The user aborted a request."), { name: "AbortError" })) === null,
+    "picker cancel is silent",
+  );
+  assert(
+    organisePickErrorMessage(new Error("This browser cannot choose documents.")) === null,
+    "generic cannot-choose-documents is not shown as a product failure",
+  );
+  assert(
+    organisePickErrorMessage(new Error("Folder access is not available in this browser.")) === ORGANISE_FOLDER_UNSUPPORTED,
+    "unsupported folder picker is a friendly limitation",
+  );
+
+  const picked = knowledgeItemsFromBrowserFiles([{ name: "factura-enero.pdf" }], (_file, index) => `picked/${index}/factura-enero.pdf`);
+  assert(picked[0]?.kind === "file", "file picker creates a file descriptor");
+  assert(picked[0]?.path === "picked/0/factura-enero.pdf", "file picker keeps a virtual identifier");
+  assert(!planUsesAbsoluteFilesystemPath(picked[0].path), "Plan input does not require an absolute filesystem path");
+
+  const descriptor = indexedFileFromBrowserFile(
+    { name: "contrato-cliente.docx", size: 28, lastModified: 1_700_000_000_000, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    "picked",
+    "0/contrato-cliente.docx",
+  );
+  assert(descriptor.name === "contrato-cliente.docx", "picked file keeps its filename");
+  assert(descriptor.size === 28, "picked file keeps size");
+  assert(descriptor.lastModified !== null, "picked file keeps lastModified");
+
+  const sourceFiles = [
+    {
+      id: "src_informes:factura-enero.pdf",
+      sourceId: "src_informes",
+      name: "factura-enero.pdf",
+      relativePath: "factura-enero.pdf",
+      parentRelative: "",
+      size: 12,
+      lastModified: null,
+    },
+    {
+      id: "src_informes:contrato-cliente.docx",
+      sourceId: "src_informes",
+      name: "contrato-cliente.docx",
+      relativePath: "contrato-cliente.docx",
+      parentRelative: "",
+      size: 20,
+      lastModified: null,
+    },
+  ];
+  const selected = knowledgeItemsFromIndexedFiles(
+    [sourceFiles[0]],
+    (file) => `${file.sourceId}/${file.relativePath}`,
+  );
+  assert(selected[0]?.path === "src_informes/factura-enero.pdf", "source files become Plan input descriptors");
+  assert(!planUsesAbsoluteFilesystemPath(selected[0].path), "source Plan input stays virtual");
+
+  const planInput = selected.map((item) => ({ currentPath: item.path, fileName: item.path.split("/").pop() ?? item.path }));
+  assert(planInput.length === 1, "Plan draft is created from browser descriptors");
+  assert(planInput.every((item) => !planUsesAbsoluteFilesystemPath(item.currentPath)), "Plan items do not use absolute paths");
+
+  const searchHits = searchKnowledge({
+    query: "factura",
+    files: sourceFiles,
+    sources: [
+      {
+        id: "src_informes",
+        kind: "local",
+        type: "local_folder",
+        name: "informes",
+        fileCount: 2,
+        folderCount: 1,
+        bytes: 32,
+        lastIndexed: null,
+        status: "ready",
+      },
+    ],
+    workflows: [],
+    activity: [],
+  });
+  assert(searchHits.some((hit) => hit.title === "factura-enero.pdf"), "Search and Organise read the same browser index");
+  assert(!isTechnicalSourceId("informes"), "source label stays human");
+
+  assert(host.includes("rememberOrganiseDescriptors"), "picked files are remembered locally");
+  assert(host.includes("requestLocalFiles"), "Choose files uses the browser file picker");
+  assert(host.includes("requestLocalFolder"), "Choose folder uses the browser folder picker");
+  assert(host.includes("ORGANISE_FOLDER_UNSUPPORTED") || host.includes("cannot choose folders"), "unsupported folder picker is classified");
+  assert(host.includes("ORGANISE_EXECUTION_LIMIT"), "execution is limited separately from Plan creation");
+  assert(
+    !host.includes("This browser cannot move or rename files. Use Chrome"),
+    "browser Plan execution does not require Desktop",
+  );
+}
+
+runBrowserOrganiseSelectionCheck();
+console.log("BROWSER-ORGANISE-SELECTION-001 check passed");

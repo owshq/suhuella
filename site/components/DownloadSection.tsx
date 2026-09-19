@@ -8,6 +8,7 @@ import { WindowsIcon } from "@/components/icons/WindowsIcon";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 import type { Dictionary } from "@/lib/i18n/types";
+import { hasDownloadableInstaller, visibleInstallers } from "@/lib/installer-availability";
 import { formatAppVersion } from "@/lib/release";
 
 type DownloadSectionProps = {
@@ -18,6 +19,8 @@ type DownloadSectionProps = {
     windows: string;
     mac: string;
   };
+  windowsLabel?: string;
+  macLabel?: string;
 };
 
 type Installer = {
@@ -26,6 +29,8 @@ type Installer = {
   ext: string;
   icon: typeof WindowsIcon;
   external?: boolean;
+  disabled?: boolean;
+  unavailableLabel: string;
 };
 
 function InstallerButton({
@@ -37,6 +42,48 @@ function InstallerButton({
   index: number;
   version: string;
 }) {
+  const className =
+    "group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/60 bg-white/40 p-4 transition-all duration-300 hover:bg-white/60 hover:shadow-xl hover:shadow-blue-900/10 md:p-5";
+
+  const content = (
+    <>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--brand-accent)] shadow-sm transition-colors group-hover:bg-[var(--brand-accent)] group-hover:text-[var(--brand-on-accent)]">
+        <item.icon className="h-6 w-6" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-slate-800 md:text-base">
+            {item.label}
+          </span>
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--brand-accent)]">
+            {version}
+          </span>
+        </div>
+        <p className="mt-0.5 text-xs font-medium text-slate-500">
+          {item.disabled ? item.unavailableLabel : `${item.label} ${item.ext}`}
+        </p>
+      </div>
+
+      <ArrowDownToLine className="h-5 w-5 shrink-0 text-slate-400 transition-colors group-hover:text-[var(--brand-accent)]" />
+    </>
+  );
+
+  if (item.disabled || !item.href || item.href === "#") {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ delay: index * 0.1, duration: 0.5 }}
+        aria-disabled="true"
+        className={`${className} pointer-events-none opacity-60`}
+      >
+        {content}
+      </motion.div>
+    );
+  }
+
   return (
     <motion.a
       href={item.href}
@@ -48,40 +95,21 @@ function InstallerButton({
       transition={{ delay: index * 0.1, duration: 0.5 }}
       whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
-      className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-white/60 bg-white/40 p-4 transition-all duration-300 hover:bg-white/60 hover:shadow-xl hover:shadow-blue-900/10 md:p-5"
+      className={className}
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-[#0084FF] shadow-sm transition-colors group-hover:bg-[#0084FF] group-hover:text-white">
-        <item.icon className="h-6 w-6" />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-slate-800 md:text-base">
-            {item.label}
-          </span>
-          <span className="rounded-full bg-[#0084FF]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[#0084FF]">
-            {version}
-          </span>
-        </div>
-        <p className="mt-0.5 text-xs font-medium text-slate-500">
-          {item.label} {item.ext}
-        </p>
-      </div>
-
-      <ArrowDownToLine className="h-5 w-5 shrink-0 text-slate-400 transition-colors group-hover:text-[#0084FF]" />
+      {content}
     </motion.a>
   );
 }
 
 function PurchaseLink({ t }: { t: Dictionary }) {
   return (
-    <p className="mt-4 text-center text-xs text-zinc-600">
-      {t.download.orBuy}{" "}
+    <p className="mt-4 text-center text-sm text-slate-600">
       <Link
-        href="/"
-        className="text-violet-400 underline-offset-2 transition-colors hover:text-violet-300 hover:underline"
+        href="/license"
+        className="font-semibold text-[var(--brand-accent)] underline-offset-2 transition-colors hover:text-slate-900 hover:underline"
       >
-        suhuella.com
+        {t.download.orBuy}
       </Link>
     </p>
   );
@@ -92,42 +120,53 @@ export function DownloadSection({
   showPurchaseLink = false,
   compact = false,
   installerUrls,
+  windowsLabel,
+  macLabel,
 }: DownloadSectionProps) {
   const { t } = useLocale();
   const version = formatAppVersion();
-  const purchaseUrl = checkoutUrl || "#";
+  const shown = visibleInstallers(installerUrls);
 
-  const installers: Installer[] = installerUrls
-    ? [
-        {
-          href: installerUrls.windows || "#",
-          label: t.download.windows,
-          ext: ".exe",
-          icon: WindowsIcon,
-        },
-        {
-          href: installerUrls.mac || "#",
-          label: t.download.mac,
-          ext: ".dmg",
-          icon: AppleIcon,
-        },
-      ]
-    : [
-        {
-          href: purchaseUrl,
-          label: t.download.windows,
-          ext: ".exe",
-          icon: WindowsIcon,
-          external: Boolean(checkoutUrl),
-        },
-        {
-          href: purchaseUrl,
-          label: t.download.mac,
-          ext: ".dmg",
-          icon: AppleIcon,
-          external: Boolean(checkoutUrl),
-        },
-      ];
+  const installers: Installer[] = [
+    ...(shown.windows
+      ? [
+          {
+            href: shown.windows,
+            label: windowsLabel ?? t.download.windows,
+            ext: ".exe",
+            icon: WindowsIcon,
+            external: true,
+            unavailableLabel: t.download.unavailable,
+          } satisfies Installer,
+        ]
+      : []),
+    ...(shown.mac
+      ? [
+          {
+            href: shown.mac,
+            label: macLabel ?? t.download.mac,
+            ext: ".dmg",
+            icon: AppleIcon,
+            external: true,
+            unavailableLabel: t.download.unavailable,
+          } satisfies Installer,
+        ]
+      : []),
+  ];
+
+  if (!hasDownloadableInstaller(shown) && !checkoutUrl) {
+    return (
+      <section
+        id="descarga"
+        className={`rounded-2xl ${compact ? "w-full scroll-mt-28" : "mx-auto max-w-3xl scroll-mt-28 px-6"}`}
+      >
+        <p className="rounded-2xl border border-white/60 bg-white/50 px-4 py-3 text-center text-sm leading-relaxed text-slate-600">
+          {t.download.comingSoon}
+        </p>
+        {showPurchaseLink ? <PurchaseLink t={t} /> : null}
+      </section>
+    );
+  }
 
   const grid = (
     <div className={`grid md:grid-cols-2 ${compact ? "gap-3" : "gap-4"}`}>
