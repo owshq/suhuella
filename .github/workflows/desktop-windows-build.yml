@@ -16,10 +16,11 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install dependencies
-        run: |
-          npm install --prefix desktop
-          if [ -f site/package-lock.json ]; then npm ci --prefix site; else npm install --prefix site; fi
+      - name: Install desktop dependencies
+        run: npm install --prefix desktop
+
+      - name: Install site dependencies
+        run: npm install --prefix site
 
       - uses: actions/setup-dotnet@v4
         with:
