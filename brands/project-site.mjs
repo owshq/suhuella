@@ -2,10 +2,20 @@ import { createRequire } from "node:module";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { brandIdentity, brandPublicDir, repoRoot, resolveBrandId } from "./select.mjs";
+import { projectBrandEntry } from "./project-brand.mjs";
 
 const require = createRequire(import.meta.url);
-const sharp = require("../desktop/node_modules/sharp");
-const toIco = require("../desktop/node_modules/to-ico");
+
+function loadOptional(moduleCandidates) {
+  for (const candidate of moduleCandidates) {
+    try {
+      return require(candidate);
+    } catch {
+      // try next path
+    }
+  }
+  return null;
+}
 
 const BRAND_PUBLIC_FILES = [
   "suhuella-logo.svg",
@@ -22,6 +32,10 @@ const BRAND_PUBLIC_FILES = [
 ];
 
 const brandId = resolveBrandId();
+
+// Always generate @suhuella/brand entry first — before any optional native deps.
+await projectBrandEntry(brandId);
+
 const identity = brandIdentity(brandId);
 const publicDir = path.join(repoRoot, "site/public");
 const appDir = path.join(repoRoot, "site/app");
@@ -41,12 +55,28 @@ if (!pwa?.backgroundColor || !pwa.themeColor || !pwa.icon512 || !pwa.icon256 || 
   throw new Error(`brands/${brandId}/identity.json is missing pwa projection fields.`);
 }
 
+const sharp = loadOptional([
+  "../desktop/node_modules/sharp",
+  "../site/node_modules/sharp",
+]);
+const toIco = loadOptional([
+  "../desktop/node_modules/to-ico",
+  "../site/node_modules/to-ico",
+]);
+
 const icon192Path = path.join(publicDir, path.basename(pwa.icon192));
+const icon256Path = path.join(publicDir, path.basename(pwa.icon256));
+const icon512Path = path.join(publicDir, path.basename(pwa.icon512));
+
 try {
   await readFile(icon192Path);
 } catch {
-  const icon256Path = path.join(publicDir, path.basename(pwa.icon256));
-  await sharp(icon256Path).resize(192, 192).png().toFile(icon192Path);
+  if (!sharp) {
+    console.warn("[brand] sharp missing — copying 256px icon as 192px fallback");
+    await cp(icon256Path, icon192Path);
+  } else {
+    await sharp(icon256Path).resize(192, 192).png().toFile(icon192Path);
+  }
 }
 
 const manifest = {
@@ -69,28 +99,30 @@ await writeFile(path.join(publicDir, "app.webmanifest"), `${JSON.stringify(manif
 
 const appIconSvgName = path.basename(pwa.logoSvg).replace("-logo.svg", "-app-icon.svg");
 const appIconSvgPath = path.join(publicDir, appIconSvgName);
-const icon512Path = path.join(publicDir, path.basename(pwa.icon512));
-let faviconSource;
-try {
-  faviconSource = await readFile(appIconSvgPath);
-} catch {
-  faviconSource = await readFile(icon512Path);
+const faviconTargets = [path.join(appDir, "favicon.ico"), path.join(publicDir, "favicon.ico")];
+
+if (sharp && toIco) {
+  let faviconSource;
+  try {
+    faviconSource = await readFile(appIconSvgPath);
+  } catch {
+    faviconSource = await readFile(icon512Path);
+  }
+  const faviconSizes = [16, 32, 48];
+  const faviconBuffers = await Promise.all(
+    faviconSizes.map((size) => sharp(faviconSource).resize(size, size).png().toBuffer()),
+  );
+  const faviconIco = await toIco(faviconBuffers);
+  for (const target of faviconTargets) {
+    await writeFile(target, faviconIco);
+  }
+
+  const logoSvgPath = path.join(publicDir, path.basename(pwa.logoSvg));
+  const logoSvg = await readFile(logoSvgPath);
+  const logoPngPath = path.join(publicDir, path.basename(pwa.logoSvg).replace(".svg", ".png"));
+  await sharp(logoSvg).resize(512, 512).png().toFile(logoPngPath);
+} else {
+  console.warn("[brand] sharp/to-ico missing — favicon/logo PNG generation skipped (run npm install)");
 }
-const faviconSizes = [16, 32, 48];
-const faviconBuffers = await Promise.all(
-  faviconSizes.map((size) => sharp(faviconSource).resize(size, size).png().toBuffer()),
-);
-const faviconIco = await toIco(faviconBuffers);
-await writeFile(path.join(appDir, "favicon.ico"), faviconIco);
-await writeFile(path.join(publicDir, "favicon.ico"), faviconIco);
-
-const logoSvgPath = path.join(publicDir, path.basename(pwa.logoSvg));
-const logoSvg = await readFile(logoSvgPath);
-const logoPngPath = path.join(publicDir, path.basename(pwa.logoSvg).replace(".svg", ".png"));
-await sharp(logoSvg).resize(512, 512).png().toFile(logoPngPath);
-
-const packageEntry = path.join(repoRoot, "brands/.build/entry.ts");
-await mkdir(path.dirname(packageEntry), { recursive: true });
-await writeFile(packageEntry, `export * from "../${brandId}/entry.ts";\n`);
 
 console.log(`[brand] projected ${brandId} public assets and @suhuella/brand entry`);

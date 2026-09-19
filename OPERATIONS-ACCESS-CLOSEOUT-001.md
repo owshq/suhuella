@@ -254,7 +254,7 @@ Not a user-facing first-run feature. Does not block Web RC unless `/_ops` breaks
 After close:
 
 1. **SOURCES-CAPABILITY-MATRIX-001** (if still OPEN)
-2. **FIRST-RUN-EXPERIENCE-001**
+2. **FIRST-IMPRESSION-TEST-001** (supersedes FIRST-RUN-EXPERIENCE-001)
 
 No additional Operations work unless production access fails in practice.
 

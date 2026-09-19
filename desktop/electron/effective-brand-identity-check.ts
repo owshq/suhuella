@@ -3,7 +3,7 @@ import {
   deriveProductBrandView,
   EFFECTIVE_BRAND_IDENTITY_VERSION,
   resolveEffectiveBrandIdentity,
-} from '../src/lib/effective-brand-identity.ts'
+} from '@suhuella/product/lib/effective-brand-identity.ts'
 
 const base = resolveEffectiveBrandIdentity()
 assert.equal(base.identityVersion, EFFECTIVE_BRAND_IDENTITY_VERSION, 'identity version is 1')

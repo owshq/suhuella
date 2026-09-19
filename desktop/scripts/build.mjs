@@ -21,13 +21,15 @@ function run(command, args) {
 }
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const releaseGate = spawnSync(process.execPath, ['brands/run-release-gate.mjs'], {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  env: process.env,
-})
-if (releaseGate.status !== 0) {
-  process.exit(releaseGate.status ?? 1)
+for (const script of ['brands/run-release-gate.mjs', 'brands/project-brand.mjs']) {
+  const step = spawnSync(process.execPath, [script], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+    env: process.env,
+  })
+  if (step.status !== 0) {
+    process.exit(step.status ?? 1)
+  }
 }
 
 process.env.SUHUELLA_BUILD ??= new Date().toISOString().slice(0, 10)

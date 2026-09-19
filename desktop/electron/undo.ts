@@ -9,9 +9,9 @@ import type {
   KnowledgeSetValidationErrorCode,
   OrganisationExecutionResult,
   UndoExecutionResult,
-} from '../src/types.ts'
-import { activityItemFromPlanItem } from '../src/lib/activity-copy.ts'
-import { isFolderCreateAction } from '../src/lib/plan-editor-copy.ts'
+} from '@suhuella/product/types.ts'
+import { activityItemFromPlanItem } from '@suhuella/product/lib/activity-copy.ts'
+import { isFolderCreateAction } from '@suhuella/product/lib/plan-editor-copy.ts'
 import {
   loadActivityRuns,
   nextActivityRunNumber,
@@ -25,7 +25,7 @@ import {
   inversePlanFromActivityRun,
   planFromExecutedItems,
 } from './organisation-plan.ts'
-import type { IndexedFolderEntry } from '../src/types.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 
 export const UNDO_MAX_AGE_DAYS = 30
 

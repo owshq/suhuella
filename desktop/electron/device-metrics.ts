@@ -1,11 +1,11 @@
 import { statfsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { DeviceMetrics, DeviceStorageMetrics } from '../src/types.ts'
-import { assembleDeviceMetrics, emptyDeviceMetrics } from '../src/lib/device-metrics-view.ts'
+import type { DeviceMetrics, DeviceStorageMetrics } from '@suhuella/product/types.ts'
+import { assembleDeviceMetrics, emptyDeviceMetrics } from '@suhuella/product/lib/device-metrics-view.ts'
 import { getOsComputerName } from './device-identity.ts'
 import { assembleStorageOverview } from './document-storage.ts'
-import { emptyAppStorage } from '../src/lib/storage-overview.ts'
+import { emptyAppStorage } from '@suhuella/product/lib/storage-overview.ts'
 
 let startupMs: number | null = null
 let lastRecommendationMs: number | null = null

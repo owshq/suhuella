@@ -10,7 +10,7 @@ import type {
   RecommendationInput,
   RecommendedFolder,
   ScoreContribution,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const MAX_CANDIDATES = 100
 

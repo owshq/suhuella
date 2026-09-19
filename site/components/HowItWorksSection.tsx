@@ -25,7 +25,7 @@ export function HowItWorksSection() {
   const { t } = useLocale();
 
   return (
-    <section className="mx-auto max-w-6xl px-6 py-20 md:py-28">
+    <section className="mx-auto max-w-6xl px-6 pt-20 pb-10 md:pt-28 md:pb-14">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -48,7 +48,7 @@ export function HowItWorksSection() {
         {t.howItWorks.steps.map((step) => (
           <motion.div key={step.number} variants={item}>
             <GlassCard className="h-full p-6 md:p-7">
-              <span className="inline-flex rounded-full bg-[#0084FF]/10 px-2.5 py-1 font-mono text-xs font-semibold text-[#0084FF]">
+              <span className="inline-flex rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] px-2.5 py-1 font-mono text-xs font-semibold text-[var(--brand-accent)]">
                 {step.number}
               </span>
               <h3 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">

@@ -22,7 +22,7 @@
     "paths": {
       "@/*": ["./*"],
       "@suhuella/brand": ["../brands/.build/entry.ts"],
-      "@suhuella/desktop/*": ["../desktop/src/*"]
+      "@suhuella/product/*": ["../packages/product/src/*"]
     }
   },
   "include": [

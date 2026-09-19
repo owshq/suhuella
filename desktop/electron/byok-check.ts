@@ -11,7 +11,7 @@ import {
 import { addByokPreference, listByokPreferences } from './byok-preferences-store.ts'
 import { runByokContractChecks } from './byok.ts'
 import { recommendFolders } from './recommendations.ts'
-import type { IndexedFolderEntry } from '../src/types.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 
 function desktopRoot(): string {
   const cwd = process.cwd()

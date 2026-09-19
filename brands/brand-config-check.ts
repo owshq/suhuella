@@ -19,8 +19,8 @@ import {
 } from "./index.ts";
 import { verificationEmailSubject } from "../site/lib/resend-mail.ts";
 import { businessCheckoutUrl } from "../site/lib/checkout.ts";
-import { resolveEffectiveBranding } from "../desktop/src/lib/effective-branding.ts";
-import { licenseErrorMessage } from "../desktop/src/lib/license-status.ts";
+import { resolveEffectiveBranding } from "../packages/product/src/lib/effective-branding.ts";
+import { licenseErrorMessage } from "../packages/product/src/lib/license-status.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -174,8 +174,8 @@ function run(): void {
     rootWrangler.includes(`"NEXT_PUBLIC_APP_VERSION": "${publicVersion}"`),
     "root Worker env version matches public version",
   );
-  const browserLicense = readText("desktop/src/host/browser/license.ts");
-  const browserHost = readText("desktop/src/host/install-browser-host.ts");
+  const browserLicense = readText("packages/product/src/host/browser/license.ts");
+  const browserHost = readText("packages/product/src/host/install-browser-host.ts");
   assert(browserLicense.includes("brand.release.version"), "browser license appVersion reads BrandConfig");
   assert(!browserLicense.includes("0.1.0-web"), "0.1.0-web is not a public version");
   assert(browserHost.includes("brand.release.version"), "browser About version reads BrandConfig");
@@ -320,43 +320,43 @@ function run(): void {
   const siteMark = readText("site/components/icons/BrandMark.tsx");
   const overlayFrame = readText("site/components/web/RouteOverlayFrame.tsx");
   const downloadCatalog = readText("site/components/DownloadCatalogContent.tsx");
-  const settingsWindow = readText("desktop/src/windows/SettingsWindow.tsx");
+  const settingsWindow = readText("packages/product/src/windows/SettingsWindow.tsx");
   assert(siteLogo.includes("BrandMark"), "site SuhuellaLogo uses BrandConfig mark");
   assert(
     siteMark.includes("brand.logo.publicSvg") || siteMark.includes("BrandMarkGlyph"),
     "site BrandMark reads BrandConfig logo",
   );
-  const desktopBrandMark = readText("desktop/src/components/BrandMark.tsx");
-  const desktopBrandWordmark = readText("desktop/src/components/BrandWordmark.tsx");
+  const desktopBrandMark = readText("packages/product/src/components/BrandMark.tsx");
+  const desktopBrandWordmark = readText("packages/product/src/components/BrandWordmark.tsx");
   assert(desktopBrandMark.includes("identity: EffectiveBrandIdentity"), "BrandMark paints identity.logo");
   assert(!desktopBrandMark.includes("useEffectiveBrandIdentity"), "BrandMark never decides");
   assert(!desktopBrandWordmark.includes("useEffectiveBrandIdentity"), "BrandWordmark never decides");
   assert(
-    readText("desktop/src/lib/branding/PartnerProductMark.tsx").includes("INTERNAL ONLY"),
+    readText("packages/product/src/lib/branding/PartnerProductMark.tsx").includes("INTERNAL ONLY"),
     "partner/product mark is internal-only",
   );
   assert(
-    !readText("desktop/src/components/IdentityCard.tsx").includes("PartnerProductMark"),
+    !readText("packages/product/src/components/IdentityCard.tsx").includes("PartnerProductMark"),
     "UI components do not import PartnerProductMark",
   );
   assert(
-    readText("desktop/src/components/AppBrandingContext.tsx").includes("useEffectiveBrandIdentity"),
+    readText("packages/product/src/components/AppBrandingContext.tsx").includes("useEffectiveBrandIdentity"),
     "app branding exposes ADR-003 hook",
   );
   assert(
-    readText("desktop/src/components/BrandMark.tsx").includes("PartnerProductMark"),
+    readText("packages/product/src/components/BrandMark.tsx").includes("PartnerProductMark"),
     "BrandMark falls back to partner/product mark",
   );
   assert(
-    readText("desktop/src/lib/effective-brand-identity.ts").includes("identityVersion"),
+    readText("packages/product/src/lib/effective-brand-identity.ts").includes("identityVersion"),
     "EffectiveBrandIdentity contract is versioned",
   );
   assert(
-    readText("desktop/src/lib/effective-brand-identity.ts").includes("deriveProductBrandView"),
+    readText("packages/product/src/lib/effective-brand-identity.ts").includes("deriveProductBrandView"),
     "product brand is a derived view not a parallel resolver",
   );
   assert(
-    readText("desktop/src/components/AppBrandingContext.tsx").includes("useProductBrandIdentity"),
+    readText("packages/product/src/components/AppBrandingContext.tsx").includes("useProductBrandIdentity"),
     "product brand hook derives from base resolver",
   );
   assert(
@@ -372,7 +372,7 @@ function run(): void {
   assert(!desktopBrandMark.includes("@suhuella/brand"), "BrandMark does not read BrandConfig");
   assert(!desktopBrandWordmark.includes("@suhuella/brand"), "BrandWordmark does not read BrandConfig");
   assert(!desktopBrandMark.includes("resolveEffectiveBrandIdentity"), "BrandMark does not call resolver");
-  const appBranding = readText("desktop/src/components/AppBrandingContext.tsx");
+  const appBranding = readText("packages/product/src/components/AppBrandingContext.tsx");
   assert(appBranding.includes("resolveEffectiveBrandIdentity"), "hooks layer owns resolver calls");
   assert(!appBranding.includes("<BrandMark"), "identity hooks do not render presenters");
   assert(
@@ -426,7 +426,7 @@ function run(): void {
   const releaseManifest = readText("site/lib/release-manifest.ts");
   assert(releaseManifest.includes("releaseRemoteEnabled"), "remote release fetch is gated per Brand");
 
-  const organise = readText("desktop/src/components/OrganisePanel.tsx");
+  const organise = readText("packages/product/src/components/OrganisePanel.tsx");
   assert(!organise.includes("location.hostname"), "Organise is not hostname-switched");
   assert(!organise.includes("brand.id"), "Organise does not branch on brand.id");
 

@@ -1,15 +1,15 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { activityItemFromPlanItem, humanActivityReason } from '../src/lib/activity-copy.ts'
-import { summarizeActivity, summarizeActivityProgress } from '../src/lib/activity-summary.ts'
-import { estimateTimeSaved } from '../src/lib/time-saved.ts'
+import { activityItemFromPlanItem, humanActivityReason } from '@suhuella/product/lib/activity-copy.ts'
+import { summarizeActivity, summarizeActivityProgress } from '@suhuella/product/lib/activity-summary.ts'
+import { estimateTimeSaved } from '@suhuella/product/lib/time-saved.ts'
 import type {
   ActivityRun,
   ActivityTrigger,
   OrganisationExecutionResult,
   OrganisationPlanItem,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 import { buildInverseOrganisationPlan, planFromExecutedItems } from './organisation-plan.ts'
 import {
   ACTIVITY_MAX_AGE_DAYS,

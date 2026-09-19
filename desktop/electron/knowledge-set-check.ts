@@ -12,7 +12,7 @@ import { runStorageChecks } from './storage-manager.ts'
 import { runUndoChecks } from './undo.ts'
 import { runWorkflowChecks } from './workflow-store.ts'
 import { runSaveAsOverlayChecks } from './save-as-overlay.ts'
-import { runPlanPresentationChecks } from '../src/lib/plan-presentation.ts'
+import { runPlanPresentationChecks } from '@suhuella/product/lib/plan-presentation.ts'
 import './license-status-check.ts'
 
 function readOrganiseSource(relativePath: string): string {

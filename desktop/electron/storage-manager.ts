@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { AppStorageBreakdown, StorageUsage } from '../src/types.ts'
+import type { AppStorageBreakdown, StorageUsage } from '@suhuella/product/types.ts'
 import { ACTIVITY_MAX_AGE_DAYS, ACTIVITY_MAX_RUNS, clearActivityRuns, loadActivityRuns } from './activity-store.ts'
 import { cacheSizeBytes, clearCache, loadCacheManifest, pruneCache } from './cache-store.ts'
 import { clearLogs, logsSizeBytes, pruneLogs } from './log-store.ts'

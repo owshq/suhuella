@@ -11,7 +11,7 @@ import {
   listByokConversation,
 } from './byok-conversation.ts'
 import { loadByokCredentials } from './byok-store.ts'
-import type { ByokAssistResult, ByokProviderId } from '../src/types.ts'
+import type { ByokAssistResult, ByokProviderId } from '@suhuella/product/types.ts'
 
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_TOKENS = 500

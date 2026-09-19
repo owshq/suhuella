@@ -1,4 +1,4 @@
-import type { Intent, IntentContext, IntentId, KnowledgeDescriptor } from '../src/types.ts'
+import type { Intent, IntentContext, IntentId, KnowledgeDescriptor } from '@suhuella/product/types.ts'
 
 /**
  * Intent Resolver — runtime only.

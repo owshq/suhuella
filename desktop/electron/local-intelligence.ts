@@ -1,4 +1,4 @@
-import type { KnowledgeDescriptor } from '../src/types.ts'
+import type { KnowledgeDescriptor } from '@suhuella/product/types.ts'
 
 /**
  * INTELLIGENCE-MODEL-001 — Local Intelligence

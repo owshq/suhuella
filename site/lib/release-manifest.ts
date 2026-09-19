@@ -4,14 +4,46 @@ import { getInstallerUrls, type InstallerUrls } from "@/lib/downloads";
 
 export type ReleaseChannel = "stable" | "beta";
 
+export type ReleaseDownloadTarget = {
+  available: boolean;
+  url: string | null;
+};
+
 export type ReleaseManifest = {
   version: string;
   channel: ReleaseChannel;
   minimumVersion: string;
   mandatory: boolean;
+  notes: string;
+  releaseDate: string;
+  downloads: {
+    web: ReleaseDownloadTarget;
+    mac: ReleaseDownloadTarget;
+    windows: ReleaseDownloadTarget;
+  };
   windows: string;
   mac: string;
 };
+
+function downloadTarget(
+  entry: unknown,
+  legacyUrl: string,
+): ReleaseDownloadTarget {
+  if (entry && typeof entry === "object") {
+    const record = entry as Record<string, unknown>;
+    const urlRaw = record.url;
+    const url =
+      urlRaw === null || urlRaw === undefined
+        ? null
+        : typeof urlRaw === "string" && urlRaw.trim()
+          ? urlRaw.trim()
+          : null;
+    const available = record.available === true || Boolean(url);
+    return { available, url };
+  }
+  const legacy = legacyUrl.trim();
+  return { available: Boolean(legacy), url: legacy || null };
+}
 
 function isValidHttpsUrl(value: string): boolean {
   try {
@@ -26,12 +58,28 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
 
   const record = data as Record<string, unknown>;
   const version = typeof record.version === "string" ? record.version.trim() : "";
-  const windows = typeof record.windows === "string" ? record.windows.trim() : "";
-  const mac = typeof record.mac === "string" ? record.mac.trim() : "";
+  const legacyWindows = typeof record.windows === "string" ? record.windows.trim() : "";
+  const legacyMac = typeof record.mac === "string" ? record.mac.trim() : "";
+  const downloadsRecord =
+    record.downloads && typeof record.downloads === "object"
+      ? (record.downloads as Record<string, unknown>)
+      : null;
+  const downloads = {
+    web: downloadTarget(downloadsRecord?.web, ""),
+    mac: downloadTarget(downloadsRecord?.mac, legacyMac),
+    windows: downloadTarget(downloadsRecord?.windows, legacyWindows),
+  };
+  if (!downloadsRecord) {
+    downloads.web.available = true;
+  }
+  const windows = downloads.windows.url ?? "";
+  const mac = downloads.mac.url ?? "";
   const minimumVersion =
     typeof record.minimumVersion === "string" && record.minimumVersion.trim()
       ? record.minimumVersion.trim()
       : version;
+  const releaseDate =
+    typeof record.releaseDate === "string" ? record.releaseDate.trim() : "";
 
   if (!version) return null;
   if (windows && !isValidHttpsUrl(windows)) return null;
@@ -42,6 +90,9 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
     channel: record.channel === "beta" ? "beta" : "stable",
     minimumVersion,
     mandatory: record.mandatory === true,
+    notes: typeof record.notes === "string" ? record.notes.trim() : "",
+    releaseDate,
+    downloads,
     windows,
     mac,
   };
@@ -73,6 +124,13 @@ function manifestFromLegacyEnv(): ReleaseManifest | null {
     channel: "stable",
     minimumVersion: version,
     mandatory: false,
+    notes: "",
+    releaseDate: "",
+    downloads: {
+      web: { available: true, url: null },
+      mac: { available: Boolean(installers.mac), url: installers.mac || null },
+      windows: { available: Boolean(installers.windows), url: installers.windows || null },
+    },
     windows: installers.windows,
     mac: installers.mac,
   };

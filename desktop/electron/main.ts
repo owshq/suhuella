@@ -16,7 +16,7 @@ import {
   Tray,
 } from 'electron'
 import { brand } from '@suhuella/brand'
-import { isCustomizableIconId } from '../src/lib/source-appearance.ts'
+import { isCustomizableIconId } from '@suhuella/product/lib/source-appearance.ts'
 import {
   cancelIndexScan,
   getIndexedFolders,
@@ -32,8 +32,8 @@ import {
 } from './index-service.ts'
 import { assertCanExecute, assertCapabilityKernelFrozen, intentAllowsCapability } from './capabilities.ts'
 import { organisationActivityTrigger, persistOrganisationActivity } from './activity.ts'
-import { workflowIntentSummary } from '../src/lib/workflow-copy.ts'
-import { pathForSection, type AppSection } from '../src/lib/app-routes.ts'
+import { workflowIntentSummary } from '@suhuella/product/lib/workflow-copy.ts'
+import { pathForSection, type AppSection } from '@suhuella/product/lib/app-routes.ts'
 import { loadActivityRuns, nextActivityRunNumber } from './activity-store.ts'
 import { loadIndex } from './index-store.ts'
 import { normalizeSearchQuery, searchKnowledge } from './search.ts'
@@ -143,7 +143,7 @@ import type {
   NavigateFolderResult,
   OpenFolderResult,
   SuggestionPayload,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const SETTINGS_MIN_WIDTH = 760
 const SETTINGS_MIN_HEIGHT = 560

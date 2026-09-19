@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "components/web/SuhuellaApp.tsx",
+    "app/app/**/*.ts",
+    "app/app/**/*.tsx",
+    "app/(suhuella)/**/*.ts",
+    "app/(suhuella)/**/*.tsx",
+    "../packages/product/src/**/*.ts",
+    "../packages/product/src/**/*.tsx",
+    "../brands/index.ts",
+    "../brands/types.ts",
+    "../brands/resolve.ts",
+    "../brands/presentation.ts",
+    "../brands/suhuella/brand.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "../packages/product/src/main.tsx"
+  ]
+}

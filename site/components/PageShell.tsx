@@ -14,8 +14,10 @@ export function PageShell({ children, landing = false }: PageShellProps) {
   return (
     <LocaleProvider>
       <DocumentTitle />
-      <AnimatedMeshBackground landing={landing} />
-      {children}
+      <div className="landing-surface relative flex min-h-screen flex-col">
+        <AnimatedMeshBackground landing={landing} />
+        {children}
+      </div>
     </LocaleProvider>
   );
 }

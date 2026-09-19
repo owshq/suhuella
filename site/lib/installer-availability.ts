@@ -1,4 +1,5 @@
 import type { InstallerUrls } from "./downloads.ts";
+import { publicReleaseAliases } from "@suhuella/product/lib/release-lifecycle";
 
 export type VisibleInstallers = {
   windows?: string;
@@ -39,15 +40,21 @@ export function publicReleasePayload(release: {
   channel: "stable" | "beta";
   minimumVersion: string;
   mandatory: boolean;
+  notes?: string;
+  releaseDate?: string;
+  downloads?: {
+    web: { available: boolean; url?: string | null };
+    mac: { available: boolean; url?: string | null };
+    windows: { available: boolean; url?: string | null };
+  };
   windows: string;
   mac: string;
 }) {
   const shown = visibleInstallers(release);
   return {
-    version: release.version,
-    channel: release.channel,
-    minimumVersion: release.minimumVersion,
-    mandatory: release.mandatory,
+    ...publicReleaseAliases(release),
+    ...(release.releaseDate ? { releaseDate: release.releaseDate } : {}),
+    ...(release.downloads ? { downloads: release.downloads } : {}),
     ...shown,
   };
 }

@@ -14,9 +14,9 @@ import type {
   SuggestedLocation,
   SuggestionMode,
   SuggestionPayload,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 import { applyBrandPresentation } from '@suhuella/brand'
-import { fileTypeLabel, prettyToken } from '../src/lib/save-as-copy.ts'
+import { fileTypeLabel, prettyToken } from '@suhuella/product/lib/save-as-copy.ts'
 
 const MAX_LEARNED = 5
 const MAX_AVAILABLE = 6
@@ -509,7 +509,7 @@ export function runSaveAsOverlayChecks(): void {
 
   const cwdWindow = existsSync(path.join(cwd, 'src/windows/SuggestionWindow.tsx'))
     ? path.join(cwd, 'src/windows/SuggestionWindow.tsx')
-    : path.join(cwd, 'desktop/src/windows/SuggestionWindow.tsx')
+    : path.join(cwd, 'packages/product/src/windows/SuggestionWindow.tsx')
   const windowSource = readFileSync(cwdWindow, 'utf8')
   if (windowSource.includes('Add folders first')) {
     throw new Error('Save As popup must not use Add folders first as the main experience')

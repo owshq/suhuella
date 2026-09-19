@@ -8,10 +8,10 @@ import type {
   Workflow,
   WorkflowDraft,
   WorkflowTrigger,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 import { validateKnowledgeSet, validateOrganisationPlan, type KnowledgeSetOperationResult } from './knowledge-set.ts'
 import { replayableApprovedPlan } from './organisation-plan.ts'
-import { workflowActionSummary, workflowIconKind, workflowIntentSummary } from '../src/lib/workflow-copy.ts'
+import { workflowActionSummary, workflowIconKind, workflowIntentSummary } from '@suhuella/product/lib/workflow-copy.ts'
 
 export const WORKFLOWS_FILE = 'workflows.json'
 export const WORKFLOWS_LOG_VERSION = 1

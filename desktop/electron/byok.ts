@@ -12,7 +12,7 @@ import type {
   ByokProviderId,
   ByokRecommendationContext,
   ByokTask,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 /**
  * INTELLIGENCE-MODEL-001 — BYOK

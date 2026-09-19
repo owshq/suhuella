@@ -36,7 +36,7 @@ export function FeaturesGrid() {
         transition={{ duration: 0.6 }}
         className="mb-12 text-center"
       >
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-[#0084FF] shadow-sm">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold text-[var(--brand-accent)] shadow-sm">
           <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.5} />
           {t.features.eyebrow}
         </div>
@@ -57,7 +57,7 @@ export function FeaturesGrid() {
           return (
             <motion.div key={feature.title} variants={item}>
               <GlassCard className="group relative h-full overflow-hidden p-6 transition-all duration-300 hover:bg-white/50 hover:shadow-2xl hover:shadow-blue-900/10 md:p-8">
-                <div className="mb-5 inline-flex rounded-xl bg-[#0084FF] p-3 text-white shadow-lg shadow-[#0084FF]/30 transition-transform group-hover:scale-110">
+                <div className="mb-5 inline-flex rounded-xl bg-[var(--brand-accent)] p-3 text-[var(--brand-on-accent)] shadow-lg shadow-[color-mix(in_srgb,var(--brand-accent)_30%,transparent)] transition-transform group-hover:scale-110">
                   <Icon className="h-5 w-5 md:h-6 md:w-6" strokeWidth={2} />
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 md:text-xl">

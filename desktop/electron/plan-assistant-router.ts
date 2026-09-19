@@ -10,15 +10,15 @@ import {
   isPlanAssistantQuestion,
   isSimplePlanAssistantTask,
   ON_DEVICE_PLAN_ASSISTANT_USING,
-} from '../src/lib/plan-assistant-copy.ts'
-import { groundedPlanAssistantReply } from '../src/lib/plan-presentation.ts'
-import type { IndexedFolderEntry } from '../src/types.ts'
+} from '@suhuella/product/lib/plan-assistant-copy.ts'
+import { groundedPlanAssistantReply } from '@suhuella/product/lib/plan-presentation.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 import type {
   KnowledgeSetValidationError,
   PlanAssistantStatus,
   PlanAssistantTurn,
   PlanAssistantUsing,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 /**
  * One Plan Assistant — no selector.
@@ -52,7 +52,7 @@ function failed(error: KnowledgeSetValidationError): PlanAssistantTurn {
 }
 
 function fromLocalResult(
-  result: KnowledgeSetOperationResult<import('../src/types.ts').PlanAssistantProposal>,
+  result: KnowledgeSetOperationResult<import('@suhuella/product/types.ts').PlanAssistantProposal>,
 ): PlanAssistantTurn {
   if (!result.ok) return failed(result.error)
   return { ok: true, kind: 'proposal', proposal: { ...result.data, using: ON_DEVICE_PLAN_ASSISTANT_USING } }

@@ -14,7 +14,7 @@ import type {
   OrganisationPlanItem,
   OrganisationPlanItemStatus,
   OrganisationReviewGroup,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 export const ACTIVITY_FILE = 'activity.json'
 export const ACTIVITY_LOG_VERSION = 1

@@ -5,7 +5,7 @@ import {
   installerUrlForPlatform,
   type PublicRelease,
   type ReleaseDecision,
-} from '../src/lib/release-lifecycle.ts'
+} from '@suhuella/product/lib/release-lifecycle.ts'
 
 function emptyDecision(installed: string): ReleaseDecision {
   return decideReleaseState({

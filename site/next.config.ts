@@ -2,8 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const desktopSrc = path.join(monorepoRoot, "desktop/src");
-const desktopSrcTurbopack = path.relative(monorepoRoot, desktopSrc);
+const productSrc = path.join(monorepoRoot, "packages/product/src");
+const productSrcTurbopack = path.relative(monorepoRoot, productSrc);
 
 const operationsBaseUrl =
   process.env.OPS_BASE_URL?.trim().replace(/\/$/, "") ||
@@ -24,13 +24,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: monorepoRoot,
     resolveAlias: {
-      "@suhuella/desktop": desktopSrcTurbopack,
+      "@suhuella/product": productSrcTurbopack,
     },
   },
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@suhuella/desktop": desktopSrc,
+      "@suhuella/product": productSrc,
     };
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,

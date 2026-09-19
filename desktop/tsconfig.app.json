@@ -19,8 +19,9 @@
     "noFallthroughCasesInSwitch": true,
     "strict": true,
     "paths": {
-      "@suhuella/brand": ["../brands/.build/entry.ts"]
+      "@suhuella/brand": ["../brands/.build/entry.ts"],
+      "@suhuella/product/*": ["../packages/product/src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["../packages/product/src"]
 }

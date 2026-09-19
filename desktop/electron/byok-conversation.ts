@@ -1,4 +1,4 @@
-import type { ByokConversationMessage } from '../src/types.ts'
+import type { ByokConversationMessage } from '@suhuella/product/types.ts'
 
 /**
  * INTELLIGENCE-MODEL-001 — BYOK conversation

@@ -1,6 +1,6 @@
 import { readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import type { FolderIndex, IndexedFolderEntry, IndexScanProgress, KnowledgeSource } from '../src/types.ts'
+import type { FolderIndex, IndexedFolderEntry, IndexScanProgress, KnowledgeSource } from '@suhuella/product/types.ts'
 import { createLocalKnowledgeSource } from './knowledge-sources.ts'
 import { tokenize } from './recommendations.ts'
 

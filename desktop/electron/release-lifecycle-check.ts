@@ -7,7 +7,7 @@ import {
   installerUrlForPlatform,
   parseAppVersion,
   publicReleaseAliases,
-} from '../src/lib/release-lifecycle.ts'
+} from '@suhuella/product/lib/release-lifecycle.ts'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)

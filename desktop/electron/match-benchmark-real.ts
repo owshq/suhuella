@@ -4,7 +4,7 @@ import path from 'node:path'
 import { describeKnowledgeItem } from './descriptors.ts'
 import { buildFileProfile, buildFolderProfile, rankFolders } from './recommendations.ts'
 import { attachLocalSource, sourcesFromLocalLocations } from './knowledge-sources.ts'
-import type { FolderIndex, IndexedFolderEntry, KnowledgeSource } from '../src/types.ts'
+import type { FolderIndex, IndexedFolderEntry, KnowledgeSource } from '@suhuella/product/types.ts'
 
 const DEFAULT_CASES_NAME = 'match-benchmark.local.json'
 const DEFAULT_RESULTS_NAME = 'match-benchmark-results.local.json'

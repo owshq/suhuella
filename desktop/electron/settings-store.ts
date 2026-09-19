@@ -9,8 +9,8 @@ import {
   normalizeSourceKey,
   resolveSourceIdentity,
   sourceLabelFromPath,
-} from '../src/lib/source-appearance.ts'
-import type { AppSettings, SourceIconId, SuggestedLocationKind } from '../src/types.ts'
+} from '@suhuella/product/lib/source-appearance.ts'
+import type { AppSettings, SourceIconId, SuggestedLocationKind } from '@suhuella/product/types.ts'
 import { DEFAULT_KNOWLEDGE_SOURCES_ENABLED, normalizeKnowledgeSourcesEnabled } from './knowledge-sources.ts'
 
 const SETTINGS_FILE = 'settings.json'

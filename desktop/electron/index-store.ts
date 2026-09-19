@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import type { FolderIndex, IndexedFolderEntry, KnowledgeSource } from '../src/types.ts'
+import type { FolderIndex, IndexedFolderEntry, KnowledgeSource } from '@suhuella/product/types.ts'
 import {
   attachLocalSource,
   sourcesFromLocalLocations,

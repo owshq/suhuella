@@ -308,11 +308,11 @@ cd site
 npm run r2:create
 ```
 
-Upload after building on the matching OS (`desktop/release/`):
+Upload after building on the matching OS (`desktop/.build/suhuella/release/`):
 
 ```bash
-npx wrangler r2 object put suhuella-downloads/SuHuella-Setup-0.1.0-pre-rc.exe --file "../desktop/release/SuHuella-Setup-0.1.0-pre-rc.exe"
-npx wrangler r2 object put suhuella-downloads/SuHuella-0.1.0-pre-rc.dmg --file "../desktop/release/SuHuella-0.1.0-pre-rc.dmg"
+npx wrangler r2 object put suhuella-downloads/SuHuella-Setup-0.1.0-pre-rc.exe --file "../desktop/.build/suhuella/release/SuHuella-Setup-0.1.0-pre-rc.exe"
+npx wrangler r2 object put suhuella-downloads/SuHuella-0.1.0-pre-rc.dmg --file "../desktop/.build/suhuella/release/SuHuella-0.1.0-pre-rc.dmg"
 ```
 
 Do not upload fake installers.

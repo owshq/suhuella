@@ -11,8 +11,8 @@
       "url": "https://download.suhuella.com/latest/mac"
     },
     "windows": {
-      "available": false,
-      "url": null
+      "available": true,
+      "url": "https://download.suhuella.com/latest/win"
     }
   },
   "minimumVersion": "0.1.0-pre-rc",

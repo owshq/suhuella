@@ -18,7 +18,7 @@ import { enrichKnowledgeDescriptor } from './local-intelligence.ts'
 import { recommendFolders } from './recommendations.ts'
 import { proposeSafeRename, renameNameConflicts, validateSafeFileName } from './rename-proposal.ts'
 import { applyBrandPresentation } from '@suhuella/brand'
-import type { IndexedFolderEntry } from '../src/types.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 import type {
   KnowledgeSet,
   KnowledgeSetItem,
@@ -31,7 +31,7 @@ import type {
   OrganisationPlanItem,
   OrganisationPlanPreview,
   OrganisationReviewGroup,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 export const ORGANISATION_PREVIEW_MESSAGE = applyBrandPresentation(
   'Review the plan. Confirm selected actions only. SuHuella may create folders. Existing files are never overwritten or deleted.',

@@ -1,6 +1,6 @@
 import { describeKnowledgeItem } from './descriptors.ts'
 import { tokenize, buildFileProfile, buildFolderProfile, rankFolders } from './recommendations.ts'
-import type { IndexedFolderEntry } from '../src/types.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 
 const FIXTURE_ROOT = '/suhuella-benchmark'
 

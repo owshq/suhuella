@@ -13,6 +13,12 @@ desktop/dist/
 desktop/dist-electron/
 desktop/out/
 desktop/release/
+brands/.build/
+desktop/.build/
+site/.build/
+desktop/native/**/bin/
+desktop/native/**/obj/
+desktop/native/**/publish/
 
 # testing
 coverage/
@@ -33,9 +39,15 @@ yarn-error.log*
 !.env.example
 !site/.env.example
 
+# local operations store (Node / next dev)
+site/.data/
+
 site/.open-next
 site/.wrangler
 .wrangler/
 
 # electron
 desktop/*.log
+desktop/*.local.json
+desktop/match-benchmark.local.json
+desktop/match-benchmark-results.local.json

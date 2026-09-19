@@ -1,99 +1,226 @@
+import { applyBrandPresentationDeep } from "@suhuella/brand";
 import type { Dictionary, Locale } from "./types";
 
 const es: Dictionary = {
   meta: {
-    title: "SuHuella — Guarda cada archivo en su sitio",
+    title: "SuHuella — La carpeta correcta al guardar",
     description:
-      "Utilidad de escritorio ultraligera que sugiere dónde guardar facturas y documentos. 100% privada e instantánea. Compra única.",
+      "SuHuella Web te deja probar SuHuella en este dispositivo. Todo permanece en local. La app de escritorio estará disponible más adelante.",
   },
   pageTitles: {
     download: "Descarga",
+    license: "Licencia",
   },
   success: {
     title: "Tu pago se ha completado",
+    verifiedTitle: "Pago confirmado",
     description:
-      "Gracias por comprar SuHuella. Descarga el instalador para Windows o Mac.",
-    downloadCta: "Descargar SuHuella para Mac / Windows",
+      "Gracias por tu compra. Elige tu plataforma e instala SuHuella en un minuto.",
+    downloadWindows: "Descargar SuHuella para Windows",
+    downloadMac: "Descargar SuHuella para macOS",
+    downloadCta: "Descargar SuHuella",
     backHome: "Volver al inicio",
-    verifying: "Verificando tu pago…",
-    unauthorizedTitle: "Acceso no autorizado",
+    verifying: "Confirmando tu pago",
+    verifyingHint: "Solo un momento.",
+    missingSessionTitle: "Esta página es solo después de pagar",
+    missingSessionDescription:
+      "Completa la compra para descargar SuHuella. Si ya pagaste, abre el enlace de tu recibo o escríbenos a support@suhuella.com.",
+    invalidSessionTitle: "No hemos podido confirmar este pago",
+    invalidSessionDescription:
+      "Puedes seguir: vuelve a intentarlo o escríbenos a support@suhuella.com. Si ya pagaste, te ayudamos con la descarga.",
+    unauthorizedTitle: "No hemos podido confirmar tu compra",
     unauthorizedDescription:
-      "No hemos podido verificar tu pago. Completa la compra para acceder a la descarga.",
-    retryPurchase: "Reintentar compra",
+      "Completa la compra para descargar SuHuella. Si ya pagaste, escríbenos a support@suhuella.com.",
+    retryPurchase: "Ver planes",
+    viewPlans: "Ver planes",
+    lifetimeUnavailable: "Lifetime aún no está disponible.",
+    monthlyUnavailable: "Monthly aún no está disponible.",
+    planUnavailable: "Este plan aún no está disponible.",
+    installersPending:
+      "Tu pago está confirmado. El instalador aún no está listo. Puedes seguir: escríbenos a support@suhuella.com y te lo enviamos.",
     mvpWarning:
-      "Esta versión es un MVP inicial. Algunas aplicaciones pueden no detectarse todavía.",
-    support: "¿Necesitas ayuda? Escríbenos a support@suhuella.com",
+      "Versión inicial: algunas aplicaciones pueden no mostrar sugerencias todavía. Puedes seguir guardando como siempre.",
+    support: "¿Necesitas ayuda? support@suhuella.com",
     trayNote:
-      "Funciona en silencio en la bandeja del sistema y solo aparece cuando lo necesitas.",
+      "SuHuella espera en la bandeja del sistema y solo aparece cuando lo necesitas.",
+    installTitle: "Qué hacer ahora",
+    installSteps: [
+      "Descarga el instalador de tu sistema.",
+      "Si Windows o macOS avisan que no está firmado, continúa: Más información → Ejecutar de todos modos, o clic derecho → Abrir.",
+      "Abre SuHuella. No aparece una ventana: busca el icono en la bandeja (Windows) o en la barra de menús (macOS).",
+      "Pulsa la notificación o el icono, añade las carpetas que ya usas y sigue guardando.",
+    ],
+    unsignedNote:
+      "El instalador aún no está firmado. La advertencia del sistema es esperada. Luego SuHuella espera en la bandeja.",
+    downloadUnavailableTitle: "La descarga aún no está lista",
+    downloadUnavailableDescription:
+      "Tu pago está confirmado. El instalador no está listo todavía. Puedes seguir: escríbenos a support@suhuella.com y te lo enviamos.",
+    licenseActivated: "Licencia activada",
+    openApp: "Abrir SuHuella",
+    downloadIfMissing: "Si SuHuella no se abre, descárgala e instálala.",
+    paymentIncomplete: "El pago no se ha completado.",
+    purchaseConfirmed: "Compra confirmada",
+    alreadyInstalled: "¿Ya está instalada? Abre SuHuella para activar este dispositivo.",
+    continueInBrowser: "Usar SuHuella en este navegador",
+    checkoutCanceled: "Checkout cancelado. Tu plan no ha cambiado.",
+    modalNoPurchaseTitle: "No hay ninguna compra que confirmar",
+    modalNoPurchaseDescription:
+      "No hemos podido verificar una sesión de checkout. Puedes seguir usando SuHuella Web o ver los planes.",
+  },
+  welcomeModal: {
+    title: "Organiza documentos sin perder el control",
+    body: "SuHuella aprende de las carpetas que tú eliges y sugiere dónde guardar u organizar documentos. Tus archivos permanecen en este dispositivo. Nada se mueve sin tu confirmación.",
+    start: "Empezar",
+    viewPlans: "Ver planes",
+    howItWorks: "¿Cómo funciona?",
   },
   hero: {
     badge: {
       name: "SuHuella",
-      latency: "Instantáneo",
-      memory: "<50 MB RAM",
     },
     title: "Guarda tus archivos en la carpeta correcta. Al instante.",
     subtitle:
-      "Una utilidad de escritorio ultraligera que aprende de tus hábitos y sugiere dónde guardar cada factura o documento sin salir de tu Mac o PC.",
+      "SuHuella Web te deja probarla en este dispositivo. Todo permanece en local. La app de escritorio dará la experiencia nativa más adelante.",
   },
   features: {
     eyebrow: "Por qué SuHuella",
-    title: "Privacidad, velocidad y simplicidad",
+    title: "Privada, silenciosa y tuya",
     items: [
       {
-        title: "Privacidad Absoluta",
+        title: "Todo permanece en tu ordenador",
         description:
-          "Tus archivos jamás suben a la nube. Todo se procesa de forma local en tu equipo.",
+          "El contenido de tus archivos no se envía a ningún sitio. SuHuella funciona sin conexión.",
       },
       {
-        title: "Cero Latencia",
+        title: "En este navegador ahora",
         description:
-          "Aparece justo cuando vas a guardar un archivo, sin esperas ni configuraciones complejas.",
+          "Ábrela aquí, sin instalar nada. La app de escritorio dará la experiencia nativa más adelante.",
       },
       {
-        title: "Compra única",
+        title: "Planes de pago más adelante",
         description:
-          "Un solo pago, sin suscripciones. El importe se muestra en el checkout de Stripe.",
+          "Los planes de pago aún no están disponibles. Mientras tanto, ábrela en este navegador.",
       },
     ],
   },
   download: {
-    title: "Descarga directa",
-    subtitle: "Instaladores firmados y listos para usar.",
+    title: "Descarga SuHuella",
+    subtitle: "Instálalo en un minuto. Luego sigue guardando como siempre.",
     windows: "Windows",
     mac: "macOS",
     orBuy: "¿Aún no has comprado?",
     trayNote:
-      "Funciona en silencio en la bandeja del sistema y solo aparece cuando lo necesitas.",
+      "Espera en la bandeja del sistema y solo aparece cuando lo necesitas.",
+    unavailable: "Aún no disponible",
+    comingSoon: "La app de escritorio estará disponible pronto. Mientras tanto, ábrela en este navegador.",
+    catalogTitle: "Descargas de SuHuella",
+    catalogSubtitle:
+      "Aquí aparecerán las versiones públicas de SuHuella Desktop cuando estén disponibles. Mientras tanto, puedes usar SuHuella Web en este navegador.",
+    catalogSubtitleWithMac:
+      "La descarga es pública. SuHuella Desktop Mac es pre-RC. Al abrir la app, la licencia comprueba edición y capacidades. El checkout de pago sigue desactivado.",
+    stateWebTitle: "SuHuella Web",
+    stateWebAvailable: "Disponible ahora",
+    stateWebAction: "Abrir SuHuella",
+    stateDesktopTitle: "SuHuella Desktop",
+    stateDesktopUnavailable: "Todavía no disponible en esta pre-RC.",
+    stateDesktopNoInstallers:
+      "No hay instaladores públicos para Mac o Windows en este momento.",
+    stateMacTitle: "SuHuella Desktop Mac",
+    stateMacAvailable: "Disponible",
+    stateMacAction: "Descargar para Mac",
+    stateWindowsTitle: "SuHuella Desktop Windows",
+    stateWindowsUnavailable: "Aún no disponible",
+    catalogUnsignedNote:
+      "macOS puede mostrar un aviso de seguridad porque esta build pre-RC no está notarizada.",
+    activationNote:
+      "Puedes descargar una versión pública cuando esté disponible. Al abrir SuHuella, la licencia comprueba edición, dispositivos y capacidades. El checkout de pago sigue desactivado.",
+    viewPlans: "Ver planes",
+    tableVersion: "Versión",
+    tableChannel: "Canal",
+    tablePlatform: "Plataforma",
+    tableStatus: "Estado",
+    tableDate: "Fecha",
+    tableAction: "Acción",
+    platformWeb: "Web",
+    platformMac: "Mac",
+    platformWindows: "Windows",
+    statusAvailable: "Disponible",
+    statusUnavailable: "No disponible",
+    channelPreRc: "pre-RC",
+    channelStable: "stable",
+    channelBeta: "beta",
+    actionOpen: "Abrir",
+    actionDownload: "Descargar",
+    actionNone: "—",
   },
   howItWorks: {
-    title: "Simple por diseño. Inteligente por costumbre.",
+    title: "Configúralo una vez. Ahorra tiempo cada día.",
     steps: [
       {
         number: "01",
-        title: "Organiza una vez",
+        title: "Añade las carpetas que ya usas",
         description:
-          "Guarda tus archivos en tus carpetas habituales como siempre lo haces, pero con ayuda.",
+          "Elige las carpetas de las que SuHuella aprende. Todo permanece en tu ordenador.",
       },
       {
         number: "02",
-        title: "La app memoriza",
+        title: "Revisa lo que propone",
         description:
-          "Aprende según tu histórico y los nombres de archivo, todo en local en tu equipo.",
+          "En Organizar ves el plan. SuHuella sugiere la carpeta; tú decides qué ocurre.",
       },
       {
         number: "03",
-        title: "Acierto instantáneo",
+        title: "Tú confirmas",
         description:
-          "Te sugiere la carpeta exacta justo cuando vas a guardar el siguiente archivo.",
+          "Nada se mueve hasta que lo apruebas. La app de escritorio añadirá más adelante la experiencia nativa al guardar.",
       },
     ],
   },
+  embeddings: {
+    title: "La carpeta correcta, cada vez",
+    subtitle:
+      "SuHuella te sugiere una carpeta. Tú confirmas. Todo permanece en este dispositivo.",
+    models: "En este dispositivo · Todo permanece en local",
+    stats: [
+      { value: "Local", label: "En este dispositivo" },
+      { value: "Tuya", label: "Tú tienes el control" },
+      { value: "Después", label: "Escritorio más adelante" },
+    ],
+    statsNote: {
+      title: "Ahora en el navegador",
+      description:
+        "SuHuella Web trabaja en este dispositivo. La app de escritorio dará la experiencia nativa más adelante.",
+    },
+  },
   privacy: {
-    eyebrow: "Privacidad absoluta",
-    title: "Tus documentos nunca salen de tu equipo",
+    eyebrow: "Privacidad",
+    title: "Todo permanece en tu ordenador",
     description:
-      "SuHuella funciona 100% en local, sin bases de datos externas ni nubes. Tus facturas, contratos y archivos confidenciales permanecen bajo tu control en todo momento.",
+      "SuHuella Web funciona en este dispositivo. El contenido de tus archivos no se envía. La app de escritorio dará la experiencia nativa más adelante.",
+  },
+  faq: {
+    title: "Preguntas frecuentes",
+    items: [
+      {
+        question: "¿SuHuella guarda el archivo por mí?",
+        answer:
+          "No. SuHuella sugiere la carpeta y tú confirmas. En el navegador lo haces desde Organizar.",
+      },
+      {
+        question: "¿Mis archivos salen de este ordenador?",
+        answer: "No. El contenido permanece en este dispositivo.",
+      },
+      {
+        question: "¿Dónde está SuHuella?",
+        answer:
+          "Ábrela en este navegador. La app de escritorio estará disponible más adelante.",
+      },
+      {
+        question: "¿Puedo usar SuHuella ahora?",
+        answer:
+          "Sí. Ábrela en este navegador. La app de escritorio para macOS y Windows estará disponible pronto.",
+      },
+    ],
   },
   footer: {
     privacy: "Privacidad",
@@ -106,138 +233,259 @@ const es: Dictionary = {
     privacyTitle: "Privacidad",
     termsTitle: "Términos",
     privacyParagraphs: [
-      "SuHuella es una utilidad de escritorio que funciona en tu ordenador. Los nombres de archivo, las rutas de carpeta y tus ajustes se quedan en local.",
+      "SuHuella se puede usar ahora en el navegador. Los nombres de archivo, las rutas de carpeta y tus ajustes se quedan en este dispositivo.",
       "La app no sube documentos, nombres de archivo ni rutas de carpeta a ningún servidor, salvo que en el futuro actives de forma explícita una función en la nube.",
-      "Los ajustes se guardan en un archivo local del equipo (settings.json en el directorio de datos de la app).",
-      "El sitio web solo procesa el pago a través de Stripe y, tras un pago correcto, te muestra los instaladores. No creamos cuentas de usuario ni guardamos tu correo en una base de datos propia.",
+      "Los ajustes se guardan en este dispositivo.",
+      "Este sitio no ofrece instaladores de escritorio ahora. Cuando el pago esté disponible, se procesa a través de Stripe. No creamos cuentas de usuario ni guardamos tu correo en una base de datos propia.",
       "Para cualquier duda: support@suhuella.com",
     ],
     termsParagraphs: [
       "SuHuella es una compra digital de pago único, sin suscripción. El importe final se muestra en el checkout de Stripe antes de pagar.",
-      "Esta versión es un MVP inicial. El producto puede cambiar y algunas aplicaciones pueden no ser compatibles todavía.",
-      "No garantizamos que SuHuella detecte el diálogo Guardar / Guardar como en todos los programas.",
-      "La app solo sugiere una carpeta de destino. Tú confirmas el guardado con el botón nativo de Windows o macOS.",
-      "Si necesitas un reembolso o tienes un problema con la descarga, escribe a support@suhuella.com.",
+      "Esta es una versión inicial. El producto puede cambiar y algunas aplicaciones pueden no ser compatibles todavía.",
+      "No garantizamos que la app de escritorio, cuando exista, detecte la ventana Guardar / Guardar como en todos los programas.",
+      "SuHuella sugiere una carpeta de destino y tú confirmas. En el navegador lo haces desde Organizar. SuHuella no mueve archivos por ti.",
+      "Si necesitas un reembolso o tienes un problema, escribe a support@suhuella.com.",
     ],
   },
   mockup: {
     fileName: "factura_servicios_marzo.pdf",
-    badge: "100% Local · Zero Cloud · Instant",
+    badge: "Todo permanece en tu ordenador",
     enterHint: "Enter",
-    matchLabel: "match",
+    saveAsHint: "Guardar como…",
+    matchLabel: "",
     allOrganized: "Todo organizado",
     suggestions: [
-      {
-        path: "Clients / TechCorp / 2026 / 03-Invoices",
-        match: 98,
-        primary: true,
-      },
-      {
-        path: "Admin / Contabilidad / Q1-Gastos",
-        match: 84,
-      },
-      {
-        path: "Projects / Rediseño Web / Facturas",
-        match: 71,
-      },
+      { path: "Finance / 2026", match: 97 },
+      { path: "Projects / Design", match: 79 },
+      { path: "Clients / TechCorp / Invoices", match: 72 },
+      { path: "Admin / Contabilidad", match: 65 },
+      { path: "Archive", match: 63 },
+      { path: "Legal / Contracts", match: 51 },
+      { path: "Personal / Receipts", match: 49 },
     ],
   },
 };
 
 const en: Dictionary = {
   meta: {
-    title: "SuHuella — Save every file in the right place",
+    title: "SuHuella — The right folder when you save",
     description:
-      "Ultra-light desktop utility that suggests where to save invoices and documents. 100% private and instant. One-time purchase.",
+      "SuHuella Web lets you try SuHuella on this device. Everything stays local. The desktop app is coming later.",
   },
   pageTitles: {
     download: "Download",
+    license: "License",
   },
   success: {
-    title: "Your payment was successful.",
+    title: "Your payment was successful",
+    verifiedTitle: "Payment confirmed",
     description:
-      "Thank you for buying SuHuella. Download the installer for Windows or Mac.",
-    downloadCta: "Download SuHuella for Mac / Windows",
+      "Thank you for your purchase. Choose your platform and install SuHuella in a minute.",
+    downloadWindows: "Download SuHuella for Windows",
+    downloadMac: "Download SuHuella for macOS",
+    downloadCta: "Download SuHuella",
     backHome: "Back to home",
-    verifying: "Verifying your payment…",
-    unauthorizedTitle: "Unauthorized access",
+    verifying: "Confirming your payment",
+    verifyingHint: "This only takes a moment.",
+    missingSessionTitle: "This page is only after you pay",
+    missingSessionDescription:
+      "Complete your purchase to download SuHuella. If you already paid, open the link from your receipt or email support@suhuella.com.",
+    invalidSessionTitle: "We could not confirm this payment",
+    invalidSessionDescription:
+      "You can continue: try again or email support@suhuella.com. If you already paid, we will help you get the download.",
+    unauthorizedTitle: "We could not confirm your purchase",
     unauthorizedDescription:
-      "We couldn't verify your payment. Complete your purchase to access the download.",
-    retryPurchase: "Retry purchase",
+      "Complete your purchase to download SuHuella. If you already paid, email support@suhuella.com.",
+    retryPurchase: "View plans",
+    viewPlans: "View plans",
+    lifetimeUnavailable: "Lifetime is not available yet.",
+    monthlyUnavailable: "Monthly is not available yet.",
+    planUnavailable: "This plan is not available yet.",
+    installersPending:
+      "Your payment is confirmed. The installer is not ready yet. You can continue: email support@suhuella.com and we will send it to you.",
     mvpWarning:
-      "This is an early MVP. Some applications may not be detected yet.",
-    support: "Need help? Contact support@suhuella.com",
+      "Early version: some apps may not show suggestions yet. You can keep saving as usual.",
+    support: "Need help? support@suhuella.com",
     trayNote:
-      "Runs quietly in your system tray and only appears when you need it.",
+      "SuHuella waits in the tray and only appears when you need it.",
+    installTitle: "What to do next",
+    installSteps: [
+      "Download the installer for your system.",
+      "If Windows or macOS warns that it is unsigned, continue: More info → Run anyway, or right-click → Open.",
+      "Open SuHuella. No window appears — look for the icon in the tray (Windows) or the menu bar (macOS).",
+      "Click the notification or the icon, add the folders you already use, then keep saving.",
+    ],
+    unsignedNote:
+      "The installer is not signed yet. The system warning is expected. After that, SuHuella waits in the tray.",
+    downloadUnavailableTitle: "The download is not ready yet",
+    downloadUnavailableDescription:
+      "Your payment is confirmed. The installer is not ready yet. You can continue: email support@suhuella.com and we will send it to you.",
+    licenseActivated: "License activated",
+    openApp: "Open SuHuella",
+    downloadIfMissing: "If SuHuella does not open, download and install it.",
+    paymentIncomplete: "Payment was not completed.",
+    purchaseConfirmed: "Purchase confirmed",
+    alreadyInstalled: "Already installed? Open SuHuella to activate this device.",
+    continueInBrowser: "Use SuHuella in this browser",
+    checkoutCanceled: "Checkout canceled. Your plan is unchanged.",
+    modalNoPurchaseTitle: "No purchase to confirm",
+    modalNoPurchaseDescription:
+      "We could not verify a checkout session. You can continue using SuHuella Web or view plans.",
+  },
+  welcomeModal: {
+    title: "Organise documents without losing control",
+    body: "SuHuella learns from the folders you choose and suggests where to save or organise documents. Your files stay on this device. Nothing moves without your confirmation.",
+    start: "Get started",
+    viewPlans: "View plans",
+    howItWorks: "How it works",
   },
   hero: {
     badge: {
       name: "SuHuella",
-      latency: "Instant",
-      memory: "<50 MB RAM",
     },
     title: "Save files to the right folder. Instantly.",
     subtitle:
-      "An ultra-light desktop utility that learns your habits and suggests where to save every invoice or document without leaving your Mac or PC.",
+      "SuHuella Web lets you try it on this device. Everything stays local. The desktop app will provide the full native experience later.",
   },
   features: {
     eyebrow: "Why SuHuella",
-    title: "Privacy, speed, and simplicity",
+    title: "Private, quiet, and yours",
     items: [
       {
-        title: "Absolute Privacy",
+        title: "Everything stays on your computer",
         description:
-          "Your files never upload to the cloud. Everything is processed locally on your machine.",
+          "No file contents leave your computer. SuHuella works offline.",
       },
       {
-        title: "Zero Latency",
+        title: "In this browser now",
         description:
-          "Appears right when you're about to save a file — no waiting, no complex setup.",
+          "Open it here, with nothing to install. The desktop app will provide the full native experience later.",
       },
       {
-        title: "One-time purchase",
+        title: "Paid plans later",
         description:
-          "Pay once, no subscription. The amount is shown in Stripe checkout.",
+          "Paid plans are not available yet. Until then, open SuHuella in this browser.",
       },
     ],
   },
   download: {
-    title: "Direct download",
-    subtitle: "Signed installers, ready to use.",
+    title: "Download SuHuella",
+    subtitle: "Install in a minute. Then keep saving as usual.",
     windows: "Windows",
     mac: "macOS",
     orBuy: "Haven't purchased yet?",
     trayNote:
-      "Runs quietly in your system tray and only appears when you need it.",
+      "It waits in the tray and only appears when you need it.",
+    unavailable: "Not ready yet",
+    comingSoon: "The desktop app is coming soon. Until then, open SuHuella in this browser.",
+    catalogTitle: "SuHuella downloads",
+    catalogSubtitle:
+      "Public SuHuella Desktop versions will appear here when they are available. For now, you can use SuHuella Web in this browser.",
+    catalogSubtitleWithMac:
+      "The download is public. SuHuella Desktop Mac is pre-RC. When you open the app, the license checks edition and capabilities. Paid checkout stays off.",
+    stateWebTitle: "SuHuella Web",
+    stateWebAvailable: "Available now",
+    stateWebAction: "Open SuHuella",
+    stateDesktopTitle: "SuHuella Desktop",
+    stateDesktopUnavailable: "Not available in this pre-RC.",
+    stateDesktopNoInstallers:
+      "There are no public Mac or Windows installers yet.",
+    stateMacTitle: "SuHuella Desktop Mac",
+    stateMacAvailable: "Available",
+    stateMacAction: "Download for Mac",
+    stateWindowsTitle: "SuHuella Desktop Windows",
+    stateWindowsUnavailable: "Not available yet",
+    catalogUnsignedNote:
+      "macOS may show a security warning because this pre-RC build is not notarized.",
+    activationNote:
+      "You can download a public version when it is available. When you open SuHuella, the license checks edition, devices, and capabilities. Paid checkout stays off.",
+    viewPlans: "View plans",
+    tableVersion: "Version",
+    tableChannel: "Channel",
+    tablePlatform: "Platform",
+    tableStatus: "Status",
+    tableDate: "Date",
+    tableAction: "Action",
+    platformWeb: "Web",
+    platformMac: "Mac",
+    platformWindows: "Windows",
+    statusAvailable: "Available",
+    statusUnavailable: "Not available yet",
+    channelPreRc: "pre-RC",
+    channelStable: "stable",
+    channelBeta: "beta",
+    actionOpen: "Open",
+    actionDownload: "Download",
+    actionNone: "—",
   },
   howItWorks: {
-    title: "Simple by design. Smart by habit.",
+    title: "Set it up once. Save time every day.",
     steps: [
       {
         number: "01",
-        title: "Organize once",
+        title: "Add the folders you already use",
         description:
-          "Save your files to your usual folders exactly as you always do — but with help.",
+          "Pick the folders SuHuella learns from. Everything stays on your computer.",
       },
       {
         number: "02",
-        title: "The app remembers",
+        title: "Review the plan",
         description:
-          "It learns from your history and file names, all locally on your machine.",
+          "On Organise you see the plan. SuHuella suggests the folder; you decide what happens.",
       },
       {
         number: "03",
-        title: "Instant accuracy",
+        title: "You confirm",
         description:
-          "It suggests the exact folder right when you're about to save the next file.",
+          "Nothing moves until you approve it. The desktop app will later add the native experience when you save.",
       },
     ],
   },
+  embeddings: {
+    title: "The right folder, every time",
+    subtitle:
+      "SuHuella suggests a folder. You confirm. Everything stays on this device.",
+    models: "On this device · Everything stays local",
+    stats: [
+      { value: "Local", label: "On this device" },
+      { value: "Yours", label: "You stay in control" },
+      { value: "Later", label: "Desktop coming later" },
+    ],
+    statsNote: {
+      title: "In the browser now",
+      description:
+        "SuHuella Web works on this device. The desktop app will provide the full native experience later.",
+    },
+  },
   privacy: {
-    eyebrow: "Absolute privacy",
-    title: "Your documents never leave your device",
+    eyebrow: "Privacy",
+    title: "Everything stays on your computer",
     description:
-      "SuHuella runs 100% locally, with no external databases or cloud services. Your invoices, contracts, and confidential files stay under your control at all times.",
+      "SuHuella Web runs on this device. File contents are not sent away. The desktop app will provide the full native experience later.",
+  },
+  faq: {
+    title: "Questions",
+    items: [
+      {
+        question: "Does SuHuella save the file for me?",
+        answer:
+          "No. SuHuella suggests the folder and you confirm. In the browser you do that from Organise.",
+      },
+      {
+        question: "Do my files leave this computer?",
+        answer: "No. The contents stay on this device.",
+      },
+      {
+        question: "Where does SuHuella live?",
+        answer:
+          "Open it in this browser. The desktop app is coming later.",
+      },
+      {
+        question: "Can I use SuHuella now?",
+        answer:
+          "Yes. Open it in this browser. The desktop app for macOS and Windows is coming soon.",
+      },
+    ],
   },
   footer: {
     privacy: "Privacy",
@@ -250,40 +498,35 @@ const en: Dictionary = {
     privacyTitle: "Privacy",
     termsTitle: "Terms",
     privacyParagraphs: [
-      "SuHuella is a desktop utility that runs on your computer. File names, folder paths, and settings stay local.",
+      "SuHuella can be used in the browser now. File names, folder paths, and settings stay on this device.",
       "The app does not upload documents, file names, or folder paths to any server unless you later enable a cloud feature explicitly.",
-      "Settings are stored in a local file on your machine (settings.json in the app userData directory).",
-      "This website only processes payment through Stripe and, after a successful payment, shows you the installers. We do not create user accounts or store your email in our own database.",
+      "Settings stay on this device.",
+      "This website does not offer desktop installers now. When payment is available, it is processed through Stripe. We do not create user accounts or store your email in our own database.",
       "Questions: support@suhuella.com",
     ],
     termsParagraphs: [
       "SuHuella is a one-time digital purchase with no subscription. The final amount is shown in Stripe checkout before you pay.",
-      "This version is an early MVP. The product may change, and some applications may not be compatible yet.",
-      "We do not guarantee that SuHuella will detect the Save / Save As dialog in every application.",
-      "The app only suggests a destination folder. You confirm the save with the native Windows or macOS Save button.",
-      "If you need a refund or have a download problem, contact support@suhuella.com.",
+      "This is an early version. The product may change, and some apps may not work yet.",
+      "We do not guarantee that the desktop app, when it exists, will detect the Save / Save As window in every application.",
+      "SuHuella suggests a destination folder and you confirm. In the browser you do that from Organise. SuHuella does not move files for you.",
+      "If you need a refund or have a problem, contact support@suhuella.com.",
     ],
   },
   mockup: {
     fileName: "factura_servicios_marzo.pdf",
-    badge: "100% Local · Zero Cloud · Instant",
+    badge: "Everything stays on your computer",
     enterHint: "Enter",
-    matchLabel: "match",
+    saveAsHint: "Save As…",
+    matchLabel: "",
     allOrganized: "All organized",
     suggestions: [
-      {
-        path: "Clients / TechCorp / 2026 / 03-Invoices",
-        match: 98,
-        primary: true,
-      },
-      {
-        path: "Admin / Accounting / Q1-Expenses",
-        match: 84,
-      },
-      {
-        path: "Projects / Web Redesign / Invoices",
-        match: 71,
-      },
+      { path: "Finance / 2026", match: 97 },
+      { path: "Projects / Design", match: 79 },
+      { path: "Clients / TechCorp / Invoices", match: 72 },
+      { path: "Admin / Accounting", match: 65 },
+      { path: "Archive", match: 63 },
+      { path: "Legal / Contracts", match: 51 },
+      { path: "Personal / Receipts", match: 49 },
     ],
   },
 };
@@ -291,5 +534,5 @@ const en: Dictionary = {
 export const dictionaries: Record<Locale, Dictionary> = { es, en };
 
 export function getDictionary(locale: Locale): Dictionary {
-  return dictionaries[locale];
+  return applyBrandPresentationDeep(dictionaries[locale]);
 }

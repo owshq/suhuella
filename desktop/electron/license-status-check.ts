@@ -1,7 +1,7 @@
-import { resolveEffectiveBranding } from '../src/lib/effective-branding.ts'
-import { checkoutPath, licensePlanCards, unavailablePlanMessage } from '../src/lib/license-checkout.ts'
-import { licenseErrorMessage, toLicenseStatusView } from '../src/lib/license-status.ts'
-import type { LicenseContext } from '../src/types.ts'
+import { resolveEffectiveBranding } from '@suhuella/product/lib/effective-branding.ts'
+import { checkoutPath, licensePlanCards, unavailablePlanMessage } from '@suhuella/product/lib/license-checkout.ts'
+import { licenseErrorMessage, toLicenseStatusView } from '@suhuella/product/lib/license-status.ts'
+import type { LicenseContext } from '@suhuella/product/types.ts'
 
 function context(partial: Partial<LicenseContext>): LicenseContext {
   return {

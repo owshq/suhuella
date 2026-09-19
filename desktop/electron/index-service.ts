@@ -5,13 +5,13 @@ import { app, type BrowserWindow } from 'electron'
 import { buildFolderIndex } from './indexer.ts'
 import { clearIndex, loadIndex, saveIndex } from './index-store.ts'
 import { loadSettings, updateIndexMetadata } from './settings-store.ts'
-import { recognisedFromNames, uniqueNameCount } from '../src/lib/recognised-names.ts'
+import { recognisedFromNames, uniqueNameCount } from '@suhuella/product/lib/recognised-names.ts'
 import {
   browseParentPath,
   isDirectBrowseChild,
   isBrowsePathUnder,
   normalizeBrowsePath,
-} from '../src/lib/source-browse.ts'
+} from '@suhuella/product/lib/source-browse.ts'
 import type {
   AppSettings,
   FoldersKnowledgeQuality,
@@ -26,7 +26,7 @@ import type {
   LocationUsefulness,
   SuggestedLocation,
   SuggestedLocationKind,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const STALE_INDEX_DAYS = 14
 

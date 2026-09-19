@@ -8,8 +8,8 @@ import type {
   StorageOverviewWarning,
   StorageSource,
   StorageSourceStatus,
-} from '../src/types.ts'
-import { emptyAppStorage, storageSourceWarning } from '../src/lib/storage-overview.ts'
+} from '@suhuella/product/types.ts'
+import { emptyAppStorage, storageSourceWarning } from '@suhuella/product/lib/storage-overview.ts'
 import { loadIndex } from './index-store.ts'
 import { loadSettings } from './settings-store.ts'
 import { getAppStorageBreakdown } from './storage-manager.ts'

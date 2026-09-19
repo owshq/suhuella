@@ -4,11 +4,16 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const result = spawnSync("node", ["brands/project-site.mjs"], {
-  cwd: root,
-  stdio: "inherit",
-});
-
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+function run(relativeScript) {
+  const result = spawnSync(process.execPath, [relativeScript], {
+    cwd: root,
+    stdio: "inherit",
+  });
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
 }
+
+// Entry must exist before any package compiles @suhuella/brand.
+run("brands/project-brand.mjs");
+run("brands/project-site.mjs");

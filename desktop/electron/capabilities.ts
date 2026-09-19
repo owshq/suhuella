@@ -6,7 +6,7 @@ import type {
   CapabilityId,
   Intent,
   IntentId,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 /**
  * Capability Kernel — proposes never execute.

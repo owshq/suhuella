@@ -1,10 +1,13 @@
 # PRE-RC-TRACKS-001
 
 ```text
-STATUS = OPEN
-TYPE = Pre-RC work list
+STATUS = OPEN · MAINTENANCE ONLY
+TYPE = Pre-RC work list (closed items + active evidence-driven work)
 PRODUCTION-READINESS-001 = DEFERRED
+POLICY = PRODUCT-EVOLUTION-POLICY — no new architecture tracks
 ```
+
+New tracks open only from **evidence** (users · telemetry · confirmed incidents). See [PRODUCT-EVOLUTION-POLICY.md](PRODUCT-EVOLUTION-POLICY.md).
 
 ```text
 PRE-RC-TRACKS-001
@@ -50,22 +53,55 @@ P0 BROWSER-SOURCE-INDEX-SEARCH-001
     CLOSED · PASS (same slice)
 
 P0 SOURCES-CAPABILITY-MATRIX-001
-    OPEN · VERIFYING — localhost 1–5 PASS; production still required
+    CLOSED · PASS
 
 P0 BROWSER-ORGANISE-SELECTION-001
     CLOSED · PASS
 
+P0 PRE-BETA-BENCHMARK-001
+    CLOSED · PASS (2026-09-19 · https://suhuella.com)
+
+P1 PRE-BETA-SANITY-001
+    CLOSED · PASS — 2026-09-19
+
+P1 FIRST-IMPRESSION-TEST-001
+    CLOSED · PASS — operator waived · 2026-09-19
+
+P1 FIRST-IMPRESSION-OBSERVATION-MODE-001
+    SUPERSEDED
+
+P1 FIRST-IMPRESSION-SUMMARY-001
+    CLOSED · PASS — operator waived · 2026-09-19
+
+P1 PRODUCT-FREEZE-001
+    OPEN — 2026-09-19
+
+P1 PRIVATE-BETA-001
+    OPEN — 2026-09-19
+
 P1 FIRST-RUN-EXPERIENCE-001
-    PAUSED — wait on SOURCES-CAPABILITY-MATRIX-001
+    SUPERSEDED — see FIRST-IMPRESSION-TEST-001
+
+P1 RELEASE-PUBLISH-PIPELINE-001
+    OPEN — operator checklist; publish without product code changes
+
+P1 RELEASE-LIFECYCLE-001
+    OPEN · PHASE A PASS — Phase B deferred until pipeline + hosting
+
+P1 DESKTOP-RELEASE-HOSTING-001
+    CLOSED · PASS (2026-09-19 · Mac via download.suhuella.com)
 
 P1 DESKTOP-RELEASE-ARTIFACTS-001
-    FROZEN · BLOCKED · PRIORITY LOW
+    CLOSED · PASS — Mac public via alias
 
 P1 DESKTOP-DMG-HOSTING-UNBLOCK-001
-    FROZEN · BLOCKED · PRIORITY LOW
+    CLOSED · PASS
 
 P1 BRAND-THEME-TOKENS-001
     CLOSED · PASS
+
+P1 BRANDING-HIERARCHY-001
+    SUPERSEDED — ADR-003 Brand Identity Hierarchy (permanent)
 
 P1 OPERATIONS-ACCESS-CLOSEOUT-001
     CLOSED · PASS
@@ -81,16 +117,22 @@ That gate is the last technical audit before people. Resend OTP is proven. Check
 **Critical path (Web RC):**
 
 ```text
-SOURCES-CAPABILITY-MATRIX-001
+SOURCES-CAPABILITY-MATRIX-001  CLOSED · PASS
     ↓
-FIRST-RUN-EXPERIENCE-001
+PRE-BETA-BENCHMARK-001  CLOSED · PASS
     ↓
-PRODUCTION-READINESS-001
+PRE-BETA-SANITY-001
     ↓
-PRIVATE-BETA-001 (Web)
+DESKTOP-RELEASE-HOSTING-001
+    ↓
+PRIVATE-BETA-001 (desirability · 20–30 users)
+    ↓
+0.1.0-rc1
+    ↓
+Public launch
 ```
 
-Remaining pre-RC gap: **SOURCES-CAPABILITY-MATRIX-001** (**OPEN · VERIFYING**), then first-run.
+**Next:** **PRIVATE-BETA-001** (20–30 users). No new functional tracks except critical bugs or narrow beta fixes.
 
 [BROWSER-ORGANISE-SELECTION-001.md](BROWSER-ORGANISE-SELECTION-001.md) is **CLOSED · PASS**. Browser Organise can create a Plan from connected sources or a local picker. Execution limits stay separate.
 
@@ -99,11 +141,11 @@ Desktop is **not** on this path. Two separate deliveries:
 ```text
 WEB RC                         DESKTOP (parallel, frozen)
 ────────                       ──────────────────────────
-FIRST-RUN-EXPERIENCE-001       GitHub Releases (preferred)
+PRE-BETA-SANITY-001            GitHub Releases (preferred)
     ↓                              ↓
-PRODUCTION-READINESS-001       Desktop Beta
+PRIVATE-BETA-001 (Web)         Desktop Beta
     ↓                              ↓
-PRIVATE-BETA-001 (Web)         Desktop RC
+0.1.0-rc1                      Desktop RC
 ```
 
 ```text
@@ -142,7 +184,7 @@ Deploy: [APP-MODAL-SHELL-PRODUCTION-DEPLOY-001.md](APP-MODAL-SHELL-PRODUCTION-DE
 
 Combined smoke: [COMBINED-PRE-RC-SMOKE-001.md](COMBINED-PRE-RC-SMOKE-001.md) — **CLOSED · PASS** (post-deploy rerun 2026-09-19).
 
-Browser sources: [BROWSER-SOURCES-BRAND-FLOW-001.md](BROWSER-SOURCES-BRAND-FLOW-001.md) — **CLOSED · PASS**. Next: [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md) — **OPEN**.
+Browser sources: [BROWSER-SOURCES-BRAND-FLOW-001.md](BROWSER-SOURCES-BRAND-FLOW-001.md) — **CLOSED · PASS**. Next: [PRE-BETA-SANITY-001.md](PRE-BETA-SANITY-001.md) — **OPEN**.
 
 ### 3. DESKTOP-RELEASE-DISTRIBUTION-001 — CLOSED · PASS
 
@@ -206,9 +248,9 @@ Same slice as **BROWSER-SOURCE-INDEX-SEARCH-001**. Browser no longer presents Do
 
 Report: [BROWSER-SOURCES-BRAND-FLOW-001.md](BROWSER-SOURCES-BRAND-FLOW-001.md).
 
-### 8d. SOURCES-CAPABILITY-MATRIX-001 — OPEN · VERIFYING
+### 8d. SOURCES-CAPABILITY-MATRIX-001 — CLOSED · PASS
 
-Localhost 1–5 **PASS**: Connect folder, document count, Search, visible Remove that stays gone, Limited in browser, Coming later, Developer Sources demo. Production `https://suhuella.com/sources` still serves the previous empty Sources promo — item 6 is open. Do not close **PASS** until that production repeat.
+Localhost and production `https://suhuella.com/sources` show Local / Limited in browser / Coming later. Connect folder, document count, Search, and Remove hold. Developer Sources stays localhost-only. Worker `ed49bf08-79a4-4c52-ad31-faadb9740078`.
 
 Report: [SOURCES-CAPABILITY-MATRIX-001.md](SOURCES-CAPABILITY-MATRIX-001.md).
 
@@ -218,11 +260,57 @@ Browser Organise no longer dead-ends on “This browser cannot choose documents.
 
 Report: [BROWSER-ORGANISE-SELECTION-001.md](BROWSER-ORGANISE-SELECTION-001.md).
 
-### 9. FIRST-RUN-EXPERIENCE-001 — PAUSED
+### 8z. FIRST-IMPRESSION-OBSERVATION-MODE-001 — SUPERSEDED
 
-Paused until **SOURCES-CAPABILITY-MATRIX-001** closes PASS. First-run stays Web only.
+Report: [FIRST-IMPRESSION-OBSERVATION-MODE-001.md](FIRST-IMPRESSION-OBSERVATION-MODE-001.md).
+
+### 9. FIRST-IMPRESSION-TEST-001 — CLOSED · PASS
+
+Operator waived session templates (2026-09-19). Engineering gate [PRE-BETA-BENCHMARK-001.md](PRE-BETA-BENCHMARK-001.md) already **PASS**.
+
+Report: [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md).
+
+### 9b. FIRST-RUN-EXPERIENCE-001 — SUPERSEDED
+
+Replaced by **FIRST-IMPRESSION-TEST-001** for the Web RC path. Kept for reference.
 
 Report: [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md).
+
+### 9c. FIRST-IMPRESSION-SUMMARY-001 — CLOSED · PASS
+
+Operator sign-off (2026-09-19). Session notes waived.
+
+Report: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md).
+
+### 9d. PRODUCT-FREEZE-001 — OPEN
+
+Active since summary **PASS** (2026-09-19). No functional tracks except critical bugs or narrow beta fixes.
+
+Report: [PRODUCT-FREEZE-001.md](PRODUCT-FREEZE-001.md).
+
+### 9d2. PRE-BETA-SANITY-001 — CLOSED · PASS
+
+30–45 min product pass (2026-09-19). Deploy gates + Playwright benchmark + browser checks.
+
+Report: [PRE-BETA-SANITY-001.md](PRE-BETA-SANITY-001.md).
+
+### 9e. PRIVATE-BETA-001 — OPEN
+
+20–30 users · 7+ days · product freeze active. Exit → **0.1.0-rc1**.
+
+Report: [PRIVATE-BETA-001.md](PRIVATE-BETA-001.md).
+
+### 9f. RELEASE-PUBLISH-PIPELINE-001 — OPEN
+
+**Before hosting or Phase B.** One operator workflow to publish any version (web + desktop) without editing product code. Covers canonical release source, version mirrors, `/api/release` authority, publication sequence, rollback. Hosting (GitHub → domain alias) is implementation detail deferred to **DESKTOP-RELEASE-HOSTING-001**.
+
+Report: [RELEASE-PUBLISH-PIPELINE-001.md](RELEASE-PUBLISH-PIPELINE-001.md).
+
+### 9g. RELEASE-LIFECYCLE-001 — OPEN · PHASE A PASS
+
+Version lifecycle contract. Download ≠ update. `/api/release` is authority for Desktop + Website. Clients never see GitHub — artifacts on GitHub Releases, stable alias on `download.suhuella.com`, manifest `mac` on your domain only. Phase A: compare kernel + Settings check. **Phase B deferred** until RELEASE-PUBLISH-PIPELINE-001 closes and DESKTOP-RELEASE-HOSTING-001 opens. Does not block Web first-impression.
+
+Report: [RELEASE-LIFECYCLE-001.md](RELEASE-LIFECYCLE-001.md).
 
 ### Desktop (frozen — off critical path)
 
@@ -232,7 +320,7 @@ Local `SuHuella-0.1.0-pre-rc.dmg` exists. No public host. Reopen only when GitHu
 
 Report: [DESKTOP-RELEASE-ARTIFACTS-001.md](DESKTOP-RELEASE-ARTIFACTS-001.md).
 
-**DESKTOP-DMG-HOSTING-UNBLOCK-001** — **FROZEN · BLOCKED · PRIORITY LOW**
+**DESKTOP-DMG-HOSTING-UNBLOCK-001** — **CLOSED · PASS**
 
 Hosting follow-up closed blocked. Do not reopen without a host.
 
@@ -241,7 +329,7 @@ Report: [DESKTOP-DMG-HOSTING-UNBLOCK-001.md](DESKTOP-DMG-HOSTING-UNBLOCK-001.md)
 **Policy (frozen):**
 
 - Download is public when published; license controls use, not download.
-- Preferred host when reopened: **GitHub Releases** (not R2 first).
+- Artifact storage when reopened: **GitHub Releases** (beta). Client URLs: **`download.suhuella.com`** via **`/api/release`** — never `github.com` in the app.
 - `/download` should eventually read a release manifest; new platforms appear without React changes. Not in scope until Desktop reopens.
 
 ### 10. BRAND-THEME-TOKENS-001 — CLOSED · PASS
@@ -251,6 +339,12 @@ Phase A. `theme.accent` / `theme.onAccent` on BrandConfig. Site layout and deskt
 Does not open Ops/Partner color editors. Does not enable checkout or Desktop RC.
 
 Report: [BRAND-THEME-TOKENS-001.md](BRAND-THEME-TOKENS-001.md).
+
+### 10b. BRANDING-HIERARCHY-001 — SUPERSEDED → ADR-003
+
+Permanent policy: [docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md](docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md). Commercial Identity ≠ Effective Brand Identity. Per-field merge. `identityVersion: 1`. Field ownership table. `useEffectiveBrandIdentity()`.
+
+Index alias: [BRANDING-HIERARCHY-001.md](BRANDING-HIERARCHY-001.md).
 
 ### 11. OPERATIONS-ACCESS-CLOSEOUT-001 — CLOSED · PASS
 
@@ -270,6 +364,6 @@ Almost all proof is macOS. Check installer, tray, Explorer, Save As, notificatio
 
 One **PRODUCTION-READINESS-001**. Production is the only authority. If it fails, it should be unexpected.
 
-If that gate PASSes: **FIRST-IMPRESSION-TEST-001**.
+If that gate PASSes: **PRIVATE-BETA-001** (after **PRE-BETA-SANITY-001**).
 
 If it is BLOCKED: one slice only.

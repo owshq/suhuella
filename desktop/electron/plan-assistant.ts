@@ -7,7 +7,7 @@ import {
   validateKnowledgeSet,
   type KnowledgeSetOperationResult,
 } from './knowledge-set.ts'
-import type { IndexedFolderEntry } from '../src/types.ts'
+import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 import type {
   KnowledgeSet,
   KnowledgeSetValidationError,
@@ -17,7 +17,7 @@ import type {
   PlanAssistantHint,
   PlanAssistantProposal,
   PlanWorkflowIdea,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 import {
   answerOnDevicePlanQuestion,
   isPlanAssistantQuestion,
@@ -25,7 +25,7 @@ import {
   ON_DEVICE_PLAN_ASSISTANT_USING,
   planAssistantBecause,
   PLAN_ASSISTANT_ALLOWED_HINTS,
-} from '../src/lib/plan-assistant-copy.ts'
+} from '@suhuella/product/lib/plan-assistant-copy.ts'
 
 /**
  * PLAN-ASSISTANT-001 — Plan Assistant (CLOSED · PASS)

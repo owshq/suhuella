@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import {
@@ -12,7 +12,7 @@ export function DocumentTitle() {
   const { locale } = useLocale();
   const pathname = usePathname();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const page = getPageIdFromPathname(pathname);
     document.title = getPageTitle(locale, page);
   }, [locale, pathname]);

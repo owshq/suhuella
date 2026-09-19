@@ -6,6 +6,42 @@ Paid utility that suggests the right folder when you save. SuHuella runs on Desk
 
 ---
 
+## Release Architecture
+
+```text
+STATUS = FROZEN
+
+Changes require a documented architectural decision.
+
+Do not introduce:
+- second version authority
+- second release manifest
+- client knowledge of hosting provider
+- release information outside release.json
+
+All future work must build on this architecture.
+```
+
+Detail: [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md). Operators edit `brands/suhuella/release.json` and run **`npm run build`**.
+
+---
+
+## Governance
+
+**Constitutional docs:** [docs/governance/README.md](docs/governance/README.md)
+
+| Layer | Documents |
+| --- | --- |
+| Architecture | Release Architecture · ADRs · BrandConfig · Commercial Authority |
+| Permanent policies | [Product Evolution](PRODUCT-EVOLUTION-POLICY.md) · [Change Classification](docs/governance/CHANGE-CLASSIFICATION-POLICY.md) · [Release Process](docs/governance/RELEASE-PROCESS-FROZEN.md) · Navigation · Branding |
+| Evidence-driven work | PRE-BETA-SANITY → Private Beta |
+
+Architecture and release **process** are frozen. UX evolves with evidence. One observed problem → one narrow fix.
+
+**Next (product):** [PRIVATE-BETA-001](PRIVATE-BETA-001.md) **OPEN** — 20–30 users · Web only. [PRE-BETA-SANITY-001](PRE-BETA-SANITY-001.md) **CLOSED · PASS**.
+
+---
+
 ## Current build
 
 **SuHuella 0.1.0-pre-rc** — Web RC path does not wait on Desktop installers.
@@ -13,10 +49,11 @@ Paid utility that suggests the right folder when you save. SuHuella runs on Desk
 **Web RC (critical path):**
 
 ```text
-SOURCES-CAPABILITY-MATRIX-001
-  →  FIRST-RUN-EXPERIENCE-001
-  →  PRODUCTION-READINESS-001
-  →  PRIVATE-BETA-001 (Web)
+PRODUCT-FREEZE-001  (OPEN)
+  →  PRE-BETA-SANITY-001  CLOSED · PASS
+  →  PRIVATE-BETA-001  OPEN (Web · 20–30 users)
+  →  0.1.0-rc1
+  →  Public launch
 ```
 
 **Desktop (parallel, frozen):** GitHub Releases → Desktop Beta → Desktop RC. See [DESKTOP-RELEASE-ARTIFACTS-001](DESKTOP-RELEASE-ARTIFACTS-001.md) — **FROZEN · BLOCKED**.
@@ -26,7 +63,7 @@ DESKTOP_IN_RC = NO
 FIRST_RUN = WEB ONLY
 ```
 
-**Open now (product):** [PRE-RC-TRACKS-001](PRE-RC-TRACKS-001.md). Next: [SOURCES-CAPABILITY-MATRIX-001](SOURCES-CAPABILITY-MATRIX-001.md) — **OPEN · VERIFYING**. [FIRST-RUN-EXPERIENCE-001](FIRST-RUN-EXPERIENCE-001.md) is **PAUSED**. Desktop tracks are **FROZEN · PRIORITY LOW**. Checkout is ready and off. [RESEND-PRODUCTION-001](RESEND-PRODUCTION-001.md) is **CLOSED · OTP PRODUCTION PROVEN**. [APP-MODAL-SHELL-001](APP-MODAL-SHELL-001.md) is **CLOSED · PASS** (supersedes DOWNLOAD-PAGE-SEMANTICS-001). [COMBINED-PRE-RC-SMOKE-001](COMBINED-PRE-RC-SMOKE-001.md) is **CLOSED · PASS**. [BRAND-THEME-TOKENS-001](BRAND-THEME-TOKENS-001.md) is **CLOSED · PASS**. [BROWSER-CONNECT-SOURCE-001](BROWSER-CONNECT-SOURCE-001.md), [BROWSER-SOURCES-BRAND-FLOW-001](BROWSER-SOURCES-BRAND-FLOW-001.md), and [BROWSER-ORGANISE-SELECTION-001](BROWSER-ORGANISE-SELECTION-001.md) are **CLOSED · PASS**. Next: [FIRST-RUN-EXPERIENCE-001](FIRST-RUN-EXPERIENCE-001.md). Do not open BYOK, Connections, Automation, or multibrand.
+**Open now (product):** [PRIVATE-BETA-001](PRIVATE-BETA-001.md) — invite 20–30 users. [PRODUCT-FREEZE-001](PRODUCT-FREEZE-001.md) **OPEN**. Track list: [PRE-RC-TRACKS-001](PRE-RC-TRACKS-001.md). Do not open BYOK, Connections, Automation, or multibrand.
 
 **Organise product model:** [CLOSED · PROVEN](#organise-product-model).
 
@@ -517,7 +554,7 @@ No further Workflow milestones. Workflows are frozen; later work adds **capabili
 
 **WINDOWS-COMPATIBILITY-001** validates the **input channel** (host Save As). **KNOWLEDGE-COMPATIBILITY-001** validates the **object** (file types). Keep them separate.
 
-**PRIVATE-BETA-001** is not a technical milestone. It answers: *after several days, would people choose to keep using SuHuella?* Detail lives in **Current Milestone** when active (§9.2). Do not start connectors or OAuth before Save As is proven on Windows. BYOK stays an optional assistant after recommendation — never matching.
+**PRIVATE-BETA-001** is not a technical milestone. It answers: *after several days, would people choose to keep using SuHuella?* Track spec: [PRIVATE-BETA-001.md](PRIVATE-BETA-001.md). Summary in §9.2 below. Do not start connectors or OAuth before Save As is proven on Windows. BYOK stays an optional assistant after recommendation — never matching.
 
 Parallel (do not block validation): performance measurement · auto-updater · release packaging (operational).
 
@@ -724,17 +761,16 @@ Not Windows. Not opened. **Question:** can SuHuella recommend a folder for the f
 
 **Agent rules**
 
-1. Read this file first, then the package README for your task.
-2. Architecture Freeze v1.1 — FINAL. No `*-ARCHITECTURE-002`.
-3. **One OPEN milestone.** DESKTOP-POLISH-001. WINDOWS-COMPATIBILITY-001 stays **BLOCKED** (not OPEN).
-4. Frozen means frozen — bugs only.
+1. Read this file first, then [PRODUCT-EVOLUTION-POLICY.md](PRODUCT-EVOLUTION-POLICY.md), then the package README for your task.
+2. **Architecture · navigation structure · release model = FROZEN.** UX evolves with evidence (users · telemetry · confirmed incidents). No new architecture tracks or “master” docs.
+3. One observed problem → one narrow fix. Do not open parallel tracks for the same observation.
+4. Frozen means frozen — production blockers and bugfixes only, minimal scope.
 5. Tests green: `npm run check:knowledge-set` · `npm run benchmark:match` · `npm run build` (in `desktop/`).
-6. A change must improve an accepted product metric or it is rejected.
-7. Do not grow RAM, disk, or idle CPU against frozen budgets.
+6. Do not grow RAM, disk, or idle CPU against frozen budgets.
 
 **Dev:** `npm run desktop` (root) · `cd desktop && npm run dev` · `npm run desktop:stop` if port 5173 busy.
 
-**Release:** version `0.1.0-rc1` (see [RC-CHECKLIST.md](RC-CHECKLIST.md)) · `npm run package:mac` / `package:win` on matching OS.
+**Release:** edit `brands/suhuella/release.json` · `npm run build` · deploy. Desktop DMG: `npm run package:mac` (see [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md)).
 
 ---
 

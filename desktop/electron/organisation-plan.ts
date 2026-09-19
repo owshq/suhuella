@@ -1,12 +1,12 @@
 import path from 'node:path'
-import { isFolderCreateAction } from '../src/lib/plan-editor-copy.ts'
+import { isFolderCreateAction } from '@suhuella/product/lib/plan-editor-copy.ts'
 import type {
   ActivityItem,
   ActivityRun,
   KnowledgeSet,
   OrganisationPlan,
   OrganisationPlanItem,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 function samePath(left: string, right: string): boolean {
   return path.normalize(left).toLowerCase() === path.normalize(right).toLowerCase()

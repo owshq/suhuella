@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { brand } from '@suhuella/brand'
-import type { NavigationMethod } from '../src/types.ts'
+import type { NavigationMethod } from '@suhuella/product/types.ts'
 
 export type SaveDialogOpenedEvent = {
   type: 'save-dialog-opened'

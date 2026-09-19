@@ -15,6 +15,7 @@ const shared = {
   logLevel: 'info',
   alias: {
     '@suhuella/brand': brandEntry,
+    '@suhuella/product': path.join(desktopRoot, '../packages/product/src'),
   },
   define: {
     __SUHUELLA_BUILD__: JSON.stringify(buildVersion),

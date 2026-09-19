@@ -10,7 +10,7 @@ import type {
   SearchQuery,
   SearchResults,
   Workflow,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const MAX_HITS = 40
 const MAX_QUERY = 200

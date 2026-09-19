@@ -2,7 +2,7 @@ import type {
   CompatibilityAttempt,
   CompatibilityDiagnostics,
   NavigationMethod,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 import { formatSourceApp, isDevelopmentMode, logDev } from './save-dialog-watcher.ts'
 
 const MAX_ATTEMPTS = 50

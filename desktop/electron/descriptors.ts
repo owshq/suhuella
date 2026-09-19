@@ -3,7 +3,7 @@ import type {
   KnowledgeItemKind,
   KnowledgeOrigin,
   KnowledgeSourceType,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',

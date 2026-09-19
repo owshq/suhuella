@@ -1,5 +1,5 @@
 import { app, shell } from 'electron'
-import { checkoutPath, type CheckoutPlan } from '../src/lib/license-checkout.ts'
+import { checkoutPath, type CheckoutPlan } from '@suhuella/product/lib/license-checkout.ts'
 import {
   clearLicenseContext,
   getCachedDeviceId,
@@ -12,8 +12,8 @@ import {
   setDeviceName,
   type ApiDevice,
 } from './license-store.ts'
-import type { LicenseActionResult, LicenseApiError, LicenseContext } from '../src/types.ts'
-import { fetchPublicServiceHealth, type PublicServiceHealth } from '../src/lib/service-health.ts'
+import type { LicenseActionResult, LicenseApiError, LicenseContext } from '@suhuella/product/types.ts'
+import { fetchPublicServiceHealth, type PublicServiceHealth } from '@suhuella/product/lib/service-health.ts'
 
 type ApiSuccess = { ok: true; license: LicenseContext; devices?: ApiDevice[] }
 type ApiFailure = { ok: false; error: LicenseApiError }

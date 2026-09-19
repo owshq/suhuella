@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ReleaseDecision } from '../src/lib/release-lifecycle.ts'
+import type { ReleaseDecision } from '@suhuella/product/lib/release-lifecycle.ts'
 import type {
   ActivityRun,
   AppInfo,
@@ -42,7 +42,7 @@ import type {
   UndoExecutionRequest,
   UndoExecutionResult,
   IncludeSourceResult,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 const api = {
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),

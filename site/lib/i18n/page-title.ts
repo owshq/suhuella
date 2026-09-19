@@ -1,9 +1,8 @@
+import { brand } from "@suhuella/brand";
 import { getDictionary } from "./dictionary";
 import type { Locale } from "./types";
 
-export type PageId = "home" | "privacy" | "terms" | "download";
-
-const BRAND = "SuHuella";
+export type PageId = "home" | "privacy" | "terms" | "download" | "license";
 
 export function getPageIdFromPathname(pathname: string): PageId {
   if (pathname.startsWith("/privacy") || pathname.startsWith("/privacidad")) {
@@ -12,8 +11,12 @@ export function getPageIdFromPathname(pathname: string): PageId {
   if (pathname.startsWith("/terms") || pathname.startsWith("/terminos")) {
     return "terms";
   }
+  if (pathname === "/license" || pathname.startsWith("/license?")) {
+    return "license";
+  }
   if (
     pathname.startsWith("/download") ||
+    pathname.startsWith("/license/success") ||
     pathname.startsWith("/success") ||
     pathname.startsWith("/descarga-exitosa")
   ) {
@@ -30,12 +33,16 @@ export function getPageTitle(locale: Locale, page: PageId): string {
   }
 
   if (page === "privacy") {
-    return `${t.legal.privacyTitle} — ${BRAND}`;
+    return `${t.legal.privacyTitle} — ${brand.displayName}`;
   }
 
   if (page === "terms") {
-    return `${t.legal.termsTitle} — ${BRAND}`;
+    return `${t.legal.termsTitle} — ${brand.displayName}`;
   }
 
-  return `${t.pageTitles.download} — ${BRAND}`;
+  if (page === "license") {
+    return `${t.pageTitles.license} — ${brand.displayName}`;
+  }
+
+  return `${t.pageTitles.download} — ${brand.displayName}`;
 }

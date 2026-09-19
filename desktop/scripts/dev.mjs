@@ -7,11 +7,14 @@ import { desktopRoot, prepareDesktopPublic, selectedBrandId } from './brand-buil
 import { buildElectron } from './electron-esbuild.mjs'
 
 const brandId = selectedBrandId()
-const brandProjection = spawnSync('node', ['brands/project-site.mjs'], {
-  cwd: path.resolve(desktopRoot, '..'),
-  stdio: 'inherit',
-})
-if (brandProjection.status !== 0) process.exit(brandProjection.status ?? 1)
+const repoRoot = path.resolve(desktopRoot, '..')
+for (const script of ['brands/project-brand.mjs', 'brands/project-site.mjs']) {
+  const brandProjection = spawnSync('node', [script], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  })
+  if (brandProjection.status !== 0) process.exit(brandProjection.status ?? 1)
+}
 
 await prepareDesktopPublic(brandId)
 await buildElectron({ watch: true })

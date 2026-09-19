@@ -8,7 +8,7 @@ import {
   isByokProviderId,
   validateByokConnectInput,
 } from './byok.ts'
-import type { ByokAssistantId, ByokConnectResult, ByokProviderId, ByokStatus } from '../src/types.ts'
+import type { ByokAssistantId, ByokConnectResult, ByokProviderId, ByokStatus } from '@suhuella/product/types.ts'
 
 const BYOK_FILE = 'byok.json'
 

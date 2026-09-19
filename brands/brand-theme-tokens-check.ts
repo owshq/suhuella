@@ -103,7 +103,7 @@ function run(): void {
     assert(!source.includes("#0084ff"), `${path.relative(root, file)} has no hardcoded #0084ff`);
   }
 
-  const desktopApp = readText("desktop/src/App.tsx");
+  const desktopApp = readText("packages/product/src/App.tsx");
   assert(desktopApp.includes("brandCssVars"), "desktop shell injects theme variables");
 
   console.log("BRAND-THEME-TOKENS-001 check passed");

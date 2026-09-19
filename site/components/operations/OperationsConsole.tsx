@@ -1580,10 +1580,11 @@ function ReleasesSection({ release }: { release: ReleaseManifest | null }) {
   return (
     <Panel title="Current stable release">
       <div className="grid gap-3 text-sm text-slate-300">
-        <div>Version {release.version}</div>
+        <div>Latest {release.version}</div>
         <div>Channel {release.channel}</div>
-        <div>Minimum version {release.minimumVersion}</div>
+        <div>Minimum {release.minimumVersion}</div>
         <div>Mandatory {release.mandatory ? "yes" : "no"}</div>
+        {release.notes ? <div>Notes {release.notes}</div> : null}
         <div className="break-all">
           Windows URL {release.windows || "empty — installer not published"}
         </div>
@@ -1592,7 +1593,7 @@ function ReleasesSection({ release }: { release: ReleaseManifest | null }) {
         </div>
       </div>
       <p className="mt-4 text-xs text-slate-500">
-        Display only. This slice does not implement the updater.
+        Read only. Publish, retire, and rollback stay a later Operations slice.
       </p>
     </Panel>
   );

@@ -5,7 +5,7 @@ import type {
   KnowledgeSourcesEnabled,
   KnowledgeSourceStatus,
   KnowledgeSourceType,
-} from '../src/types.ts'
+} from '@suhuella/product/types.ts'
 
 export const DEFAULT_KNOWLEDGE_SOURCES_ENABLED: KnowledgeSourcesEnabled = {
   local_folder: true,
