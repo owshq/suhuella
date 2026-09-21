@@ -77,11 +77,10 @@ function runBrowserAdapterWiringCheck(): void {
   assert(!sources.includes("source-handles"), "Sources UI still does not consume adapters");
 
   const contract = repoFile("tracks/archive/BROWSER-ADAPTER-WIRING-001.md");
-  assert(contract.includes("STATUS = OPEN"), "track stays open until manual smoke");
+  assert(contract.includes("STATUS = FROZEN · PASS"), "wiring track is frozen and passed");
   assert(contract.includes("AUTOMATED = PASS"), "automated gate is pass");
-  assert(contract.includes("MANUAL = PENDING"), "manual smoke is pending");
-  assert(contract.includes("FREEZE = BLOCKED"), "freeze is blocked");
-  assert(contract.includes("Do **not** write `FROZEN`"), "track is not frozen yet");
+  assert(contract.includes("MANUAL = PASS"), "manual smoke passed");
+  assert(contract.includes("FREEZE = ACTIVE"), "freeze is active");
   assert(contract.includes("Connect folder"), "manual smoke covers connect");
   assert(contract.includes("registry.unbind()"), "manual smoke covers remove");
   assert(contract.includes("No further refactoring of Browser Wiring"), "close rule is documented");

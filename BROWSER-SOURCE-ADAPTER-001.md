@@ -89,7 +89,7 @@ No bespoke test per provider.
 
 ## Next adapters (same pattern)
 
-Wiring: [BROWSER-ADAPTER-WIRING-001.md](tracks/archive/BROWSER-ADAPTER-WIRING-001.md) — OPEN · AUTOMATED PASS · MANUAL PENDING · FREEZE BLOCKED
+Wiring: [BROWSER-ADAPTER-WIRING-001.md](tracks/archive/BROWSER-ADAPTER-WIRING-001.md) — FROZEN · PASS · MANUAL = PASS · FREEZE = ACTIVE
 
 | Track | Status |
 | --- | --- |
