@@ -10,7 +10,13 @@ export const CLOUD_TOKEN_ENCRYPTION_VERSION = 1;
 export const CLOUD_TOKEN_KEY_ID_ENV = "CLOUD_TOKEN_ENCRYPTION_KEY";
 export const CLOUD_TOKEN_KEY_ID_LABEL = "v1";
 
-function requireKeyBytes(env: Record<string, string | undefined> = process.env): Uint8Array {
+function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy;
+}
+
+function requireKeyBytes(env: Record<string, string | undefined> = process.env): Uint8Array<ArrayBuffer> {
   const raw = env[CLOUD_TOKEN_KEY_ID_ENV]?.trim() ?? "";
   if (!raw) {
     throw new Error("cloud_token_key_missing");
@@ -24,15 +30,15 @@ function requireKeyBytes(env: Record<string, string | undefined> = process.env):
   if (bytes.byteLength !== 32) {
     throw new Error("cloud_token_key_invalid");
   }
-  return bytes;
+  return asBufferSource(bytes);
 }
 
-async function importAesKey(raw: Uint8Array): Promise<CryptoKey> {
+async function importAesKey(raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
-function encodeTokenSet(tokens: CloudTokenSet): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(tokens));
+function encodeTokenSet(tokens: CloudTokenSet): Uint8Array<ArrayBuffer> {
+  return asBufferSource(new TextEncoder().encode(JSON.stringify(tokens)));
 }
 
 function decodeTokenSet(bytes: Uint8Array): CloudTokenSet {
@@ -64,8 +70,8 @@ export async function encryptCloudTokens(
   );
   return {
     encryptionVersion: CLOUD_TOKEN_ENCRYPTION_VERSION,
-    ciphertext,
-    iv,
+    ciphertext: asBufferSource(ciphertext),
+    iv: asBufferSource(iv),
     keyId: CLOUD_TOKEN_KEY_ID_LABEL,
   };
 }
@@ -80,7 +86,11 @@ export async function decryptCloudTokens(
   const keyBytes = requireKeyBytes(env);
   const key = await importAesKey(keyBytes);
   const plain = new Uint8Array(
-    await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.iv }, key, blob.ciphertext),
+    await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: asBufferSource(blob.iv) },
+      key,
+      asBufferSource(blob.ciphertext),
+    ),
   );
   return decodeTokenSet(plain);
 }
