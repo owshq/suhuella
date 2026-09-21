@@ -1,8 +1,19 @@
 # Governance
 
-Constitutional documents for SuHuella. **Read before opening new tracks or changing product structure.**
+Policies and precedence for SuHuella. **Read before opening new tracks or changing product structure.**
 
 Do not duplicate these as new “master” documents elsewhere.
+
+**Constitution (permanent contracts):** [docs/architecture/constitution/README.md](../architecture/constitution/README.md) — daily work lives outside that folder.
+
+---
+
+## Precedence
+
+| Document | Scope |
+| --- | --- |
+| [Decision precedence](DECISION-PRECEDENCE.md) | User safety → Constitution → ADR → Governance → Implementation → Tests |
+| [DECISION-PRIVATE-BETA-001](DECISION-PRIVATE-BETA-001.md) | Pipeline IMPLEMENTED · commercial distribution deferred · Private Beta BLOCKED · primary metric = first useful session |
 
 ---
 
@@ -12,8 +23,12 @@ Do not duplicate these as new “master” documents elsewhere.
 | --- | --- |
 | [Product Evolution Policy](../../PRODUCT-EVOLUTION-POLICY.md) | Evidence-driven development · frozen vs evolving |
 | [Change Classification Policy](CHANGE-CLASSIFICATION-POLICY.md) | Bug · UX · Feature · Infrastructure · Architecture |
-| [Release Architecture](../../RELEASE-ARCHITECTURE-FROZEN.md) | `release.json` · `/api/release` · hosting invisibility |
+| [Contract Stability](CONTRACT-STABILITY.md) | Frozen domain / infra vs evolving adapters · UI · features |
+| [Command taxonomy](../architecture/constitution/COMMAND-TAXONOMY.md) | `health` · `build` · `publish` · `smoke` |
+| [Release Architecture](../architecture/constitution/release-architecture.md) | `release.json` · `/api/release` · hosting invisibility |
+| [Health](../architecture/constitution/health.md) | Observation only · Build Health · never modifies |
 | [Release Process (frozen)](RELEASE-PROCESS-FROZEN.md) | Develop → … → Public Release — no skipped phases |
+| [Pre-RC release semantics](PRE-RC-RELEASE-SEMANTICS.md) | `pre-rc` may publish · signing blocks `rc1` / external beta only |
 | [Navigation Policy](NAVIGATION-POLICY.md) | Six-screen order · one question per screen |
 | [Branding Hierarchy](../../BRANDING-HIERARCHY-001.md) | Brand · operator · effective identity |
 
@@ -37,7 +52,7 @@ Do not duplicate these as new “master” documents elsewhere.
 | [ADR index](../architecture/decisions/README.md) | How to write ADRs |
 | [ADR-003 Brand identity hierarchy](../architecture/decisions/ADR-003-brand-identity-hierarchy.md) | `useEffectiveBrandIdentity()` |
 
-New **Architecture**-class changes require a new ADR ([Change Classification Policy](CHANGE-CLASSIFICATION-POLICY.md)).
+New **Architecture**-class changes require a new ADR ([Change Classification Policy](CHANGE-CLASSIFICATION-POLICY.md)). Constitution **behavioural or contractual** changes require ADR **first**; editorial clarifications do not ([Decision precedence](DECISION-PRECEDENCE.md)).
 
 ---
 
@@ -59,10 +74,8 @@ New **Architecture**-class changes require a new ADR ([Change Classification Pol
 
 ## Current priority (product)
 
-Not more governance documents. Run:
+**Primary metric:** Can a first-time user obtain a useful result without assistance?
 
-```text
-First Impression Session 1 → 2 → 3 → Summary → one slice (if needed) → Private Beta
-```
+Roadmap (changes weekly): [PRE-RC-TRACKS-001.md](../../PRE-RC-TRACKS-001.md).
 
-See [FIRST-IMPRESSION-TEST-001.md](../../FIRST-IMPRESSION-TEST-001.md).
+Stable architecture: [constitution/README.md](../architecture/constitution/README.md).

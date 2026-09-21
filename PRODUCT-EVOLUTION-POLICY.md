@@ -101,7 +101,7 @@ For UX, three users with the same problem is a safe default — not a rule for e
 
 Valid evidence sources:
 
-- First Impression sessions ([FIRST-IMPRESSION-TEST-001](FIRST-IMPRESSION-TEST-001.md))
+- First Impression sessions ([FIRST-IMPRESSION-TEST-001](tracks/archive/FIRST-IMPRESSION-TEST-001.md))
 - Private Beta · support · ops · bug reports
 - **Production telemetry** (funnels, drop-off, errors, session replay where available)
 

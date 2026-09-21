@@ -121,7 +121,7 @@ Ready for PRIVATE-BETA-001:  yes
 
 ## Related
 
-- [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md)
+- [FIRST-IMPRESSION-SUMMARY-001.md](tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md)
 - [PRIVATE-BETA-001.md](PRIVATE-BETA-001.md)
 - [RELEASE-PUBLISH-PIPELINE-001.md](RELEASE-PUBLISH-PIPELINE-001.md) — deploy steps
 - [ADR-003](docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md) — branding frozen

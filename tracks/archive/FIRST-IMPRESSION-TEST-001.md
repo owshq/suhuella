@@ -9,7 +9,7 @@ CLOSE = operator waived session notes · 2026-09-19
 DATE = 2026-09-19
 ```
 
-**Closed.** Engineering gate: [PRE-BETA-BENCHMARK-001.md](PRE-BETA-BENCHMARK-001.md) **PASS**. Operator sign-off replaces unfilled [first-impression/](first-impression/) templates. Summary: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md) **CLOSED · PASS**.
+**Closed.** Engineering gate: [PRE-BETA-BENCHMARK-001.md](../../PRE-BETA-BENCHMARK-001.md) **PASS**. Operator sign-off replaces unfilled [first-impression/](../../first-impression/) templates. Summary: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md) **CLOSED · PASS**.
 
 Observe whether a completely new user understands SuHuella **without any explanation**.
 
@@ -17,9 +17,9 @@ Observe whether a completely new user understands SuHuella **without any explana
 
 Cursor behaviour: [FIRST-IMPRESSION-OBSERVATION-MODE-001.md](FIRST-IMPRESSION-OBSERVATION-MODE-001.md) — observer, not developer, until the summary closes.
 
-This track validates **first impression**, not a feature checklist. Supersedes [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md). Participant and folder logistics: [FIRST-RUN-EXPERIENCE-PREP-001.md](FIRST-RUN-EXPERIENCE-PREP-001.md).
+This track validates **first impression**, not a feature checklist. Supersedes [FIRST-RUN-EXPERIENCE-001.md](../../FIRST-RUN-EXPERIENCE-001.md). Participant and folder logistics: [FIRST-RUN-EXPERIENCE-PREP-001.md](../../FIRST-RUN-EXPERIENCE-PREP-001.md).
 
-**Session records:** [first-impression/](first-impression/) (`session-01.md` · `session-02.md` · `session-03.md`).
+**Session records:** [first-impression/](../../first-impression/) (`session-01.md` · `session-02.md` · `session-03.md`).
 
 **Decision document:** [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md) — fill after all three sessions; this summary decides beta entry, not any single session.
 
@@ -54,7 +54,7 @@ All must be true before scheduling. If any is false: **STOP.**
 | Landing modal (production) | ES copy · **Abrir SuHuella** · v0.1.0-pre-rc badge |
 | Governance / release process | FROZEN — no doc work before sessions |
 
-**Ready for Session 01.** Fill [first-impression/session-01.md](first-impression/session-01.md) header before the participant arrives.
+**Ready for Session 01.** Fill [first-impression/session-01.md](../../first-impression/session-01.md) header before the participant arrives.
 
 ---
 
@@ -174,7 +174,7 @@ During the session, record **only**:
 
 ### Observation log (one table per session)
 
-Use [first-impression/session-XX.md](first-impression/session-01.md) — columns: **Start · Finish · Completed · Without help? · Notes**.
+Use [first-impression/session-XX.md](../../first-impression/session-01.md) — columns: **Start · Finish · Completed · Without help? · Notes**.
 
 ```text
 Task timings (evidence only — fill after session):
@@ -246,7 +246,7 @@ Confidence (1–5):
 
 ## Product freeze (after track PASS)
 
-When this track closes **PASS**, **freeze the product** for the beta window. Policy: [PRODUCT-FREEZE-001.md](PRODUCT-FREEZE-001.md). Beta spec: [PRIVATE-BETA-001.md](PRIVATE-BETA-001.md).
+When this track closes **PASS**, **freeze the product** for the beta window. Policy: [PRODUCT-FREEZE-001.md](../../PRODUCT-FREEZE-001.md). Beta spec: [PRIVATE-BETA-001.md](../../PRIVATE-BETA-001.md).
 
 ```text
 FIRST-IMPRESSION-TEST-001  CLOSED · PASS

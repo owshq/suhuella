@@ -7,7 +7,7 @@ SCOPE = SuHuella Web only
 SUPERSEDED_BY = FIRST-IMPRESSION-TEST-001
 ```
 
-**Do not run this session.** Use [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md) instead.
+**Do not run this session.** Use [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md) instead.
 
 **Not a code task. Not a technical audit. Not production readiness. Not a feature review.**
 

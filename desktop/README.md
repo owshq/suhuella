@@ -46,12 +46,12 @@ src/
 | Window | When |
 | --- | --- |
 | Tray | Always after launch |
-| Onboarding | Until `firstRunCompleted` |
-| Settings / Home | After first run |
+| Onboarding | Until `firstRunCompleted` — License → first source → Home |
+| Settings / Home | After first run (first Home shows a one-time hint) |
 | Suggestion overlay | Windows Save As detected |
 | Preview Save As | Tray, Home, or `⌘⌥S` / `Ctrl+Alt+S` |
 
-Settings and Preview Save As are never visible together. First launch: tray only.
+Settings and Preview Save As are never visible together. Launch always opens onboarding or Home. Closing the window keeps SuHuella in the tray / menu bar. Quit / ⌘Q exits. See [APPLICATION-LIFECYCLE-001.md](../docs/architecture/product/application-lifecycle.md).
 
 ## Local storage
 
@@ -79,7 +79,7 @@ No automatic rescans or filesystem watchers. Scan on add folder, rescan, or onbo
   "indexedFileCount": 0,
   "lastIndexed": null,
   "firstRunCompleted": false,
-  "launchAtLogin": true,
+  "launchAtLogin": false,
   "knowledgeSourcesEnabled": { "local_folder": true }
 }
 ```

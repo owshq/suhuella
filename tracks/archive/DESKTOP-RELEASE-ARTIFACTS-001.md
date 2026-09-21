@@ -26,7 +26,7 @@ y verificado descargable desde /download.
 
 Close: **CLOSED · BLOCKED**. The DMG exists locally and is branded correctly. It is not publicly downloadable. `/download` therefore still says Mac is not available.
 
-Hosting follow-up: [DESKTOP-DMG-HOSTING-UNBLOCK-001.md](DESKTOP-DMG-HOSTING-UNBLOCK-001.md) — **CLOSED · BLOCKED** (same host gap).
+Hosting follow-up: [DESKTOP-DMG-HOSTING-UNBLOCK-001.md](../../DESKTOP-DMG-HOSTING-UNBLOCK-001.md) — **CLOSED · BLOCKED** (same host gap).
 
 ---
 
@@ -178,7 +178,7 @@ Not opened: license model, checkout, Stripe, Resend, Commercial Authority Model,
 
 ## When Desktop reopens (not now)
 
-**Frozen strategy** (see [RELEASE-LIFECYCLE-001.md](RELEASE-LIFECYCLE-001.md)):
+**Frozen strategy** (see [RELEASE-LIFECYCLE-001.md](../open/RELEASE-LIFECYCLE-001.md)):
 
 ```text
 GitHub Releases     → store binaries (operator publish)

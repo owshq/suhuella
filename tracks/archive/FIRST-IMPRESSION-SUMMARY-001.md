@@ -10,7 +10,7 @@ OPERATOR = operator sign-off (session templates waived)
 CLOSE = operator waived — PRE-BETA-BENCHMARK-001 + production deploy gates sufficient
 ```
 
-**Closed without filled session notes.** Operator confirmed First Impression PASS (2026-09-19). Human templates in [first-impression/](first-impression/) remain optional reference only — not blockers.
+**Closed without filled session notes.** Operator confirmed First Impression PASS (2026-09-19). Human templates in [first-impression/](../../first-impression/) remain optional reference only — not blockers.
 
 ```text
 Session 01 → no changes
@@ -24,9 +24,9 @@ Do not reorder findings by screen. Order by **impact** (severity, then frequency
 
 Sources:
 
-- [first-impression/session-01.md](first-impression/session-01.md)
-- [first-impression/session-02.md](first-impression/session-02.md)
-- [first-impression/session-03.md](first-impression/session-03.md)
+- [first-impression/session-01.md](../../first-impression/session-01.md)
+- [first-impression/session-02.md](../../first-impression/session-02.md)
+- [first-impression/session-03.md](../../first-impression/session-03.md)
 
 ---
 
@@ -182,7 +182,7 @@ DATE = 2026-09-19
 
 | Outcome | Next |
 | --- | --- |
-| **PASS** | **No slice.** [PRODUCT-FREEZE-001](PRODUCT-FREEZE-001.md) → [PRIVATE-BETA-001](PRIVATE-BETA-001.md) directly. |
+| **PASS** | **No slice.** [PRODUCT-FREEZE-001](../../PRODUCT-FREEZE-001.md) → [PRIVATE-BETA-001](../../PRIVATE-BETA-001.md) directly. |
 | **PASS WITH FIXES** | **One** repeated problem → **one** slice → **one** validation participant → update summary → close. No accumulated “small improvements”. |
 | **FAIL** | **One** blocker slice only. No navigation, branding, or architecture changes “while we’re at it”. Reassess before beta. |
 

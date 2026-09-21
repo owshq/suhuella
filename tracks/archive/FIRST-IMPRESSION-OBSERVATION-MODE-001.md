@@ -7,7 +7,7 @@ SUPERSEDED_BY = PRE-BETA-BENCHMARK-001 (engineering)
 DATE = 2026-09-19
 ```
 
-Engineering → [PRE-BETA-BENCHMARK-001.md](PRE-BETA-BENCHMARK-001.md). Human First Impression → optional in [first-impression/](first-impression/) for desirability only.
+Engineering → [PRE-BETA-BENCHMARK-001.md](../../PRE-BETA-BENCHMARK-001.md). Human First Impression → optional in [first-impression/](../../first-impression/) for desirability only.
 
 ```text
 The product is frozen.
@@ -22,7 +22,7 @@ Observe only.
 
 This is the **last master prompt** for the Web RC validation cycle. After it closes, use session evidence — not architecture prompts — to decide the next slice.
 
-Cursor rule: [.cursor/rules/first-impression-observation-mode.mdc](.cursor/rules/first-impression-observation-mode.mdc)
+Cursor rule: [.cursor/rules/first-impression-observation-mode.mdc](../../.cursor/rules/first-impression-observation-mode.mdc)
 
 ---
 

@@ -9,7 +9,7 @@ EXECUTION = FIRST-IMPRESSION-TEST-001 (preconditions met — operator runs sessi
 
 **Preparation only.** This track does not observe a real user, does not tag rc1, and does not open **PRODUCTION-READINESS-001**.
 
-Parent spec: [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md) (supersedes [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md))
+Parent spec: [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md) (supersedes [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md))
 
 Expected final status after operator completes participant + folder selection:
 
@@ -51,7 +51,7 @@ NOW
 
 ## 1. Participant selection
 
-Run **three** sessions — one participant per profile in [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md):
+Run **three** sessions — one participant per profile in [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md):
 
 | Session | Profile |
 | --- | --- |
@@ -374,7 +374,7 @@ Invalid observer behaviour:
 
 ## 8. Pass / Pass with fixes / Fail criteria
 
-Aligns with [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md) (three required sessions).
+Aligns with [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md) (three required sessions).
 
 ### PASS
 
@@ -428,7 +428,7 @@ Next action (exactly one):
 
 ## 9. Session records
 
-Fill [first-impression/session-01.md](first-impression/session-01.md), [session-02.md](first-impression/session-02.md), and [session-03.md](first-impression/session-03.md). Mandatory header (Age, Occupation, Browser, …) before each session. After all three: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md).
+Fill [first-impression/session-01.md](first-impression/session-01.md), [session-02.md](first-impression/session-02.md), and [session-03.md](first-impression/session-03.md). Mandatory header (Age, Occupation, Browser, …) before each session. After all three: [FIRST-IMPRESSION-SUMMARY-001.md](tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md).
 
 ---
 

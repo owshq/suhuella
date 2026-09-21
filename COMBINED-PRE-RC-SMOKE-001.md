@@ -42,7 +42,7 @@ All required tracks were closed before this run:
 COMBINED-PRE-RC-SMOKE-001 — CLOSED · PASS
 ```
 
-**Next:** [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md) may open (3 sessions).
+**Next:** [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md) may open (3 sessions).
 
 ---
 
@@ -192,4 +192,4 @@ Landing and download journey align with Strategy B. `/download` no longer implie
 
 ## Next action
 
-Open **FIRST-IMPRESSION-TEST-001** (sessions: [first-impression/](first-impression/), summary: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md)). Do **not** open **PRIVATE-BETA-001** until summary PASS and product freeze.
+Open **FIRST-IMPRESSION-TEST-001** (sessions: [first-impression/](first-impression/), summary: [FIRST-IMPRESSION-SUMMARY-001.md](tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md)). Do **not** open **PRIVATE-BETA-001** until summary PASS and product freeze.

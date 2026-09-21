@@ -12,18 +12,24 @@ Release **architecture** is frozen in [RELEASE-ARCHITECTURE-FROZEN.md](../../REL
 
 ## Phases (mandatory order)
 
+Version names: [Pre-RC release semantics](./PRE-RC-RELEASE-SEMANTICS.md).
+
 ```text
 Develop
     ↓
-Internal testing
+Internal testing          (0.1.0-pre-rc · artifacts · downloads · /api/release)
     ↓
-First Impression  (3 sessions)
+First Impression
     ↓
-Private Beta
+Product / technical gates
+    ↓
+Commercial signing gates
+    ↓
+RC                        (0.1.0-rc1 · trusted install)
+    ↓
+Private Beta              (external)
     ↓
 Feedback
-    ↓
-RC
     ↓
 Public Release
 ```
@@ -31,11 +37,13 @@ Public Release
 | Phase | Track / reference |
 | --- | --- |
 | Develop | Normal engineering |
-| Internal testing | `npm run test:*` · smoke · staging |
-| First Impression | [FIRST-IMPRESSION-TEST-001.md](../../FIRST-IMPRESSION-TEST-001.md) → [FIRST-IMPRESSION-SUMMARY-001.md](../../FIRST-IMPRESSION-SUMMARY-001.md) |
-| Private Beta | [PRIVATE-BETA-001.md](../../PRIVATE-BETA-001.md) |
+| Internal testing | `0.1.0-pre-rc` publication · `npm run test:*` · smoke |
+| First Impression | [FIRST-IMPRESSION-TEST-001.md](../../tracks/archive/FIRST-IMPRESSION-TEST-001.md) → [FIRST-IMPRESSION-SUMMARY-001.md](../../tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md) |
+| Product / technical gates | Download · first launch · product checks — not signing |
+| Commercial signing | [DECISION-PRIVATE-BETA-001.md](./DECISION-PRIVATE-BETA-001.md) — external prerequisite |
+| RC | Tag `0.1.0-rc1` only after trusted-install gates pass |
+| Private Beta | [PRIVATE-BETA-001.md](../../PRIVATE-BETA-001.md) — external users, after `rc1` |
 | Feedback | Narrow fixes from [Product Evolution Policy](../../PRODUCT-EVOLUTION-POLICY.md) |
-| RC | Tag `0.1.0-rc1` · [RC-CHECKLIST.md](../../RC-CHECKLIST.md) |
 | Public Release | Launch track (when opened) |
 
 ---
@@ -50,9 +58,15 @@ Critical-incident skips must be recorded (ops notes · incident summary · follo
 
 ---
 
+## Pre-RC publication
+
+[Pre-RC release semantics](./PRE-RC-RELEASE-SEMANTICS.md) define the version names. Develop and internal testing include real Mac and Windows artifacts, download aliases, and `/api/release`. Signing does not pause that work.
+
+External Private Beta starts only after promotion to `0.1.0-rc1` (trusted-install gates). Calling a pre-RC build a Private Beta, or blocking pre-RC downloads on signing, skips or stalls a phase. Neither is allowed.
+
 ## Web vs Desktop
 
-- **Web RC path** follows this sequence now.
-- **Desktop** may lag (installers · hosting) but does not skip **First Impression** or **Private Beta** for the product as a whole.
+- Web and Desktop downloads are both in scope for `0.1.0-pre-rc`.
+- Desktop does not skip **First Impression** or **Private Beta** for the product as a whole. Trusted install is required before the external beta, not before pre-RC publication.
 
 See [PRODUCT-EVOLUTION-POLICY.md](../../PRODUCT-EVOLUTION-POLICY.md).

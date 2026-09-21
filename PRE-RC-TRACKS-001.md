@@ -9,6 +9,40 @@ POLICY = PRODUCT-EVOLUTION-POLICY — no new architecture tracks
 
 New tracks open only from **evidence** (users · telemetry · confirmed incidents). See [PRODUCT-EVOLUTION-POLICY.md](PRODUCT-EVOLUTION-POLICY.md).
 
+Constitution (stable architecture): [docs/architecture/constitution/README.md](docs/architecture/constitution/README.md). Roadmap lives here — not in the constitution.
+
+**Primary metric:** Can a first-time user obtain a useful result without assistance?
+
+**First useful session:** understand product · connect folder · indexing · search · organise · daily use.
+
+Release pipeline is **implemented**; trusted commercial distribution is **deferred** ([DECISION-PRIVATE-BETA-001](docs/governance/DECISION-PRIVATE-BETA-001.md)).
+
+---
+
+## Product roadmap (current)
+
+Changes weekly. Not constitutional.
+
+```text
+Browser Adapter wiring
+        ↓
+Electron Adapter
+        ↓
+Desktop Release
+        ↓
+Download Experience
+        ↓
+Private Beta
+        ↓
+Real feedback → one narrow slice → repeat
+```
+
+**After beta (reserved, not opened yet):** Google Drive → Dropbox → OneDrive → iOS → Android.
+
+Each new track must answer yes to at least one: works better · easier to use · fixes an observed problem. See [Decision precedence](docs/governance/DECISION-PRECEDENCE.md).
+
+---
+
 ```text
 PRE-RC-TRACKS-001
     OPEN
@@ -57,6 +91,54 @@ P0 SOURCES-CAPABILITY-MATRIX-001
 
 P0 BROWSER-ORGANISE-SELECTION-001
     CLOSED · PASS
+
+P0 ORGANISE-SOURCES-BRIDGE-001
+    CLOSED · PASS
+
+P0 SOURCE-DOMAIN-MODEL-001
+    FROZEN · CORE — identity / handle / health / lifecycle / presentation
+
+P0 SOURCE-PLATFORM-READINESS-001
+    CLOSED · PASS — domain ready for iOS/Android (no mobile UI)
+
+P0 MULTI-PLATFORM-SOURCE-ADAPTERS-001
+    FROZEN · PASS — Handle adapters only; domain unchanged
+
+P1 BROWSER-SOURCE-ADAPTER-001
+    OPEN · REFERENCE IMPLEMENTATION
+
+P1 BROWSER-ADAPTER-WIRING-001
+    OPEN · AUTOMATED PASS · MANUAL PENDING · FREEZE BLOCKED
+
+P1 BROWSER-SOURCE-ADAPTER-INTEGRATION-001
+    CLOSED · PASS — browser host uses SourceHandle only for access
+
+P1 ELECTRON-SOURCE-ADAPTER-001
+    CLOSED · PASS — Desktop path → SourceHandle
+
+P1 DESKTOP-RELEASE-PRODUCTION-001
+    OPEN · NOW — infrastructure only (binary = published binary)
+
+P1 DOWNLOAD-EXPERIENCE-001
+    OPEN — immediately after Desktop Release PASS (same user flow)
+
+P1 FIRST-LAUNCH-EXPERIENCE-001
+    OPEN — after Download Experience PASS (Install → first source)
+
+P1 PRIVATE-BETA-001
+    OPEN — after Desktop binary + Download + First Launch PASS
+
+P1 GOOGLE-DRIVE-SOURCE-ADAPTER-001
+    RESERVED — after Browser + Desktop are impeccable
+
+P1 IOS-SOURCE-ADAPTER-001
+    RESERVED
+
+P1 ANDROID-SOURCE-ADAPTER-001
+    RESERVED
+
+P1 CLOUD-ADAPTERS-RESERVED
+    Dropbox · OneDrive · NAS · SMB — not opened yet
 
 P0 PRE-BETA-BENCHMARK-001
     CLOSED · PASS (2026-09-19 · https://suhuella.com)
@@ -114,51 +196,70 @@ Do not run **PRODUCTION-READINESS-001** until the tracks below are closed.
 
 That gate is the last technical audit before people. Resend OTP is proven. Checkout off. Version closed.
 
-**Critical path (Web RC):**
+**Critical path (Web — engineering gates done):**
 
 ```text
-SOURCES-CAPABILITY-MATRIX-001  CLOSED · PASS
-    ↓
-PRE-BETA-BENCHMARK-001  CLOSED · PASS
-    ↓
-PRE-BETA-SANITY-001
-    ↓
-DESKTOP-RELEASE-HOSTING-001
-    ↓
-PRIVATE-BETA-001 (desirability · 20–30 users)
-    ↓
+SOURCE-PLATFORM-READINESS-001     CLOSED · PASS
+BROWSER-SOURCE-ADAPTER-001        reference
+ELECTRON-SOURCE-ADAPTER-001      CLOSED · PASS
+PRE-BETA-BENCHMARK-001            CLOSED · PASS
+PRE-BETA-SANITY-001               CLOSED · PASS
+```
+
+**Critical path (Desktop delivery — active now):**
+
+```text
+DESKTOP-RELEASE-PRODUCTION-001    OPEN · NOW (infra only)
+        ↓
+DOWNLOAD-EXPERIENCE-001           (same user flow · product)
+        ↓
+FIRST-LAUNCH-EXPERIENCE-001       (Install → Launch → License → Home → first source)
+        ↓
+PRIVATE-BETA-001                    (20–30 users · desirability)
+        ↓
 0.1.0-rc1
-    ↓
+        ↓
 Public launch
 ```
 
-**Next:** **PRIVATE-BETA-001** (20–30 users). No new functional tracks except critical bugs or narrow beta fixes.
+Do not start **PRIVATE-BETA-001** until Desktop binary, Download experience, and First launch experience are **CLOSED · PASS**. Entry criterion — not “all tests green”: [Would we watch a stranger complete their first session without help?](docs/governance/DECISION-PRECEDENCE.md#private-beta-entry)
+
+**Next:** **DESKTOP-RELEASE-PRODUCTION-001**. **No new architecture tracks until after Private Beta PASS.** No cloud or mobile adapters until Browser + Desktop are impeccable and beta feedback is in.
+
+**User evidence drives priority.** **Architecture is validated through shipped product and user evidence.** Scoreboard — user behaviours, not deliverables ([DECISION-PRECEDENCE.md](docs/governance/DECISION-PRECEDENCE.md#operational-scoreboard)):
+
+```text
+□ User downloads SuHuella
+□ User installs it
+□ User launches it
+□ User understands what to do
+□ User connects a folder
+□ User finds a document
+□ User completes a first successful session
+```
+
+Delivery flow (all energy here): Desktop Release → Download → Install → First Launch → Connect Folder → Search → External User Feedback.
+
+**Post-beta architecture:** only when observed evidence proves insufficiency — not because it feels cleaner. Priority: Critical (cannot continue) → High (confused) → Medium (friction) → Low (developer preference · waits).
+
+Domain frozen — [SOURCE-DOMAIN-MODEL-001.md](SOURCE-DOMAIN-MODEL-001.md) · validation Browser ✓ · Electron ✓ · Google Drive after beta.
 
 [BROWSER-ORGANISE-SELECTION-001.md](BROWSER-ORGANISE-SELECTION-001.md) is **CLOSED · PASS**. Browser Organise can create a Plan from connected sources or a local picker. Execution limits stay separate.
 
-Desktop is **not** on this path. Two separate deliveries:
+Web engineering gates are done. Desktop delivery is the active path (see above).
 
 ```text
-WEB RC                         DESKTOP (parallel, frozen)
-────────                       ──────────────────────────
-PRE-BETA-SANITY-001            GitHub Releases (preferred)
-    ↓                              ↓
-PRIVATE-BETA-001 (Web)         Desktop Beta
-    ↓                              ↓
-0.1.0-rc1                      Desktop RC
+DESKTOP_IN_RC = NO          (Web RC scope unchanged)
+/download = unified flow    (infra → UX → first launch → beta)
 ```
 
-```text
-DESKTOP_IN_RC = NO
-FIRST_RUN = WEB ONLY
-/download = Web available, Desktop unavailable
-```
+Hosting prerequisites (**DESKTOP-RELEASE-HOSTING-001** **CLOSED · PASS**) are met. Remaining work is production publish + product experience, not packaging architecture.
 
-Do not reopen Desktop tracks until a public artifact host exists (GitHub Releases, R2, or operator HTTPS). No further time on packaging or hosting until then.
+Do not open Google Drive, Dropbox, OneDrive, NAS, SMB, iOS, or Android adapters until Browser + Desktop are impeccable.
 
-After Web RC gates pass, stop opening internal audits unless a real user finds a problem.
+After Desktop delivery tracks pass, stop opening internal audits unless a real user finds a problem.
 
-Do not add tracks. Do not open BYOK, Connections, Automation, or Multibrand.
+Do not add architecture tracks. Do not open BYOK, Connections, Automation, or Multibrand.
 
 ---
 
@@ -254,7 +355,72 @@ Localhost and production `https://suhuella.com/sources` show Local / Limited in 
 
 Report: [SOURCES-CAPABILITY-MATRIX-001.md](SOURCES-CAPABILITY-MATRIX-001.md).
 
-### 8e. BROWSER-ORGANISE-SELECTION-001 — CLOSED · PASS
+### 8e. SOURCE-DOMAIN-MODEL-001 — FROZEN · CORE
+
+Canonical Source contract. Lifecycle is a chapter, not the top-level name.
+
+```text
+Source is identity.
+Handle is access.
+Presentation is derived.
+The UI never decides.
+```
+
+React receives `SourcePresentation` `{ summary, status, actions }` only. Domain speaks action IDs (`retry`), never button copy.
+
+Report: [SOURCE-DOMAIN-MODEL-001.md](SOURCE-DOMAIN-MODEL-001.md).
+
+### 8e2. MULTI-PLATFORM-SOURCE-ADAPTERS-001 — FROZEN · PASS
+
+Handle adapters only. Source, Lifecycle, and Presentation stay frozen. Replacing a Browser FSA adapter with Drive (or any other) keeps Source ID, Activity, Plans, Search history, and document identity.
+
+Report: [MULTI-PLATFORM-SOURCE-ADAPTERS-001.md](MULTI-PLATFORM-SOURCE-ADAPTERS-001.md).
+
+### 8e2b. BROWSER-ADAPTER-WIRING-001 — OPEN · AUTOMATED PASS · MANUAL PENDING · FREEZE BLOCKED
+
+Store talks only to `browserHandles`. Connect / Restore / Refresh / Remove / Probe go Registry → Store. Do not write FROZEN until 5-minute Chrome smoke passes (Connect → Index → Search → Restore → Remove). Close rule: no further browser wiring refactors unless a functional bug is found; new providers use Registry only.
+
+Report: [BROWSER-ADAPTER-WIRING-001.md](tracks/archive/BROWSER-ADAPTER-WIRING-001.md).
+
+### 8e2c. BROWSER-SOURCE-ADAPTER-INTEGRATION-001 — CLOSED · PASS
+
+Browser host access goes through SourceHandle. Scan opens the handle first. Grant remains the IndexedDB token.
+
+Report: [BROWSER-SOURCE-ADAPTER-INTEGRATION-001.md](BROWSER-SOURCE-ADAPTER-INTEGRATION-001.md).
+
+### 8e2d. ELECTRON-SOURCE-ADAPTER-001 — CLOSED · PASS
+
+Desktop path access goes through `createElectronHandleAdapter` and the Electron registry. Add / refresh / availability / Remove dispose stay the same for the user.
+
+Report: [ELECTRON-SOURCE-ADAPTER-001.md](ELECTRON-SOURCE-ADAPTER-001.md).
+
+### 8e2e. DESKTOP-RELEASE-PRODUCTION-001 — OPEN · NOW
+
+Infrastructure only. The published binary equals the packaged binary. DMG, SHA256, GitHub Release, sidecar, `release.json`, `/api/release`, `download.suhuella.com`, `verify:desktop-artifact`, smoke. No UX.
+
+Report: [DESKTOP-RELEASE-PRODUCTION-001.md](DESKTOP-RELEASE-PRODUCTION-001.md).
+
+### 8e2f. DOWNLOAD-EXPERIENCE-001 — OPEN
+
+Product experience immediately after Desktop Release PASS. One user flow: click → preparing → download → install guidance → first launch. User never sees GitHub or raw URLs.
+
+Report: [DOWNLOAD-EXPERIENCE-001.md](DOWNLOAD-EXPERIENCE-001.md).
+
+### 8e2g. FIRST-LAUNCH-EXPERIENCE-001 — OPEN
+
+Product only. Install → Launch → License → First Home → Connect first source. No domain or adapter work. Gate before beta.
+
+Launch always shows the window. Close hides; Quit exits. [APPLICATION-LIFECYCLE-001.md](docs/architecture/product/application-lifecycle.md).
+
+Report: [FIRST-LAUNCH-EXPERIENCE-001.md](FIRST-LAUNCH-EXPERIENCE-001.md).
+
+### 8e3. SOURCE-PLATFORM-READINESS-001 — CLOSED · PASS
+
+Phase 6 of SOURCE-DOMAIN-EVOLUTION-001. Hosts declare access capabilities. Home, Sources, and Organise ask `connectGrant` / `directoryCatalog` / `organiseFromIndexedSources`, not `host === 'browser'`. iOS and Android profiles are reserved. No mobile UI. Web Connect and Desktop Add are unchanged.
+
+Report: [SOURCE-PLATFORM-READINESS-001.md](SOURCE-PLATFORM-READINESS-001.md).
+
+### 8f. BROWSER-ORGANISE-SELECTION-001 — CLOSED · PASS
 
 Browser Organise no longer dead-ends on “This browser cannot choose documents.” Select from Sources, Choose files, and Choose folder create a Plan draft. Execution limits are honest and do not require Desktop.
 
@@ -262,13 +428,13 @@ Report: [BROWSER-ORGANISE-SELECTION-001.md](BROWSER-ORGANISE-SELECTION-001.md).
 
 ### 8z. FIRST-IMPRESSION-OBSERVATION-MODE-001 — SUPERSEDED
 
-Report: [FIRST-IMPRESSION-OBSERVATION-MODE-001.md](FIRST-IMPRESSION-OBSERVATION-MODE-001.md).
+Report: [FIRST-IMPRESSION-OBSERVATION-MODE-001.md](tracks/archive/FIRST-IMPRESSION-OBSERVATION-MODE-001.md).
 
 ### 9. FIRST-IMPRESSION-TEST-001 — CLOSED · PASS
 
 Operator waived session templates (2026-09-19). Engineering gate [PRE-BETA-BENCHMARK-001.md](PRE-BETA-BENCHMARK-001.md) already **PASS**.
 
-Report: [FIRST-IMPRESSION-TEST-001.md](FIRST-IMPRESSION-TEST-001.md).
+Report: [FIRST-IMPRESSION-TEST-001.md](tracks/archive/FIRST-IMPRESSION-TEST-001.md).
 
 ### 9b. FIRST-RUN-EXPERIENCE-001 — SUPERSEDED
 
@@ -280,7 +446,7 @@ Report: [FIRST-RUN-EXPERIENCE-001.md](FIRST-RUN-EXPERIENCE-001.md).
 
 Operator sign-off (2026-09-19). Session notes waived.
 
-Report: [FIRST-IMPRESSION-SUMMARY-001.md](FIRST-IMPRESSION-SUMMARY-001.md).
+Report: [FIRST-IMPRESSION-SUMMARY-001.md](tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md).
 
 ### 9d. PRODUCT-FREEZE-001 — OPEN
 
@@ -294,9 +460,11 @@ Report: [PRODUCT-FREEZE-001.md](PRODUCT-FREEZE-001.md).
 
 Report: [PRE-BETA-SANITY-001.md](PRE-BETA-SANITY-001.md).
 
-### 9e. PRIVATE-BETA-001 — OPEN
+### 9e. PRIVATE-BETA-001 — OPEN (gated)
 
 20–30 users · 7+ days · product freeze active. Exit → **0.1.0-rc1**.
+
+**Do not start** until **DESKTOP-RELEASE-PRODUCTION-001**, **DOWNLOAD-EXPERIENCE-001**, and **FIRST-LAUNCH-EXPERIENCE-001** are **CLOSED · PASS**.
 
 Report: [PRIVATE-BETA-001.md](PRIVATE-BETA-001.md).
 
@@ -310,15 +478,21 @@ Report: [RELEASE-PUBLISH-PIPELINE-001.md](RELEASE-PUBLISH-PIPELINE-001.md).
 
 Version lifecycle contract. Download ≠ update. `/api/release` is authority for Desktop + Website. Clients never see GitHub — artifacts on GitHub Releases, stable alias on `download.suhuella.com`, manifest `mac` on your domain only. Phase A: compare kernel + Settings check. **Phase B deferred** until RELEASE-PUBLISH-PIPELINE-001 closes and DESKTOP-RELEASE-HOSTING-001 opens. Does not block Web first-impression.
 
-Report: [RELEASE-LIFECYCLE-001.md](RELEASE-LIFECYCLE-001.md).
+Report: [RELEASE-LIFECYCLE-001.md](tracks/open/RELEASE-LIFECYCLE-001.md).
 
-### Desktop (frozen — off critical path)
+### Desktop delivery (active)
 
-**DESKTOP-RELEASE-ARTIFACTS-001** — **FROZEN · BLOCKED · PRIORITY LOW**
+**DESKTOP-RELEASE-PRODUCTION-001** — **OPEN · NOW** — see §8e2e.
 
-Local `SuHuella-0.1.0-pre-rc.dmg` exists. No public host. Reopen only when GitHub Releases, R2, or operator HTTPS is ready.
+**DOWNLOAD-EXPERIENCE-001** — **OPEN** — see §8e2f.
 
-Report: [DESKTOP-RELEASE-ARTIFACTS-001.md](DESKTOP-RELEASE-ARTIFACTS-001.md).
+**FIRST-LAUNCH-EXPERIENCE-001** — **OPEN** — see §8e2g.
+
+**DESKTOP-RELEASE-ARTIFACTS-001** — **CLOSED · PASS**
+
+Mac public via alias. Superseded for active work by **DESKTOP-RELEASE-PRODUCTION-001**.
+
+Report: [DESKTOP-RELEASE-ARTIFACTS-001.md](tracks/archive/DESKTOP-RELEASE-ARTIFACTS-001.md).
 
 **DESKTOP-DMG-HOSTING-UNBLOCK-001** — **CLOSED · PASS**
 
@@ -364,6 +538,6 @@ Almost all proof is macOS. Check installer, tray, Explorer, Save As, notificatio
 
 One **PRODUCTION-READINESS-001**. Production is the only authority. If it fails, it should be unexpected.
 
-If that gate PASSes: **PRIVATE-BETA-001** (after **PRE-BETA-SANITY-001**).
+If that gate PASSes: **PRIVATE-BETA-001** (after Desktop Release + Download + First Launch PASS).
 
 If it is BLOCKED: one slice only.

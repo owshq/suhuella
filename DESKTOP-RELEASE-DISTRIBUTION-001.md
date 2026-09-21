@@ -29,7 +29,7 @@ If NO (this close):
 - Windows validation is not an RC gate until Desktop is reintroduced.
 - Desktop download returns only when a real distribution path exists.
 
-Strategy A was re-entered in [DESKTOP-RELEASE-ARTIFACTS-001.md](DESKTOP-RELEASE-ARTIFACTS-001.md). A local SuHuella DMG was produced. Hosting follow-up [DESKTOP-DMG-HOSTING-UNBLOCK-001.md](DESKTOP-DMG-HOSTING-UNBLOCK-001.md) is **FROZEN · BLOCKED**. Desktop is off the Web RC critical path. This distribution decision stays **Strategy B** until a public URL exists. Reopen with GitHub Releases preferred.
+Strategy A was re-entered in [DESKTOP-RELEASE-ARTIFACTS-001.md](tracks/archive/DESKTOP-RELEASE-ARTIFACTS-001.md). A local SuHuella DMG was produced. Hosting follow-up [DESKTOP-DMG-HOSTING-UNBLOCK-001.md](DESKTOP-DMG-HOSTING-UNBLOCK-001.md) is **FROZEN · BLOCKED**. Desktop is off the Web RC critical path. This distribution decision stays **Strategy B** until a public URL exists. Reopen with GitHub Releases preferred.
 
 ```text
 A user must never be told to download something that does not exist.

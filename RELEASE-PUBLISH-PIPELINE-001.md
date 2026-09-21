@@ -1,22 +1,26 @@
 # RELEASE-PUBLISH-PIPELINE-001
 
 ```text
-STATUS = FROZEN · PASS
+STATUS = CLOSED · PASS · DO NOT REOPEN
 TYPE = Release infrastructure
 OBJECTIVE = One operator workflow that publishes a release without requiring product code changes
 PUBLIC_VERSION = 0.1.0-pre-rc
 NEXT_EXAMPLE = 0.1.1
+REOPEN_ONLY = ADR — code signing, auto-update, beta/stable channels, storage change (R2), abandon GitHub Releases
 ```
 
-This track closes **how** an operator publishes any version — web and desktop — before opening hosting implementation (`DESKTOP-RELEASE-HOSTING-001`) or auto-update (`AUTO-UPDATER-001`).
+This track is **closed**. Architecture decisions are done; remaining work is repeatable operator runs.
 
-Hosting (GitHub Releases, R2, domain redirects) is an implementation detail. The product requirement is a **repeatable publication sequence** that keeps every public surface on the same version and never exposes `github.com` to clients.
+This track closes **how** an operator publishes any version — web and desktop — without product code changes.
+
+Hosting (GitHub Releases, domain redirects) is an implementation detail. The product requirement is a **repeatable, artifact-based publication sequence** that keeps every public surface on the same version and never exposes `github.com` to clients.
 
 Related (closed / frozen):
 
 - [VERSION-CONSISTENCY-001.md](VERSION-CONSISTENCY-001.md) — version mirror rules
-- [RELEASE-LIFECYCLE-001.md](RELEASE-LIFECYCLE-001.md) — client lifecycle contract (Phase A PASS; Phase B deferred)
-- [DESKTOP-RELEASE-ARTIFACTS-001.md](DESKTOP-RELEASE-ARTIFACTS-001.md) — FROZEN · BLOCKED until hosting exists
+- [RELEASE-LIFECYCLE-001.md](tracks/open/RELEASE-LIFECYCLE-001.md) — client lifecycle contract (Phase A PASS; Phase B deferred)
+- [DESKTOP-RELEASE-HOSTING-001.md](DESKTOP-RELEASE-HOSTING-001.md) — CLOSED · PASS — `download.suhuella.com` aliases + publish scripts
+- [DESKTOP-RELEASE-ARTIFACTS-001.md](tracks/archive/DESKTOP-RELEASE-ARTIFACTS-001.md) — FROZEN · PASS — artifact naming contract
 
 **Out of scope (do not touch in this track):** licensing, checkout, desktop auto-updater beyond Phase A check, Operations UI, R2, branding.
 
@@ -28,7 +32,7 @@ One operator-editable file. Everything else derives automatically.
 
 | Layer | Role | Location | Who reads it |
 | --- | --- | --- | --- |
-| **A — Release manifest (authority)** | Version, channel, minimum, mandatory, installer URLs | **`brands/suhuella/release.json`** — the only file operators edit | Sync script, `/api/release` bundle |
+| **A — Release manifest (authority)** | Version, channel, minimum, mandatory, installer URLs, **artifact metadata** (`filename`, `sha256`, `size`) | **`brands/suhuella/release.json`** — the only file operators edit | Sync script, `/api/release` bundle |
 | **B — Derived mirrors** | Same version + URLs, no manual edits | `brands/dbasenet/release.json`, `site/release.json`, package.json, wrangler | Build, deploy, Desktop About |
 | **C — BrandConfig.release** | Imported from release.json in code | `brands/suhuella/brand.ts` | Landing badge, browser About, manifest fallback |
 | **D — Runtime API** | Single client-facing payload | **`GET /api/release`** | Website `/download`, Desktop Settings check |
@@ -76,29 +80,27 @@ Use this for every release (e.g. `0.1.0-pre-rc` → `0.1.1`). Check off in order
 
 Skip this block for **web-only** version bumps (version badge + `/api/release` only).
 
-- [ ] `npm run package:mac --prefix desktop` (Mac DMG).
+- [ ] `npm run package:mac --prefix desktop` — runs `build:icons`, build, electron-builder (Mac DMG).
 - [ ] Confirm artifact name: `SuHuella-<version>.dmg` (from BrandConfig `desktopProductName` + version).
-- [ ] Windows: deferred until `WINDOWS-VALIDATION-001` reopens.
+- [ ] Windows: `npm run package:win --prefix desktop` on Windows, or CI workflow `desktop-windows-build.yml`.
 
-### C. GitHub Release (metadata + artifacts — operator-only)
+### C. Publish artifact (operator script — preferred)
 
-Requires `gh` auth and repo access. Does **not** change client URLs.
+Requires `GH_TOKEN` or `gh auth`. Script is **artifact-based, never filename-based** — upload skips only when remote SHA256 matches local SHA256.
 
-- [ ] Create annotated tag: `git tag -a v<version> -m "Release <version>"` and push tag.
-- [ ] `gh release create v<version> --title "<version>" --notes "<notes>"`.
-- [ ] Upload `SuHuella-<version>.dmg` (and Windows installer when applicable) to the GitHub Release.
-- [ ] Do **not** paste GitHub asset URLs into `release.json`.
+- [ ] Mac: `npm run publish:desktop-mac` from repo root.
+- [ ] Windows (after CI upload): `npm run publish:desktop-win`.
+- [ ] Script uploads DMG/exe + `.sha256` sidecar to GitHub Release, updates `release.json` (`url`, `filename`, `sha256`, `size`), deploys download Worker, syncs mirrors, runs smoke.
+- [ ] Do **not** paste GitHub asset URLs into `release.json` manually — manifest uses stable aliases only.
 
-### D. Point manifest at public download URLs
+Manual `gh release upload` remains valid for recovery; prefer the publish scripts for the full sequence.
 
-When `DESKTOP-RELEASE-HOSTING-001` is closed, domain aliases exist:
+### D. Verify artifact (before calling release live)
 
-- [ ] Set `mac` in all release mirrors to stable alias, e.g. `https://download.suhuella.com/latest/mac`.
-- [ ] Set `windows` similarly when available.
-- [ ] Optional: `notes`, `mandatory`, `channel` (`stable` | `beta`).
-- [ ] Re-run `npm run test:brand-config`.
-
-Until hosting is live, leave `mac` / `windows` empty — `/download` correctly shows Mac unavailable.
+- [ ] `npm run verify:desktop-artifact -- --platform mac` (or `windows`).
+- [ ] Confirms: **version**, **filename**, **SHA256**, **size** — manifest, redirect, and downloaded bytes.
+- [ ] `curl -s https://suhuella.com/api/release | jq '.release.downloads.mac'` — exposes `filename`, `sha256`, `size`.
+- [ ] `curl -sI https://download.suhuella.com/latest/mac` — 302 to GitHub asset (operator check only; clients use manifest aliases).
 
 ### E. Deploy
 
@@ -108,9 +110,9 @@ Until hosting is live, leave `mac` / `windows` empty — `/download` correctly s
 
 ### F. Smoke test
 
-- [ ] `curl -s https://suhuella.com/api/release | jq` — version matches release.
-- [ ] Open `https://suhuella.com/download` — badge shows `v<version>`; Mac button state matches manifest (available only if `mac` is HTTPS).
-- [ ] If installers published: download via `/download` button (not raw GitHub URL).
+- [ ] `npm run smoke:desktop-download` — `/api/release`, aliases, `/download/preparing`.
+- [ ] `curl -s https://suhuella.com/api/release | jq` — version matches release; `downloads.*` includes `filename`, `sha256`, `size`.
+- [ ] Open `https://suhuella.com/download` — Mac/Windows buttons route to `/download/preparing?platform=…` (not a blank tab).
 - [ ] Desktop (when built): About shows same version; Settings → Check for updates hits `/api/release`.
 - [ ] `npm run test:download-page --prefix site` and `npm run test:desktop-artifacts --prefix site` (local regression).
 
@@ -213,35 +215,44 @@ GitHub is operator tooling (`gh release`, browser upload). It never appears in s
 
 ## 8. Exact publication sequence
 
-Operator-facing flow for a **full release** (web + desktop) once hosting exists:
+Operator-facing flow for a **full release** (web + desktop):
 
 ```text
-Build desktop
+Build
     npm run package:mac --prefix desktop
         ↓
-Tag
-    git tag -a v<version> -m "Release <version>" && git push origin v<version>
+Generate icons
+    (included in package:mac — build:icons before electron-builder)
         ↓
-Create GitHub Release
-    gh release create v<version> --title "<version>" --notes "..."
+Package
+    SuHuella-<version>.dmg in desktop/.build/suhuella/release/
         ↓
-Upload installers
-    gh release upload v<version> desktop/.build/suhuella/release/SuHuella-<version>.dmg
-    (domain redirect /latest/mac → this asset — DESKTOP-RELEASE-HOSTING-001)
+Calculate SHA256 + size
+    publish script computes digest and byte size from local artifact
         ↓
-Update release manifest
-    brands/suhuella/release.json (mac URL + version)
+Publish artifact
+    npm run publish:desktop-mac
+    → GitHub Release + .sha256 sidecar
+    → download.suhuella.com/latest/mac redirect var
+    → release.json (url, filename, sha256, size)
+        ↓
+Verify artifact
+    npm run verify:desktop-artifact -- --platform mac
+        ↓
+Update release.json
+    (automatic in publish script; operator may edit version/notes before publish)
     npm run release:sync
-    npm run test:release-version
         ↓
-Deploy Worker
-    npm run cf:deploy
+Deploy
+    npm run cf:deploy  (included unless --skip-deploy)
         ↓
-Smoke test
-    curl /api/release · /download · optional installer download · Desktop check
+Smoke
+    npm run smoke:desktop-download
         ↓
-Release live
+Live
 ```
+
+**Upload rule (frozen):** skip upload only when remote SHA256 === local SHA256. Never skip because the filename already exists on the release.
 
 **Web-only release today** (no public DMG):
 
@@ -294,29 +305,66 @@ curl -s https://suhuella.com/api/release | jq '.release.version'
 
 ## Deliverable
 
-This document is the single operator reference. No additional code required for OPEN — existing checks cover invariants:
+This document is the single operator reference:
 
-| Task | Existing enforcement |
+| Task | Enforcement |
 | --- | --- |
 | Version consistency | `npm run test:brand-config` |
 | Download semantics | `npm run test:download-page` |
 | Desktop artifact contract | `npm run test:desktop-artifacts` |
+| Mac publish | `npm run publish:desktop-mac` |
+| Win publish | `npm run publish:desktop-win` |
+| Artifact verification | `npm run verify:desktop-artifact` |
+| Post-publish smoke | `npm run smoke:desktop-download` |
 | Release lifecycle kernel | `npm run test:release-lifecycle --prefix desktop` |
 | Production smoke | `npm run verify:production` (post-deploy) |
 | github.com in clients | manual `rg` (sections 6–7) |
 
-Optional later: one script `test:release-publish-pipeline` wrapping the above — only if operators want a single command.
+---
+
+## 10. Frozen rules
+
+These rules follow from the architecture. Changing them requires a new ADR or track — not a silent implementation tweak.
+
+### Immutable artifacts
+
+**Release artifacts are immutable.**
+
+The only mutable object is `release.json`.
+
+Clients never infer releases from filenames, GitHub assets, or download URLs.
+
+Clients trust only **`GET /api/release`**.
+
+Rollback repoints `release.json` and domain aliases — it does not rewrite published binaries.
+
+### Stable distribution API
+
+**`download.suhuella.com` is a stable public API.**
+
+| Consumer | Uses |
+| --- | --- |
+| Website | `/download/preparing` triggers download via manifest URLs pointing at aliases |
+| Desktop updater (future) | Same aliases |
+| Automation / CLI | `GET /latest/mac`, `GET /latest/win` |
+| Support documentation | May reference stable alias URLs |
+
+Changing alias semantics (paths, redirect behaviour, response codes) requires an **ADR**.
+
+The website consumes the API; it does not replace it.
 
 ---
 
 ## Definition of done
 
-- [ ] Operator can publish **web version bump** by editing config/manifest mirrors + deploy only.
-- [ ] Operator can publish **desktop release** by following sections 2 and 8 once `DESKTOP-RELEASE-HOSTING-001` closes (GitHub upload + domain alias + manifest `mac`).
-- [ ] No step requires editing React, Electron feature code, or API routes.
-- [ ] Rollback procedure tested once on staging or documented dry-run.
+- [x] Operator can publish **web version bump** by editing config/manifest mirrors + deploy only.
+- [x] Operator can publish **desktop release** via `publish:desktop-mac` / `publish:desktop-win` + verify + smoke.
+- [x] No step requires editing React, Electron feature code, or API routes per release.
+- [x] Artifact-based upload (SHA256 match to skip; never filename-based skip).
+- [x] `/download/preparing` replaces blank post-download UX.
+- [ ] One production publish with new DMG verified end-to-end (`verify:desktop-artifact` PASS) — **next operator action**.
 
-**Close criteria:** one dry-run publish (web-only) executed on checklist; hosting track unblocked for full sequence.
+**Close criteria:** pipeline frozen; remaining work is operational (publish real artifact, validate live).
 
 ---
 
@@ -324,9 +372,48 @@ Optional later: one script `test:release-publish-pipeline` wrapping the above �
 
 | Track | When |
 | --- | --- |
-| **DESKTOP-RELEASE-HOSTING-001** | After this checklist is accepted — connect GitHub Releases → `download.suhuella.com` |
-| **AUTO-UPDATER-001** | After a real public installer URL exists |
-| **RELEASE-LIFECYCLE-001 Phase B** | After hosting — in-app install/update UX beyond check-only |
+| **AUTO-UPDATER-001** | After a verified public installer + manifest artifact metadata in production |
+| **RELEASE-LIFECYCLE-001 Phase B** | In-app install/update UX beyond check-only |
+| **New ADR** | If abandoning GitHub Releases, moving to R2, code signing, or Stable/Beta/Nightly channels |
+
+Do **not** open a new pipeline document for SHA256, size, preparing page, or aliases — those are implementations of this track.
+
+---
+
+## Implementation status (2026-09-19)
+
+- [x] Artifact-based publishing (SHA256 match to skip upload; replace on mismatch)
+- [x] SHA256 verification (`release-artifact-sha256.mjs`, sidecar on GitHub Release)
+- [x] `download.suhuella.com` stable aliases (`/latest/mac`, `/latest/win`)
+- [x] Preparing page (`/download/preparing` — live download state, not a blank tab)
+- [x] `filename` / `size` / `sha256` in manifest and `/api/release`
+- [x] `npm run verify:desktop-artifact` (version, filename, SHA256, size)
+
+**Architecture complete.** Failures from here are implementation bugs, not design gaps.
+
+---
+
+## Operator runbook (first desktop release)
+
+No more pipeline design. **Gated execution** — do not advance until the current step passes. Full log template: [DESKTOP-RELEASE-PRODUCTION-001.md](DESKTOP-RELEASE-PRODUCTION-001.md).
+
+```text
+1. Package       npm run package:mac --prefix desktop
+        ↓
+2. Publish       npm run publish:desktop-mac
+        ↓
+3. Verify        npm run verify:desktop-artifact -- --platform mac
+        ↓
+4. Deploy        (in publish, or npm run cf:deploy if --skip-deploy)
+        ↓
+5. Smoke         npm run smoke:desktop-download
+        ↓
+6. Manual download   suhuella.com/download
+        ↓
+7. First launch      icon · About · folder · use
+```
+
+Failures are **implementation bugs** unless an ADR trigger applies. First desktop release closes when step 7 passes for a user who has never seen SuHuella.
 
 ---
 
@@ -334,4 +421,6 @@ Optional later: one script `test:release-publish-pipeline` wrapping the above �
 
 | Date | Note |
 | --- | --- |
-| 2026-09-19 | Track opened. Invariants verified locally. Desktop hosting still blocked — web-only publish path is operable today. |
+| 2026-09-19 | Track opened. Invariants verified locally. |
+| 2026-09-19 | FROZEN · PASS — artifact pipeline, preparing page, distribution API rules, verify script. |
+| 2026-09-19 | **CLOSED · PASS** — no pending architecture. Operator runbook above. Reopen only via ADR. |

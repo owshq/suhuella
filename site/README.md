@@ -41,13 +41,14 @@ GET /api/release → release.json
 | `/api/license/activate` | Email + device → signed `LicenseContext` |
 | `/api/license/check` | Refresh a signed licence |
 | `/api/license/deactivate` | Release this computer |
+| `/api/license/organisation` | Business admin organisation view and seat actions (license token) |
 | `/api/business/pricing` | Configurable Business price (min 20 seats, €2 / seat) |
 | `/api/admin/business` | Existing Business account API (superadmin) |
 | `/api/operations/state` | Operations console snapshot |
 | `/api/operations/actions` | Auditable Operations mutations (reason required) |
 | `/api/business/seats` | Business owner/admin seat management |
 | `/privacy`, `/terms` | Legal |
-| `/_ops` | OPERATIONS console — Cloudflare Access in production; `/admin` redirects here |
+| `ops.suhuella.com/` | OPERATIONS console — Cloudflare Access · superadmin. `/admin` and `/_ops` on suhuella.com redirect here |
 | `/success`, `/descarga-exitosa` | Redirect → `/license/success` (query preserved) |
 
 Route-backed overlays (close → `/home`):
@@ -337,17 +338,40 @@ Set those URLs in `site/.dev.vars` locally and as Wrangler secrets in production
 
 ## Local testing
 
+Local web has two modes. This is Developer Experience, not product or release.
+
+```text
+UI mode (default)
+    npm run dev
+    Fast feedback for Home, Sources, Settings, layout, copy.
+    No OpenNext/workerd/D1.
+
+    If Next reports a slow filesystem under ~/Documents, keep the
+    working copy at ~/Developer/suhuella. Turbopack cannot put .next
+    outside the project path.
+
+Full Cloudflare mode
+    npm run dev:cf
+    Slower startup (OpenNext/workerd + local D1).
+    Required for license, OTP, service-health, worker parity.
+```
+
+Motion `color-mix` console warnings are P2 cleanup — do not treat as a Gate 6 or release blocker.
+
 ```bash
 cd site
 npm install
-npm run dev       # http://localhost:3000 — Developer Sources on /sources, see DEV-SOURCES.md
-npm run preview   # Workers runtime — http://localhost:8787
+npm run dev                           # UI-only — http://localhost:3000
+npm run dev:cf                        # Full Cloudflare/D1
+npm run preview                       # Workers runtime — http://localhost:8787
 npm run build
 npm run check:business-license
 npm run test:license
 npm run test:checkout
 npm run test:admin
 ```
+
+Developer Sources on `/sources` — see [DEV-SOURCES.md](DEV-SOURCES.md).
 
 Admin console manages access and support actions. Billing provider controls paid entitlement.
 
@@ -360,8 +384,8 @@ Paid licenses cannot be revoked from Operations. Gift, promo, manual, internal, 
 | `/download` | Friendly error, no download buttons |
 | `/download?session_id=invalid` | Friendly error, no download buttons |
 | `/download?session_id=cs_test_…` (paid) | “Payment verified” + download buttons |
-| `/_ops` on production without Cloudflare Access | 401, no login form |
-| `http://localhost:3000/_ops` in `next dev` | Superadmin console, no login |
+| `https://ops.suhuella.com/` without Cloudflare Access | Access login, not the product app |
+| `http://localhost:3000/ops` in `next dev` | Superadmin console, no login |
 
 API check without session:
 
@@ -408,5 +432,6 @@ cd site
 cp .dev.vars.example .dev.vars
 cp .env.example .env.local
 npm install
-npm run dev
+npm run dev          # UI — http://localhost:3000
+npm run dev:cf       # OpenNext/D1
 ```

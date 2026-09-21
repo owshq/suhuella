@@ -97,7 +97,7 @@ Impact:
 Task completed only after trial and error.
 ```
 
-**Never write “Recommended fix” during the session.** Solutions are discussed only in [FIRST-IMPRESSION-SUMMARY-001.md](../FIRST-IMPRESSION-SUMMARY-001.md).
+**Never write “Recommended fix” during the session.** Solutions are discussed only in [FIRST-IMPRESSION-SUMMARY-001.md](../tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md).
 
 ## After session
 
@@ -136,6 +136,6 @@ The summary rolls these up across sessions (e.g. 🟡 Search wording confused 2/
 
 ## After three sessions
 
-Complete [FIRST-IMPRESSION-SUMMARY-001.md](../FIRST-IMPRESSION-SUMMARY-001.md). That summary — not any single session — decides beta entry.
+Complete [FIRST-IMPRESSION-SUMMARY-001.md](../tracks/archive/FIRST-IMPRESSION-SUMMARY-001.md). That summary — not any single session — decides beta entry.
 
 **PASS:** no slice → private beta. **PASS WITH FIXES:** one repeated problem → one slice → one participant → close. **FAIL:** one blocker slice only. No changes between sessions 01–03.

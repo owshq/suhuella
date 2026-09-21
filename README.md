@@ -38,38 +38,34 @@ Detail: [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md). Operat
 
 Architecture and release **process** are frozen. UX evolves with evidence. One observed problem → one narrow fix.
 
-**Next (product):** [PRIVATE-BETA-001](PRIVATE-BETA-001.md) **OPEN** — 20–30 users · Web only. [PRE-BETA-SANITY-001](PRE-BETA-SANITY-001.md) **CLOSED · PASS**.
+**Next (product):** keep shipping `0.1.0-pre-rc` (downloads, `/api/release`, Mac and Windows artifacts). External [PRIVATE-BETA-001](PRIVATE-BETA-001.md) stays **BLOCKED** on commercial signing — that blocks promotion, not this pre-release. [PRE-BETA-SANITY-001](PRE-BETA-SANITY-001.md) **CLOSED · PASS**.
 
 ---
 
 ## Current build
 
-**SuHuella 0.1.0-pre-rc** — Web RC path does not wait on Desktop installers.
+**Internal release:** `0.1.0-pre-rc`. **User-facing version:** `0.1.0`. Customers do not see `pre-rc` or `rc1`. Policy: [Pre-RC release semantics](docs/governance/PRE-RC-RELEASE-SEMANTICS.md).
 
-**Web RC (critical path):**
+`0.1.0-pre-rc` is the active development version. It includes `/api/release`, GitHub artifacts, and `download.suhuella.com` aliases for Mac and Windows. It is not `0.1.0-rc1`. Unsigned or notarization-deferred builds stay honest technical pre-releases.
 
 ```text
-PRODUCT-FREEZE-001  (OPEN)
-  →  PRE-BETA-SANITY-001  CLOSED · PASS
-  →  PRIVATE-BETA-001  OPEN (Web · 20–30 users)
+0.1.0-pre-rc
+  →  real Mac + Windows artifacts
+  →  /api/release + website downloads
+  →  product / technical gates
+  →  commercial signing
   →  0.1.0-rc1
+  →  Private Beta
   →  Public launch
 ```
 
-**Desktop (parallel, frozen):** GitHub Releases → Desktop Beta → Desktop RC. See [DESKTOP-RELEASE-ARTIFACTS-001](DESKTOP-RELEASE-ARTIFACTS-001.md) — **FROZEN · BLOCKED**.
-
-```text
-DESKTOP_IN_RC = NO
-FIRST_RUN = WEB ONLY
-```
-
-**Open now (product):** [PRIVATE-BETA-001](PRIVATE-BETA-001.md) — invite 20–30 users. [PRODUCT-FREEZE-001](PRODUCT-FREEZE-001.md) **OPEN**. Track list: [PRE-RC-TRACKS-001](PRE-RC-TRACKS-001.md). Do not open BYOK, Connections, Automation, or multibrand.
+**Open now (product):** product and technical gates on the published pre-RC. Do not wait on signing to build, upload, or test. [PRODUCT-FREEZE-001](PRODUCT-FREEZE-001.md) **OPEN**. Track list: [PRE-RC-TRACKS-001](PRE-RC-TRACKS-001.md). Do not open BYOK, Connections, Automation, or multibrand.
 
 **Organise product model:** [CLOSED · PROVEN](#organise-product-model).
 
 **Closed (product UX):** PRODUCT-AUDIT-FIXES-001 · ORGANISE-PLAN-PRODUCT-MODEL-AUDIT-001 · ORGANISE-PLAN-UX-CLEANUP-001. **Paused:** Identity acceptance · Desktop polish UX.
 
-**Checklist:** [RC-CHECKLIST.md](RC-CHECKLIST.md). Do not start REAL-USER-VALIDATION-001 until **PRODUCTION-READINESS-001** closes and the build is promoted to **0.1.0-rc1**.
+**Checklist:** [RC-CHECKLIST.md](tracks/archive/RC-CHECKLIST.md). Do not start REAL-USER-VALIDATION-001 until **PRODUCTION-READINESS-001** closes and the build is promoted to **0.1.0-rc1**.
 
 **Production routes (2026-09-19):** `npm run verify:production` passes — `/` · `/download` · `/license` → 307 app-shell modals; `/home` · `/search` · `/sources` · `/organise` · `/activity` · `/settings` → 200; `/app` → 308 `/home`.
 
@@ -87,7 +83,7 @@ Frozen: WEB-001 (product) · architecture v1.1 · six-screen model · core pipel
 - Autopilot (not available as a trigger · later execution policy)
 - Undo (30-day window · inverse execution)
 - Activity (local history · 90 days or 500 runs)
-- Home (what SuHuella knows · one-line state) · Sources · Settings (General · AI · License · Privacy · Notifications · Diagnostics · About)
+- Home (what SuHuella knows · one-line state) · Sources · Settings (General · AI · License · Support)
 - Licensing (public `/license` · Settings License · download ≠ purchase ≠ activation)
 - Local Knowledge Index (folder names · file names · no content upload)
 - Plan Assistant (On-device intelligence today · your account when connected · never executes)
@@ -273,7 +269,7 @@ Do not open a successor. Resume the global product track.
 
 | Area | Fix |
 | --- | --- |
-| Settings | One job per tab. General hides desktop-only controls in the browser. AI answers who is helping. License stays edition-only. Privacy reassures. Notifications list only real types. Diagnostics stays in Diagnostics. About stays thin. Legacy `folders` / `connections` / `storage` prefs map to current tabs. |
+| Settings | Four tabs: General · AI · License · Support. General = language, privacy, notifications, startup. AI = on-device intelligence + BYOK. License = status + licensed device + purchase/activate/deactivate. Support = diagnostics, logs, version, updates, contact. Legacy prefs map internally only. |
 | Home | Knowledge only. One-line state. Empty state links to Sources. No Activity, Undo, or workflow management. |
 | Activity | History only. BYOK teaching / preference / workflow-idea card removed. |
 | Sources | Included locations keep a real `exists` flag. Missing path or lost permission shows **Unavailable** with Refresh / Refresh permission and Remove. |
@@ -586,9 +582,9 @@ Public API: `POST /api/license/activate` · `activate-from-checkout` · `check` 
 
 ## 7. Operations
 
-**`suhuella.com/_ops`** — customers · licenses · Business seats · activations · gifts · release display · support · audit. Legacy **`/admin`** redirects here.
+**`https://ops.suhuella.com/`** — internal Operations console (customers · licenses · Business seats · activations · gifts · releases · support · audit). Superadmin only. Cloudflare Access (Google / Microsoft) + `SUPERADMIN_EMAILS`. No password login.
 
-Production: Cloudflare Access (Google / Microsoft) + `SUPERADMIN_EMAILS`. No password login. Local dev: `http://localhost:3000/_ops` opens without login on localhost only.
+`suhuella.com/` is the public product site. `/admin` and `/_ops` on the apex redirect to `ops.suhuella.com`. Local dev: `http://localhost:3000/ops`.
 
 Closeout: [OPERATIONS-ACCESS-CLOSEOUT-001.md](OPERATIONS-ACCESS-CLOSEOUT-001.md). Site detail: [site/README.md](site/README.md).
 
@@ -605,7 +601,7 @@ cd site && npm run deploy
 # or: npm run cf:deploy   (from repo root)
 ```
 
-Build fixes applied: strip `sharp` before OpenNext bundle · `NEXT_PRIVATE_MINIMAL_MODE=1` in `wrangler.jsonc` · Operations auth at `/_ops` (rewrite to `/ops`) + API route guards (no Node `proxy.ts` middleware).
+Build fixes applied: strip `sharp` before OpenNext bundle · `NEXT_PRIVATE_MINIMAL_MODE=1` in `wrangler.jsonc` · Operations on `ops.suhuella.com/` + API route guards (no Node `proxy.ts` middleware).
 
 **WEB-ROUTING-FIX-001** — **CLOSED · PASS** (merged into deployment).
 
@@ -625,19 +621,17 @@ Live Worker `c9b35ead-a879-4620-8be7-ca798de7ec5b` (2026-09-19). `PAID_CHECKOUT_
 
 ### DESKTOP-RELEASE-DISTRIBUTION-001
 
-**Status:** CLOSED · PASS · STRATEGY B · `DESKTOP_IN_RC = NO`
+**Status:** CLOSED · PASS · historical (2026-09-19)
 
 Report: [DESKTOP-RELEASE-DISTRIBUTION-001.md](DESKTOP-RELEASE-DISTRIBUTION-001.md).
 
-Live Worker `df34ed42-9ec7-4f9e-9cdd-2b9485c32fd4` (2026-09-19). Landing primary CTA is Open SuHuella → `/home`. No Download CTA. `/api/release` is `0.1.0-pre-rc` with no installer URLs. Desktop stays internal until a real publish path exists.
+That closeout recorded Strategy B and no installer URLs. Pre-RC downloads have since been published. Do not treat this section as the current plan.
 
-### Desktop distribution (frozen)
+### Desktop distribution
 
-**DESKTOP-RELEASE-ARTIFACTS-001** — **FROZEN · BLOCKED · PRIORITY LOW** · [report](DESKTOP-RELEASE-ARTIFACTS-001.md)
+Pre-RC Mac and Windows downloads are published (`download.suhuella.com`, `/api/release`). That is technical publication, not a trusted commercial install. Signing still gates `0.1.0-rc1` and external Private Beta. See [Pre-RC release semantics](docs/governance/PRE-RC-RELEASE-SEMANTICS.md).
 
-**DESKTOP-DMG-HOSTING-UNBLOCK-001** — **FROZEN · BLOCKED · PRIORITY LOW** · [report](DESKTOP-DMG-HOSTING-UNBLOCK-001.md)
-
-Local Mac DMG exists. No public host. Reopen only with GitHub Releases (preferred), R2, or operator HTTPS. Download is public when published; license controls use. `/download` stays Web-available, Desktop-unavailable.
+Historical closeouts below (`DESKTOP_IN_RC = NO`, “no public host”, “no installer URLs”) describe an earlier state. They are not current policy.
 
 ### RC-DOWNLOAD-JOURNEY-001
 

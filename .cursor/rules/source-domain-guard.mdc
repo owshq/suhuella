@@ -1,0 +1,26 @@
+---
+description: SOURCE-DOMAIN-GUARD — React consumes SourcePresentation only.
+globs: packages/product/src/{components,windows}/**
+alwaysApply: false
+---
+
+# SOURCE-DOMAIN-GUARD
+
+Canonical contract: [SOURCE-DOMAIN-MODEL-001.md](../../SOURCE-DOMAIN-MODEL-001.md) — **FROZEN · CORE**. Further domain changes require an ADR.
+
+React components never derive:
+
+- lifecycle
+- health
+- capabilities
+- actions
+- badges
+
+React consumes `SourcePresentation` only.
+
+Feature code never branches on `host === 'browser'`, `isWeb`, or a handle type.
+It asks `SourceCapabilities` and `HostAccessCapabilities`.
+
+Domain decisions belong exclusively to the Source Domain Model
+(`source-identity.ts`, `source-handle.ts`, `source-health.ts`, `source-lifecycle.ts`, `source-actions.ts`, `source-capabilities.ts`, `platform-capabilities.ts`).
+Copy belongs to `source-presentation.ts`.
