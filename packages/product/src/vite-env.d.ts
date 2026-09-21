@@ -25,6 +25,8 @@ import type {
   KnowledgeSet,
   KnowledgeSetItem,
   KnowledgeSetValidationError,
+  BusinessOrganisationAction,
+  BusinessOrganisationResult,
   LicenseActionResult,
   LicenseApiError,
   LicenseStatusView,
@@ -62,7 +64,7 @@ export type SuhuellaAPI = {
   addIndexedLocation: (hint?: string) => Promise<AppSettings>
   removeIndexedLocation: (location: string) => Promise<AppSettings>
   setIndexedLocations: (locations: string[]) => Promise<AppSettings>
-  startIndexScan: () => Promise<AppSettings>
+  startIndexScan: (refresh?: 'pending' | 'all') => Promise<AppSettings>
   restoreSourceAccess: (sourceId: string) => Promise<AppSettings>
   cancelIndexScan: () => Promise<void>
   onIndexProgress: (listener: (progress: IndexScanProgress) => void) => () => void
@@ -94,6 +96,80 @@ export type SuhuellaAPI = {
   ) => Promise<{ ok: true; proofId: string } | { ok: false; error: LicenseApiError }>
   activateLicense: (emailProofId: string) => Promise<LicenseActionResult>
   updateBusinessBranding: (dataUrl: string | null) => Promise<LicenseActionResult>
+  getBusinessOrganisation: () => Promise<BusinessOrganisationResult>
+  manageBusinessOrganisation: (
+    action: BusinessOrganisationAction,
+    payload?: { email?: string; seatId?: string; seatCount?: number },
+  ) => Promise<BusinessOrganisationResult>
+  listCloudIntegrations: () => Promise<
+    | {
+        ok: true
+        catalog: Array<{
+          provider: string
+          displayName: string
+          enabled: boolean
+          supportsWebhooks: boolean
+          scopes: string[]
+        }>
+        connections: Array<{
+          id: string
+          brandId: string
+          provider: string
+          status: string
+          accountEmail: string | null
+          accountDisplayName: string | null
+          scopes: string[]
+          tokenExpiresAt: string | null
+          lastSyncAt: string | null
+          lastErrorCode: string | null
+          lastErrorMessage: string | null
+          createdAt: string
+          updatedAt: string
+        }>
+      }
+    | { ok: false; error: string }
+  >
+  startCloudIntegration: (
+    provider: string,
+  ) => Promise<{ ok: true; authorizeUrl: string } | { ok: false; error: string }>
+  disconnectCloudIntegration: (
+    connectionId: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  reconnectCloudIntegration: (
+    connectionId: string,
+  ) => Promise<{ ok: true; authorizeUrl: string } | { ok: false; error: string }>
+  getCloudIntegrationStatus: (
+    connectionId: string,
+  ) => Promise<
+    | {
+        ok: true
+        connection: {
+          id: string
+          brandId: string
+          provider: string
+          status: string
+          accountEmail: string | null
+          accountDisplayName: string | null
+          scopes: string[]
+          tokenExpiresAt: string | null
+          lastSyncAt: string | null
+          lastErrorCode: string | null
+          lastErrorMessage: string | null
+          createdAt: string
+          updatedAt: string
+        }
+        sync: {
+          jobId: string
+          status: string
+          progressFiles: number
+          progressBytes: number
+          lastErrorCode: string | null
+          lastErrorMessage: string | null
+          updatedAt: string
+        } | null
+      }
+    | { ok: false; error: string }
+  >
   checkLicense: () => Promise<LicenseActionResult>
   deactivateLicense: () => Promise<LicenseActionResult>
   deactivateRemoteDevice: (deviceIndex: number) => Promise<LicenseActionResult>
@@ -101,6 +177,7 @@ export type SuhuellaAPI = {
   getCompatibilityDiagnostics: () => Promise<CompatibilityDiagnostics>
   exportCompatibilityDiagnostics: () => Promise<string | null>
   finishOnboarding: (destination?: 'home' | 'organise') => Promise<AppSettings>
+  dismissWelcomeHint: () => Promise<AppSettings>
   previewSuggestions: () => Promise<void>
   previewSuggestionName: (fileName: string) => Promise<SuggestionPayload>
   pickSuggestionFile: () => Promise<SuggestionPayload | null>
@@ -207,6 +284,8 @@ declare global {
   interface Window {
     suhuella: SuhuellaAPI
     __suhuellaHost?: 'electron' | 'browser'
+    /** Set by the web shell from PAID_CHECKOUT_ENABLED. Missing means closed. */
+    __suhuellaPaidCheckoutEnabled?: boolean
     showDirectoryPicker?: (options?: {
       id?: string
       mode?: 'read' | 'readwrite'

@@ -4,12 +4,11 @@ import { LayoutGrid, List, Plus, RotateCcw, Search, XCircle } from 'lucide-react
 import { Children, type ReactNode, useEffect, useRef, useState } from 'react'
 import { thisComputerLabel } from '../lib/folders-ui'
 import {
-  browserCapabilityCatalog,
+  hostCapabilityCatalog,
   browserChooseSubfolderLabel,
   browserCloudComingLaterCopy,
   browserConnectFolderHint,
   browserConnectFolderLabel,
-  browserIntegrationsActionLabel,
   browserLocalFoldersLabel,
   sourcesWhatCanSeeCopy,
   formatDocumentCount,
@@ -19,14 +18,22 @@ import {
   sourceGrantActionLabel,
   sourcePickActionLabel,
   sourceSightGroup,
+  sourceConnectWaitKind,
+  sourceConnectWaitingHint,
+  sourceConnectWaitingStatus,
   sourceSightLabel,
-  sourceSightState,
+  sourceWorkingActionLabel,
   sourcesEmptyBody,
   sourcesLimitedSupportCopy,
   sourcesUnsupportedBody,
-  sourceUnavailableActionLabel,
   type SourceSightState,
 } from '../lib/sources-ui'
+import { hostAccessFor } from '../lib/platform-capabilities'
+import {
+  buildSourcePresentation,
+  sourceActionLabel,
+  sourceHealthDetailLines,
+} from '../lib/source-presentation'
 import type { DesktopDownloadOffer } from '../lib/desktop-download-cta'
 import {
   defaultSourceAppearance,
@@ -35,6 +42,7 @@ import {
   sourceAppearanceDotColor,
 } from '../lib/source-appearance'
 import { FeaturePromoCard } from './FeaturePromoCard'
+import { CloudAccountsSection } from './CloudAccountsSection'
 import {
   SourceAppearanceMenu,
   SourceIconBadge,
@@ -92,6 +100,37 @@ function filterSuggested(items: SuggestedLocation[], query: string): SuggestedLo
   )
 }
 
+function SourceConnectBusyStatus({
+  workingLabel,
+  kind,
+}: {
+  workingLabel: string | null
+  kind?: ReturnType<typeof sourceConnectWaitKind> | null
+}) {
+  const status = sourceConnectWaitingStatus(workingLabel, kind)
+  const hint = sourceConnectWaitingHint(workingLabel, kind)
+  if (!status && !workingLabel) return null
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-source-connect-busy
+      className="rounded-2xl border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-4 py-3"
+    >
+      {workingLabel ? (
+        <p className="text-[14px] font-semibold text-[var(--app-fg)]">{workingLabel}</p>
+      ) : null}
+      <div className="source-connect-busy-track mt-2" aria-hidden>
+        <div className="source-connect-busy-bar" />
+      </div>
+      {status ? (
+        <p className="mt-2 text-[13px] text-[var(--app-fg)] opacity-60">{status}</p>
+      ) : null}
+      {hint ? <p className="mt-1 text-[13px] text-[var(--app-fg)] opacity-50">{hint}</p> : null}
+    </div>
+  )
+}
+
 function HeaderGlassButton({
   label,
   onClick,
@@ -119,9 +158,11 @@ function SourceCard({
   scanning,
   files,
   updated,
+  detailLines,
   actionLabel,
   busy,
   needsAttention,
+  removing,
   layout = 'list',
   onAction,
   onOpenSource,
@@ -138,9 +179,11 @@ function SourceCard({
   scanning?: boolean
   files?: number
   updated?: string | null
+  detailLines?: string[]
   actionLabel?: string | null
   busy?: boolean
   needsAttention?: boolean
+  removing?: boolean
   layout?: SourceLayout
   onAction?: () => void
   onOpenSource?: () => void
@@ -183,34 +226,38 @@ function SourceCard({
     scanning && (sight === 'indexed' || sight === 'available')
       ? 'Updating…'
       : sourceSightLabel(sight)
-  const details = indexed
-    ? [files != null ? formatDocumentCount(files) : null, lastUpdatedCopy(updated ?? null)].filter(Boolean)
-    : sight === 'unavailable'
-      ? [actionLabel === 'Restore permission' ? 'Permission required' : 'This folder is no longer available']
-      : []
+  const details =
+    detailLines ??
+    (indexed
+      ? [files != null ? formatDocumentCount(files) : null, lastUpdatedCopy(updated ?? null)].filter(Boolean)
+      : [])
+  const workingLabel = sourceWorkingActionLabel(actionLabel, busy)
   const actionButtons = (
     <>
-      {actionLabel ? (
+      {workingLabel ? (
         <>
           <button
             type="button"
             disabled={busy}
+            aria-busy={busy}
             onClick={onAction}
             className="rounded-full bg-[var(--app-fg)] px-3 py-1.5 text-[12px] font-semibold text-[var(--app-bg)] hover:opacity-90 disabled:opacity-50 transition"
           >
-            {actionLabel}
+            {workingLabel}
           </button>
           {needsAttention && onRemove ? (
             <button
               type="button"
+              disabled={removing}
+              aria-busy={removing}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
                 onRemove()
               }}
-              className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition"
+              className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition disabled:opacity-50"
             >
-              Remove
+              {sourceWorkingActionLabel('Remove', removing) ?? 'Remove'}
             </button>
           ) : null}
         </>
@@ -229,14 +276,16 @@ function SourceCard({
           {onRemove ? (
             <button
               type="button"
+              disabled={removing}
+              aria-busy={removing}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
                 onRemove()
               }}
-              className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition"
+              className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition disabled:opacity-50"
             >
-              Remove
+              {sourceWorkingActionLabel('Remove', removing) ?? 'Remove'}
             </button>
           ) : null}
         </div>
@@ -264,7 +313,8 @@ function SourceCard({
       <>
         <article
           ref={cardRef}
-          className={`group flex flex-col overflow-visible ${sight === 'coming_later' ? 'pointer-events-none opacity-60' : ''} ${onOpenSource || onAction ? 'cursor-pointer' : ''}`}
+          className={`group flex flex-col overflow-visible ${sight === 'coming_later' ? 'pointer-events-none opacity-45' : ''} ${onOpenSource || onAction ? 'cursor-pointer' : ''}`}
+          aria-disabled={sight === 'coming_later' || undefined}
           onClick={onOpenSource ? openSource : onAction}
         >
           <div ref={gridEditor.badgeRef} className="w-full">
@@ -308,7 +358,8 @@ function SourceCard({
     <>
       <article
         ref={cardRef}
-        className={`group flex items-center justify-between gap-4 border-b border-[var(--overlay-row)] px-3 py-3 last:border-0 hover:bg-[var(--overlay-row)] rounded-xl transition ${sight === 'coming_later' ? 'pointer-events-none opacity-60' : ''} ${onOpenSource || onAction ? 'cursor-pointer' : ''}`}
+        className={`group flex items-center justify-between gap-4 border-b border-[var(--overlay-row)] px-3 py-3 last:border-0 hover:bg-[var(--overlay-row)] rounded-xl transition ${sight === 'coming_later' ? 'pointer-events-none opacity-45' : ''} ${onOpenSource || onAction ? 'cursor-pointer' : ''}`}
+        aria-disabled={sight === 'coming_later' || undefined}
         onClick={onOpenSource ? openSource : onAction}
       >
         <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -354,12 +405,14 @@ function AddSourceCard({
   label,
   hint,
   disabled,
+  busy,
   layout,
   onAdd,
 }: {
   label: string
   hint: string
   disabled?: boolean
+  busy?: boolean
   layout: SourceLayout
   onAdd: () => void
 }) {
@@ -368,6 +421,7 @@ function AddSourceCard({
       <button
         type="button"
         disabled={disabled}
+        aria-busy={busy}
         onClick={onAdd}
         aria-label={label}
         className="flex w-full flex-col text-left disabled:opacity-50"
@@ -383,11 +437,12 @@ function AddSourceCard({
 
   return (
     <button
-      type="button"
-      disabled={disabled}
-      onClick={onAdd}
-      aria-label={label}
-      className="flex w-full items-center gap-4 rounded-xl border border-dashed border-[var(--sidebar-line)] px-3 py-3 text-left transition hover:bg-[var(--overlay-row)] disabled:opacity-50"
+        type="button"
+        disabled={disabled}
+        aria-busy={busy}
+        onClick={onAdd}
+        aria-label={label}
+        className="flex w-full items-center gap-4 rounded-xl border border-dashed border-[var(--sidebar-line)] px-3 py-3 text-left transition hover:bg-[var(--overlay-row)] disabled:opacity-50"
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border border-dashed border-[var(--sidebar-line)] bg-[var(--overlay-row)] text-[var(--app-fg)] opacity-40">
         <Plus className="h-5 w-5" />
@@ -410,6 +465,7 @@ export function SourcesPanel({
   capabilities,
   busy,
   notice,
+  noticeKind,
   downloadOffer,
   onAdd,
   onAddSuggested,
@@ -430,6 +486,7 @@ export function SourcesPanel({
   capabilities: PlatformCapabilities
   busy?: boolean
   notice?: string | null
+  noticeKind?: 'error' | 'status'
   downloadOffer?: DesktopDownloadOffer | null
   onAdd: () => void
   onAddSuggested: (path: string) => void
@@ -442,29 +499,60 @@ export function SourcesPanel({
   developerSources?: ReactNode
 }) {
   const { locale, t } = useAppLocale()
-  const [viewMode, setViewMode] = useState<SourceLayout>('grid')
+  const [viewMode, setViewMode] = useState<SourceLayout>('list')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [pendingWait, setPendingWait] = useState<{
+    idleLabel: string
+    kind: ReturnType<typeof sourceConnectWaitKind>
+  } | null>(null)
+  const wasBusy = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const isScanning = scan.status === 'scanning'
   const progressPercent = scanProgressPercent(scan)
   const documentCount = locations.reduce((sum, location) => sum + location.fileCount, 0)
-  const browser = host === 'browser'
-  const desktop = !browser
-  const pickLabel = sourcePickActionLabel(desktop)
-  const grantLabel = desktop ? pickLabel : sourceGrantActionLabel()
-  const anotherLabel = desktop ? pickLabel : sourceAnotherFolderLabel()
+  const access = hostAccessFor(host)
+  const pickLabel = sourcePickActionLabel(access)
+  const grantLabel = access.connectGrant ? sourceGrantActionLabel() : pickLabel
+  const anotherLabel = access.connectGrant ? sourceAnotherFolderLabel() : pickLabel
   const folderAccess = capabilities.filesystem
   const canOrganise = capabilities.organise
-  const unsupported = browser && !folderAccess
-  const limited = browser && folderAccess && !canOrganise
-  const connectDisabled = busy || unsupported
-  const addLabel = browser ? browserConnectFolderLabel(locale) : anotherLabel
-  const addHint = browser ? browserConnectFolderHint(locale) : SOURCES_PRIVACY_LINES[0]
+  const unsupported = access.connectGrant && !folderAccess
+  const limited = access.limitedSystemFolders && folderAccess && !canOrganise
+  const removing = pendingWait?.kind === 'remove'
+  const connectWaiting =
+    pendingWait?.kind === 'picker' || pendingWait?.kind === 'add' || pendingWait?.kind === 'restore' || pendingWait?.kind === 'retry'
+  const connectDisabled = (busy && !removing) || unsupported
+  const addLabel = access.connectGrant ? browserConnectFolderLabel(locale) : anotherLabel
+  const addHint = access.connectGrant ? browserConnectFolderHint(locale) : SOURCES_PRIVACY_LINES[0]
+  const waiting = pendingWait !== null
+  const waitingLabel = sourceWorkingActionLabel(pendingWait?.idleLabel ?? addLabel, waiting)
+
+  useEffect(() => {
+    if (wasBusy.current && !busy) setPendingWait(null)
+    wasBusy.current = Boolean(busy)
+  }, [busy])
+
+  function beginWait(idleLabel: string, opensPicker: boolean, run: () => void) {
+    setPendingWait({ idleLabel, kind: sourceConnectWaitKind(idleLabel, opensPicker) })
+    run()
+  }
+
+  function requestAdd() {
+    beginWait(addLabel, true, onAdd)
+  }
+
+  function requestSuggested(path: string, idleLabel: string) {
+    beginWait(idleLabel, Boolean(access.connectGrant || path.startsWith('suhuella:')), () => onAddSuggested(path))
+  }
+
+  function requestRemove(path: string) {
+    beginWait('Remove', false, () => onRemove(path))
+  }
   const catalog = suggested.filter(
     (place) =>
       Boolean(place.path) &&
-      (desktop
+      (access.directoryCatalog
         ? place.exists && !place.path.startsWith('suhuella:')
         : true) &&
       !locations.some(
@@ -474,8 +562,8 @@ export function SourcesPanel({
           (location.catalogKey && samePath(location.catalogKey, place.path)),
       ),
   )
-  const available = desktop ? catalog : []
-  const capabilityCards = browser ? browserCapabilityCatalog(platform ?? 'darwin') : []
+  const available = access.directoryCatalog ? catalog : []
+  const capabilityCards = hostCapabilityCatalog(access, platform ?? 'darwin')
   const systemCatalog = capabilityCards.filter((card) => card.capability === 'limited')
   const cloudCatalog = capabilityCards.filter((card) => card.capability === 'coming_later')
   const connectedKeys = new Set(
@@ -496,40 +584,51 @@ export function SourcesPanel({
       !locations.some((location) => sameSourceName(location.name, card.label)),
   )
 
-  function locationSight(location: IndexedLocationSummary): SourceSightState {
-    return sourceSightState({
-      included: true,
-      exists: location.exists,
-      hostCanSee: location.exists && location.status !== 'permission_denied',
-      status: location.status,
-    })
-  }
-
   function locationCard(location: IndexedLocationSummary, kind?: SuggestedLocation['kind']) {
-    const sight = locationSight(location)
-    const needsAttention = sight === 'unavailable'
-    const permissionLost = location.status === 'permission_denied'
-    const restore = permissionLost && onRestore ? () => onRestore(location.path) : () => onRescan()
+    const presentation =
+      location.presentation ??
+      buildSourcePresentation({
+        id: location.path,
+        displayName: location.name,
+        locationStatus: location.status,
+        documentCount: location.fileCount,
+        lastIndexedAt: location.lastIndexed,
+        lastCheckedAt: location.lastCheckedAt,
+        lastStateChangeAt: location.lastStateChangeAt,
+        availabilityReason: location.availabilityReason,
+        access,
+        scanning: location.status === 'indexing',
+      })
+    const sight: SourceSightState = presentation.capabilities.openable ? 'indexed' : 'unavailable'
+    const needsAttention = !presentation.capabilities.openable
+    const primaryAction = presentation.actions.find((action) => action !== 'remove')
+    const restoreLabel = sourceActionLabel(primaryAction ?? 'none') ?? 'Retry'
+    const restore =
+      primaryAction === 'restore_permission' && onRestore
+        ? () => beginWait(restoreLabel, false, () => onRestore(location.path))
+        : () => beginWait(restoreLabel, false, onRescan)
     return (
       <SourceCard
         path={location.path}
-        title={location.name}
+        title={presentation.summary.title}
         kind={kind}
         platform={platform}
         sourceAppearance={settings?.sourceAppearance}
         onAppearanceChange={onSourceAppearanceChange}
         sight={sight}
-        scanning={isScanning}
-        files={location.fileCount}
-        updated={location.lastIndexed}
-        actionLabel={needsAttention ? sourceUnavailableActionLabel(permissionLost) : null}
+        scanning={location.status === 'indexing'}
+        files={presentation.summary.documentCount}
+        updated={presentation.summary.lastIndexedAt}
+        detailLines={sourceHealthDetailLines(presentation)}
+        actionLabel={needsAttention ? sourceActionLabel(primaryAction ?? 'none') : null}
         busy={needsAttention && connectDisabled}
         needsAttention={needsAttention}
         layout={viewMode}
         onAction={needsAttention ? restore : undefined}
         onOpenSource={onOpenSource ? () => onOpenSource(location.path, location.name) : undefined}
         onRescan={() => onRescan()}
-        onRemove={() => onRemove(location.path)}
+        removing={removing}
+        onRemove={() => requestRemove(location.path)}
       />
     )
   }
@@ -601,17 +700,13 @@ export function SourcesPanel({
     unusedSystemCatalog.length > 0 ||
     unusedCloudCatalog.length > 0
   const showComputerGroup =
-    browser ||
+    access.connectGrant ||
     computerLocations.length > 0 ||
     computerAvailable.length > 0 ||
     computerGrantable.length > 0 ||
     (!searching && locations.length > 0)
   const hasCloudSection =
     cloudLocations.length > 0 || cloudAvailable.length > 0 || unusedCloudCatalog.length > 0
-
-  function scrollToCloudIntegrations() {
-    document.getElementById('sources-cloud')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 
   useEffect(() => {
     if (!searchOpen) return
@@ -679,7 +774,11 @@ export function SourcesPanel({
           ) : null}
           {isScanning ? (
             <div className="flex items-center gap-3 rounded-full bg-[var(--overlay-row)] px-3 py-1.5 text-xs border border-[var(--sidebar-line)]">
-              <span className="font-semibold text-[var(--brand-accent)]">Updating…</span>
+              <span className="font-semibold text-[var(--brand-accent)]">
+                {typeof scan.locationsTotal === 'number' && scan.locationsTotal > 1
+                  ? `${Math.min((scan.locationsDone ?? 0) + 1, scan.locationsTotal)} of ${scan.locationsTotal}`
+                  : 'Updating…'}
+              </span>
               <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--app-fg)] opacity-20">
                 <div
                   className="h-full rounded-full bg-[var(--brand-accent)] transition-all duration-500 opacity-100"
@@ -696,9 +795,18 @@ export function SourcesPanel({
       </header>
 
       {notice ? (
-        <div className="rounded-2xl border border-amber-200/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-500">
+        <div
+          role="status"
+          className={
+            noticeKind === 'status'
+              ? 'rounded-2xl border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-4 py-3 text-sm text-[var(--app-fg)]'
+              : 'rounded-2xl border border-amber-200/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-500'
+          }
+        >
           {notice}
         </div>
+      ) : waiting ? (
+        <SourceConnectBusyStatus workingLabel={waitingLabel} kind={pendingWait.kind} />
       ) : null}
 
       {locations.length === 0 ? (
@@ -722,35 +830,25 @@ export function SourcesPanel({
         ) : (
           <FeaturePromoCard
             title="Sources"
-            description={sourcesEmptyBody(desktop)}
+            description={sourcesEmptyBody(access)}
             hint={
-              desktop
+              access.directoryCatalog
                 ? undefined
                 : limited
                   ? `${sourcesLimitedSupportCopy()} ${SOURCES_PRIVACY_LINES[0]}`
                   : SOURCES_PRIVACY_LINES[0]
             }
             primary={{
-              label: desktop ? 'Add' : browserConnectFolderLabel(locale),
-              disabled: connectDisabled,
-              onClick: onAdd,
+              label:
+                sourceWorkingActionLabel(
+                  access.connectGrant ? browserConnectFolderLabel(locale) : 'Add a source',
+                  connectWaiting && !unsupported,
+                ) ?? (access.connectGrant ? browserConnectFolderLabel(locale) : 'Add a source'),
+              disabled: connectDisabled || waiting,
+              onClick: requestAdd,
             }}
             secondary={
-              browser && hasCloudSection
-                ? {
-                    label: browserIntegrationsActionLabel(locale),
-                    onClick: scrollToCloudIntegrations,
-                  }
-                : !desktop && downloadOffer
-                  ? {
-                      label: 'Download SuHuella',
-                      href: downloadOffer.href,
-                      external: downloadOffer.external,
-                    }
-                  : undefined
-            }
-            extra={
-              browser && hasCloudSection && downloadOffer
+              access.connectGrant && downloadOffer
                 ? {
                     label: 'Download SuHuella',
                     href: downloadOffer.href,
@@ -770,17 +868,18 @@ export function SourcesPanel({
 
       {showComputerGroup ? (
         <SourceGroup
-          title={browser ? browserLocalFoldersLabel(locale) : thisComputerLabel(platform ?? 'darwin')}
+          title={access.connectGrant ? browserLocalFoldersLabel(locale) : thisComputerLabel(platform ?? 'darwin')}
           layout={viewMode}
         >
           {!searching && !unsupported ? (
             <li>
               <AddSourceCard
-                label={addLabel}
+                label={sourceWorkingActionLabel(addLabel, connectWaiting && !unsupported) ?? addLabel}
                 hint={addHint}
-                disabled={connectDisabled}
+                disabled={connectDisabled || waiting}
+                busy={connectWaiting && !unsupported}
                 layout={viewMode}
-                onAdd={onAdd}
+                onAdd={requestAdd}
               />
             </li>
           ) : null}
@@ -800,7 +899,7 @@ export function SourcesPanel({
                 actionLabel={pickLabel}
                 busy={connectDisabled}
                 layout={viewMode}
-                onAction={() => onAddSuggested(place.path)}
+                onAction={() => requestSuggested(place.path, pickLabel)}
                 onOpenSource={onOpenSource ? () => onOpenSource(place.path, place.label) : undefined}
               />
             </li>
@@ -818,12 +917,12 @@ export function SourcesPanel({
                 actionLabel={grantLabel}
                 busy={connectDisabled}
                 layout={viewMode}
-                onAction={() => onAddSuggested(place.path)}
+                onAction={() => requestSuggested(place.path, grantLabel)}
                 onOpenSource={onOpenSource ? () => onOpenSource(place.path, place.label) : undefined}
               />
             </li>
           ))}
-          {browser
+          {access.limitedSystemFolders
             ? unusedSystemCatalog
                 .filter((card) => matchesSourceQuery(card.label, searchQuery))
                 .map((card) => (
@@ -838,7 +937,7 @@ export function SourcesPanel({
                       actionLabel={browserChooseSubfolderLabel(locale)}
                       busy={connectDisabled}
                       layout={viewMode}
-                      onAction={onAdd}
+                      onAction={requestAdd}
                     />
                   </li>
                 ))
@@ -849,8 +948,8 @@ export function SourcesPanel({
       {hasCloudSection ? (
         <SourceGroup
           id="sources-cloud"
-          title="Cloud"
-          hint={browser ? browserCloudComingLaterCopy(locale) : undefined}
+          title={cloudLocations.length > 0 || cloudAvailable.length > 0 ? 'Cloud' : 'Coming later'}
+          hint={access.connectGrant ? browserCloudComingLaterCopy(locale) : undefined}
           layout={viewMode}
         >
           {cloudLocations.map((location) => (
@@ -869,7 +968,7 @@ export function SourcesPanel({
                 actionLabel={pickLabel}
                 busy={connectDisabled}
                 layout={viewMode}
-                onAction={() => onAddSuggested(place.path)}
+                onAction={() => requestSuggested(place.path, pickLabel)}
                 onOpenSource={onOpenSource ? () => onOpenSource(place.path, place.label) : undefined}
               />
             </li>
@@ -892,6 +991,8 @@ export function SourcesPanel({
         </SourceGroup>
       ) : null}
 
+      <CloudAccountsSection />
+
       {externalLocations.length > 0 || externalAvailable.length > 0 ? (
         <SourceGroup title="External" layout={viewMode}>
           {externalLocations.map((location) => (
@@ -910,7 +1011,7 @@ export function SourcesPanel({
                 actionLabel={pickLabel}
                 busy={connectDisabled}
                 layout={viewMode}
-                onAction={() => onAddSuggested(place.path)}
+                onAction={() => requestSuggested(place.path, pickLabel)}
                 onOpenSource={onOpenSource ? () => onOpenSource(place.path, place.label) : undefined}
               />
             </li>

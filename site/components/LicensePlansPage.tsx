@@ -1,13 +1,20 @@
 "use client";
 
 import { brand } from "@suhuella/brand";
-import { commercialPlanCards, checkoutPath, unavailablePlanMessage } from "@suhuella/product/lib/license-checkout";
+import {
+  commercialPlanCards,
+  checkoutPath,
+  paidCheckoutClosedMessage,
+  paidPlanUnavailableCta,
+  unavailablePlanMessage,
+} from "@suhuella/product/lib/license-checkout";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SiteFooter } from "@/components/SiteFooter";
+
 export function LicensePlansPage({
   desktopDownloadAvailable = false,
   paidCheckoutEnabled = false,
@@ -24,6 +31,7 @@ export function LicensePlansPage({
   const checkout = searchParams.get("checkout");
   const unavailablePlan = searchParams.get("plan") ?? "";
   const plans = commercialPlanCards("free", "public");
+  const appLocale = locale === "es" ? "es" : "en";
 
   const intro =
     locale === "es"
@@ -40,13 +48,13 @@ export function LicensePlansPage({
       if (embedded && onClose) return null;
       return desktopDownloadAvailable ? "/download" : "/home";
     }
-    if (planId === "business" || (personalPaid && paidCheckoutEnabled)) {
+    if (planId === "business") {
+      return checkoutPath("business", { returnTo: "public" });
+    }
+    if (personalPaid && paidCheckoutEnabled) {
       return checkoutPath(planId, { returnTo: "public" });
     }
-    if (personalPaid) {
-      return `/license?checkout=unavailable&plan=${planId}`;
-    }
-    return "/";
+    return null;
   };
 
   const body = (
@@ -69,15 +77,20 @@ export function LicensePlansPage({
             : "Checkout canceled. Your plan is unchanged."}
         </p>
       ) : null}
-      {checkout === "unavailable" ? (
-        <p className={`rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 ${embedded ? "mt-4" : "mt-6"}`}>
-          {locale === "es"
-            ? unavailablePlan === "lifetime"
-              ? "Lifetime aún no está disponible."
-              : unavailablePlan === "monthly"
-                ? "Monthly aún no está disponible."
-                : "Este plan aún no está disponible."
-            : unavailablePlanMessage(unavailablePlan)}
+      {checkout === "unavailable" || !paidCheckoutEnabled ? (
+        <p
+          role="status"
+          className={`rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600 ${embedded ? "mt-4" : "mt-6"}`}
+        >
+          {checkout === "unavailable"
+            ? locale === "es"
+              ? unavailablePlan === "lifetime"
+                ? "Lifetime aún no está disponible."
+                : unavailablePlan === "monthly"
+                  ? "Monthly aún no está disponible."
+                  : "Este plan aún no está disponible."
+              : unavailablePlanMessage(unavailablePlan)
+            : paidCheckoutClosedMessage(appLocale)}
         </p>
       ) : null}
 
@@ -85,12 +98,8 @@ export function LicensePlansPage({
         {plans.map((plan) => {
           const personalPaid = plan.id === "lifetime" || plan.id === "monthly";
           const href = planHref(plan.id);
-          const label =
-            personalPaid && !paidCheckoutEnabled
-              ? locale === "es"
-                ? "Aún no disponible"
-                : "Coming soon"
-              : plan.cta;
+          const unavailable = personalPaid && !paidCheckoutEnabled;
+          const label = unavailable ? paidPlanUnavailableCta(appLocale) : plan.cta;
 
           return (
             <GlassCard key={plan.id} className="p-5">
@@ -102,6 +111,15 @@ export function LicensePlansPage({
                     type="button"
                     onClick={onClose}
                     className="mt-4 inline-flex rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    {label}
+                  </button>
+                ) : unavailable ? (
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="mt-4 inline-flex cursor-not-allowed rounded-full bg-slate-200 px-3.5 py-2 text-sm font-semibold text-slate-500"
                   >
                     {label}
                   </button>

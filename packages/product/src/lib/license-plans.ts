@@ -1,6 +1,7 @@
 import { brand } from '@suhuella/brand'
 
-export const PERSONAL_DEVICE_LIMIT = 3
+/** Personal licenses allow one active device. Disconnect that device to activate another. */
+export const PERSONAL_DEVICE_LIMIT = 1
 
 export type CheckoutPlan = 'lifetime' | 'monthly' | 'business'
 export type CheckoutReturnTo = 'settings' | 'desktop' | 'public'
@@ -22,11 +23,15 @@ export function isCheckoutReturnTo(value: string): value is CheckoutReturnTo {
   return value === 'settings' || value === 'desktop' || value === 'public'
 }
 
+export function personalDeviceLimitLabel(): string {
+  return PERSONAL_DEVICE_LIMIT === 1 ? '1 device' : `${PERSONAL_DEVICE_LIMIT} devices`
+}
+
 export function commercialPlanCards(
   kind = 'free',
   surface: 'settings' | 'public' = 'settings',
 ): LicensePlanCard[] {
-  const devices = `Up to ${PERSONAL_DEVICE_LIMIT} devices.`
+  const devices = `One device.`
   return [
     {
       id: 'free',
@@ -63,6 +68,33 @@ export function unavailablePlanMessage(plan?: string): string {
   if (plan === 'lifetime') return 'Lifetime is not available yet.'
   if (plan === 'monthly') return 'Monthly is not available yet.'
   return 'This plan is not available yet.'
+}
+
+/** CTA label when public paid checkout is off. */
+export function paidPlanUnavailableCta(locale: 'es' | 'en' = 'en'): string {
+  return locale === 'es' ? 'Aún no disponible' : 'Not available yet'
+}
+
+/** Accessible explanation that paid checkout is closed. */
+export function paidCheckoutClosedMessage(locale: 'es' | 'en' = 'en'): string {
+  return locale === 'es'
+    ? 'El checkout de planes de pago está cerrado. Lifetime y Monthly aún no están disponibles.'
+    : 'Paid plan checkout is closed. Lifetime and Monthly are not available yet.'
+}
+
+/**
+ * Browser shell sets `__suhuellaPaidCheckoutEnabled` from PAID_CHECKOUT_ENABLED.
+ * Explicit false/true wins. Missing on Electron allows the CTA (Worker still gates).
+ * Missing on web means closed.
+ */
+export function readPaidCheckoutEnabled(
+  flag: boolean | undefined = typeof window !== 'undefined'
+    ? window.__suhuellaPaidCheckoutEnabled
+    : undefined,
+): boolean {
+  if (flag === true) return true
+  if (flag === false) return false
+  return typeof window !== 'undefined' && window.__suhuellaHost === 'electron'
 }
 
 export function checkoutPath(

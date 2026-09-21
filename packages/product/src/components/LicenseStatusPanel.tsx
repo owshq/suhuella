@@ -7,6 +7,9 @@ import { getSuhuellaApi } from '../lib/api'
 import {
   checkoutPath,
   licensePlanCards,
+  paidCheckoutClosedMessage,
+  paidPlanUnavailableCta,
+  readPaidCheckoutEnabled,
   unavailablePlanMessage,
   type CheckoutPlan,
   type LicensePlanCard,
@@ -18,13 +21,16 @@ import {
   offlineNote,
 } from '../lib/license-status'
 import { isServiceCapabilityLimited, NORMAL_SERVICE_HEALTH, type PublicServiceHealth } from '../lib/service-health'
-import type { LicenseApiError, LicenseStatusView } from '../types'
+import { BusinessOrganisationSection } from './BusinessOrganisationSection'
+import type { LicenseApiError, LicenseDeviceInfo, LicenseStatusView } from '../types'
 
 const SUPPORT_EMAIL = brand.supportEmail
 
 type LicenseStatusPanelProps = {
   compact?: boolean
   onOpenLicense?: () => void
+  /** When omitted, reads the web shell flag. Missing flag means checkout is closed. */
+  paidCheckoutEnabled?: boolean
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -77,8 +83,9 @@ function SecondaryButton({
     <button
       type="button"
       disabled={disabled}
+      aria-disabled={disabled ? true : undefined}
       onClick={onClick}
-      className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+      className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:bg-slate-100 disabled:text-slate-500 disabled:hover:bg-slate-100"
     >
       {children}
     </button>
@@ -98,8 +105,50 @@ function isPaidPlan(id: LicensePlanCard['id']): id is CheckoutPlan {
   return id === 'lifetime' || id === 'monthly' || id === 'business'
 }
 
+function formatDevicePlatform(platform: string): string {
+  if (platform === 'darwin') return 'macOS'
+  if (platform === 'win32') return 'Windows'
+  if (platform === 'linux') return 'Linux'
+  if (platform === 'macOS' || platform === 'Windows') return platform
+  return platform.trim() || 'Unknown'
+}
+
+function shortSupportRef(code: string | null): string | null {
+  if (!code) return null
+  const trimmed = code.trim()
+  if (trimmed.length <= 8) return trimmed
+  return trimmed.slice(0, 8)
+}
+
+function licensedDevices(license: LicenseStatusView): LicenseDeviceInfo[] {
+  if (license.devices.length > 0) return license.devices
+  if (license.kind === 'free') return []
+  return [
+    {
+      index: 0,
+      name: license.computerName,
+      platform: '',
+      lastSeenLabel: license.lastCheckedLabel,
+      current: true,
+    },
+  ]
+}
+
+function LicenseDeviceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-semibold text-slate-900">{value}</dd>
+    </div>
+  )
+}
+
 function currentHeadline(license: LicenseStatusView | null): string {
   if (!license || license.kind === 'free') return `You are using ${brand.displayName} Free`
+  if (license.kind === 'business') return `${brand.displayName} Business`
+  if (license.kind === 'personal_lifetime' || license.kind === 'personal_monthly') {
+    return `${brand.displayName} Individual`
+  }
   return license.headline
 }
 
@@ -112,10 +161,9 @@ function currentDetail(license: LicenseStatusView | null): string {
 
 function StatusRows({ license }: { license: LicenseStatusView }) {
   const isBusiness = license.kind === 'business'
-  const showDevices = license.deviceCount != null && license.deviceLimit != null
   const showDetails =
     license.kind !== 'free' &&
-    (isBusiness || Boolean(license.organisationName || license.email || showDevices))
+    (isBusiness || Boolean(license.organisationName || license.email || license.periodEndLabel))
 
   if (!showDetails) return null
 
@@ -129,13 +177,13 @@ function StatusRows({ license }: { license: LicenseStatusView }) {
       ) : null}
       {license.email ? (
         <div className="flex items-center justify-between gap-3">
-          <dt className="text-slate-500">{isBusiness ? 'Signed in as' : 'Email'}</dt>
+          <dt className="text-slate-500">{isBusiness ? 'Seat assigned to' : 'Email'}</dt>
           <dd className="min-w-0 truncate font-semibold text-slate-900">{license.email}</dd>
         </div>
       ) : null}
-      {showDevices ? (
+      {isBusiness && license.deviceCount != null && license.deviceLimit != null ? (
         <div className="flex items-center justify-between gap-3">
-          <dt className="text-slate-500">{isBusiness ? 'Devices' : 'Your devices'}</dt>
+          <dt className="text-slate-500">Devices</dt>
           <dd className="font-semibold text-slate-900">
             {license.deviceCount} of {license.deviceLimit}
           </dd>
@@ -151,11 +199,151 @@ function StatusRows({ license }: { license: LicenseStatusView }) {
   )
 }
 
+function LicensedDeviceSection({
+  license,
+  currentPlatform,
+  busy,
+  deviceLimitReached,
+  onRename,
+  onDeactivateThisDevice,
+  onDeactivateRemoteDevice,
+}: {
+  license: LicenseStatusView
+  currentPlatform: string
+  busy: boolean
+  deviceLimitReached: boolean
+  onRename: (name: string) => void
+  onDeactivateThisDevice: () => void
+  onDeactivateRemoteDevice: (deviceIndex: number) => void
+}) {
+  const { t } = useAppLocale()
+  const [deviceName, setDeviceName] = useState('')
+  const [renamingDevice, setRenamingDevice] = useState(false)
+  const devices = licensedDevices(license)
+  const currentDevice = devices.find((device) => device.current)
+  const remoteDevices = devices.filter((device) => !device.current)
+  const supportRef = shortSupportRef(license.supportCode)
+  const currentPlatformLabel = formatDevicePlatform(currentDevice?.platform || currentPlatform)
+  const licenseStatusLabel = license.needsAttention
+    ? 'Needs attention'
+    : license.workingOffline
+      ? 'Active offline'
+      : 'Active'
+
+  if (license.kind === 'free') {
+    if (!deviceLimitReached) return null
+    const knownRemote = devices.filter((device) => !device.current)
+    return (
+      <Card>
+        <h3 className="text-base font-semibold text-slate-900">Your license is active on another device</h3>
+        {knownRemote.length > 0 ? (
+          <ul className="mt-3 space-y-2">
+            {knownRemote.map((device) => (
+              <li key={`${device.index}-${device.name}`} className="text-sm">
+                <p className="font-medium text-slate-900">
+                  {device.name}
+                  {device.platform ? ` · ${formatDevicePlatform(device.platform)}` : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+            {productCopy(
+              'Deactivate it on that computer, then activate here. SuHuella will not remove a device for you.',
+            )}
+          </p>
+        )}
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      {currentDevice ? (
+        <Card>
+          <h3 className="text-base font-semibold text-slate-900">Licensed device</h3>
+          <dl className="mt-3">
+            <LicenseDeviceRow label="License" value={licenseStatusLabel} />
+            <LicenseDeviceRow label="Activated on" value={currentDevice.name} />
+            <LicenseDeviceRow label="Device" value={currentPlatformLabel} />
+            {supportRef ? <LicenseDeviceRow label="Support ref" value={supportRef} /> : null}
+            <LicenseDeviceRow label="Last active" value={currentDevice.lastSeenLabel} />
+          </dl>
+          {renamingDevice ? (
+            <form
+              className="mt-4 space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                setRenamingDevice(false)
+                onRename(deviceName)
+              }}
+            >
+              <input
+                value={deviceName}
+                onChange={(event) => setDeviceName(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[var(--brand-accent)]"
+                placeholder={license.computerName}
+              />
+              <div className="flex flex-wrap gap-2">
+                <PrimaryButton
+                  disabled={busy || !deviceName.trim()}
+                  onClick={() => {
+                    setRenamingDevice(false)
+                    onRename(deviceName)
+                  }}
+                >
+                  Save name
+                </PrimaryButton>
+                <SecondaryButton disabled={busy} onClick={() => setRenamingDevice(false)}>
+                  Cancel
+                </SecondaryButton>
+              </div>
+            </form>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <SecondaryButton
+                disabled={busy}
+                onClick={() => {
+                  setDeviceName(license.computerName)
+                  setRenamingDevice(true)
+                }}
+              >
+                Rename this computer
+              </SecondaryButton>
+              <SecondaryButton disabled={busy} onClick={onDeactivateThisDevice}>
+                {t.revokeAction}
+              </SecondaryButton>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {remoteDevices.map((device) => (
+        <Card key={`${device.index}-${device.name}`}>
+          <h3 className="text-base font-semibold text-slate-900">Your license is active on another device</h3>
+          <p className="mt-2 text-sm font-medium text-slate-900">
+            {device.name} · {formatDevicePlatform(device.platform)}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">Last active {device.lastSeenLabel.toLowerCase()}</p>
+          <div className="mt-4">
+            <SecondaryButton disabled={busy} onClick={() => onDeactivateRemoteDevice(device.index)}>
+              Deactivate that device
+            </SecondaryButton>
+          </div>
+        </Card>
+      ))}
+    </>
+  )
+}
+
 export function LicenseStatusPanel({
   compact = false,
   onOpenLicense,
+  paidCheckoutEnabled,
 }: LicenseStatusPanelProps) {
-  const { t } = useAppLocale()
+  const { t, locale } = useAppLocale()
+  const checkoutOpen = readPaidCheckoutEnabled(paidCheckoutEnabled)
   const [license, setLicense] = useState<LicenseStatusView | null>(null)
   const [email, setEmail] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
@@ -164,10 +352,7 @@ export function LicenseStatusPanel({
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [showSupportInfo, setShowSupportInfo] = useState(false)
-  const [showDevices, setShowDevices] = useState(false)
   const [deviceLimitReached, setDeviceLimitReached] = useState(false)
-  const [deviceName, setDeviceName] = useState('')
-  const [renamingDevice, setRenamingDevice] = useState(false)
   const [platform, setPlatform] = useState('')
   const [purchaseState, setPurchaseState] = useState<
     'idle' | 'confirmed' | 'activating' | 'active' | 'canceled' | 'unavailable'
@@ -255,7 +440,15 @@ export function LicenseStatusPanel({
   }, [compact])
 
   function applyResult(
-    result: { ok: true; license: LicenseStatusView } | { ok: false; error: LicenseApiError; license?: LicenseStatusView },
+    result: {
+      ok: true
+      license: LicenseStatusView
+    } | {
+      ok: false
+      error: LicenseApiError
+      license?: LicenseStatusView
+      devices?: LicenseStatusView['devices']
+    },
     successText?: string,
   ) {
     if (result.license) setLicense(result.license)
@@ -265,6 +458,9 @@ export function LicenseStatusPanel({
       return
     }
     setDeviceLimitReached(result.error === 'device_limit')
+    if (result.error === 'device_limit' && result.devices?.length && result.license) {
+      setLicense({ ...result.license, devices: result.devices })
+    }
     setFeedback({ tone: 'error', text: licenseErrorMessage(result.error) })
   }
 
@@ -281,6 +477,13 @@ export function LicenseStatusPanel({
   const plans = licensePlanCards(kind)
 
   async function buyPlan(plan: CheckoutPlan) {
+    if (!checkoutOpen) {
+      setFeedback({
+        tone: 'error',
+        text: paidCheckoutClosedMessage(locale),
+      })
+      return
+    }
     if (checkoutLimited) {
       setFeedback({
         tone: 'error',
@@ -403,7 +606,7 @@ export function LicenseStatusPanel({
           </p>
         ) : null}
         {purchaseState === 'unavailable' ? (
-          <p className="mt-3 text-sm leading-relaxed text-slate-500">
+          <p role="status" className="mt-3 text-sm leading-relaxed text-slate-500">
             {unavailablePlanMessage(unavailablePlan)}
           </p>
         ) : null}
@@ -419,11 +622,6 @@ export function LicenseStatusPanel({
 
         {kind !== 'free' ? (
           <div className="mt-4 flex flex-wrap gap-2">
-            {kind === 'personal_lifetime' || kind === 'personal_monthly' ? (
-              <SecondaryButton onClick={() => setShowDevices((value) => !value)}>
-                Manage devices
-              </SecondaryButton>
-            ) : null}
             {kind === 'personal_lifetime' ? (
               <SecondaryButton onClick={() => setShowSupportInfo((value) => !value)}>
                 View support info
@@ -438,7 +636,37 @@ export function LicenseStatusPanel({
         ) : null}
       </Card>
 
-      {kind === 'business' && license ? (
+      {license ? (
+        <LicensedDeviceSection
+          license={license}
+          currentPlatform={platform}
+          busy={busy}
+          deviceLimitReached={deviceLimitReached}
+          onRename={(name) =>
+            run(() => getSuhuellaApi().renameThisDevice(name), 'Computer name updated')
+          }
+          onDeactivateThisDevice={() =>
+            run(() => getSuhuellaApi().deactivateLicense(), t.revokeDone)
+          }
+          onDeactivateRemoteDevice={(deviceIndex) =>
+            run(
+              () => getSuhuellaApi().deactivateRemoteDevice(deviceIndex),
+              'Device removed from your license',
+            )
+          }
+        />
+      ) : null}
+
+      {kind === 'business' && license?.canManageOrganisation ? (
+        <BusinessOrganisationSection
+          currentEmail={license.email}
+          busy={busy}
+          onBusy={setBusy}
+          onFeedback={(text, tone) => setFeedback({ tone, text })}
+        />
+      ) : null}
+
+      {kind === 'business' && license?.canEditBranding ? (
         <Card>
           <h3 className="text-base font-semibold text-slate-900">Business logo</h3>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
@@ -486,9 +714,19 @@ export function LicenseStatusPanel({
         <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
           Buying opens a secure checkout in your browser. It does not activate an existing license.
         </p>
+        {!checkoutOpen ? (
+          <p
+            role="status"
+            className="mt-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600"
+          >
+            {paidCheckoutClosedMessage(locale)}
+          </p>
+        ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {plans.map((plan) => {
             const paidId = isPaidPlan(plan.id) ? plan.id : null
+            const personalPaid = plan.id === 'lifetime' || plan.id === 'monthly'
+            const personalPaidClosed = personalPaid && !checkoutOpen
             return (
             <div
               key={plan.id}
@@ -501,6 +739,10 @@ export function LicenseStatusPanel({
                   <span className="inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                     Current plan
                   </span>
+                ) : plan.cta && personalPaidClosed ? (
+                  <SecondaryButton disabled>
+                    {paidPlanUnavailableCta(locale)}
+                  </SecondaryButton>
                 ) : plan.cta && paidId ? (
                   <SecondaryButton onClick={() => void buyPlan(paidId)}>
                     {plan.cta}
@@ -569,96 +811,6 @@ export function LicenseStatusPanel({
         ) : null}
       </Card>
 
-      {showDevices && license ? (
-        <QuietCard>
-          <p className="text-sm font-semibold text-slate-900">Your devices</p>
-          <ul className="mt-3 space-y-2 text-sm text-slate-700">
-            {(license.devices.length > 0
-              ? license.devices
-              : [
-                  {
-                    index: 0,
-                    name: license.computerName,
-                    platform: '',
-                    lastSeenLabel: license.lastCheckedLabel,
-                    current: true,
-                  },
-                ]
-            ).map((device) => (
-              <li key={`${device.index}-${device.name}`} className="rounded-xl px-2 py-2">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-900">{device.name}</span>
-                  {device.current ? (
-                    <span className="text-slate-500">This computer</span>
-                  ) : (
-                    <SecondaryButton
-                      disabled={busy}
-                      onClick={() =>
-                        run(
-                          () => getSuhuellaApi().deactivateRemoteDevice(device.index),
-                          'Device removed from your license',
-                        )
-                      }
-                    >
-                      Deactivate device
-                    </SecondaryButton>
-                  )}
-                </div>
-                <p className="mt-0.5 text-xs text-slate-500">Last seen {device.lastSeenLabel.toLowerCase()}</p>
-              </li>
-            ))}
-          </ul>
-          {renamingDevice ? (
-            <form
-              className="mt-3 space-y-2"
-              onSubmit={(event) => {
-                event.preventDefault()
-                setRenamingDevice(false)
-                run(() => getSuhuellaApi().renameThisDevice(deviceName), 'Computer name updated')
-              }}
-            >
-              <input
-                value={deviceName}
-                onChange={(event) => setDeviceName(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[var(--brand-accent)]"
-                placeholder={license.computerName}
-              />
-              <div className="flex flex-wrap gap-2">
-                <PrimaryButton disabled={busy || !deviceName.trim()} onClick={() => {
-                  setRenamingDevice(false)
-                  run(() => getSuhuellaApi().renameThisDevice(deviceName), 'Computer name updated')
-                }}>
-                  Save name
-                </PrimaryButton>
-                <SecondaryButton disabled={busy} onClick={() => setRenamingDevice(false)}>Cancel</SecondaryButton>
-              </div>
-            </form>
-          ) : (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <SecondaryButton
-                onClick={() => {
-                  setDeviceName(license.computerName)
-                  setRenamingDevice(true)
-                }}
-              >
-                Rename this computer
-              </SecondaryButton>
-              <SecondaryButton
-                disabled={busy}
-                onClick={() =>
-                  run(
-                    () => getSuhuellaApi().deactivateLicense(),
-                    'This computer is now using Free edition',
-                  )
-                }
-              >
-                Remove this computer
-              </SecondaryButton>
-            </div>
-          )}
-        </QuietCard>
-      ) : null}
-
       {showSupportInfo && license ? (
         <QuietCard>
           <dl className="grid gap-2 text-sm">
@@ -682,30 +834,10 @@ export function LicenseStatusPanel({
         </QuietCard>
       ) : null}
 
-      {kind !== 'free' && license ? (
-        <QuietCard>
-          <h3 className="text-sm font-semibold text-slate-900">{t.revokeTitle}</h3>
-          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{t.revokeBody}</p>
-          <div className="mt-3">
-            <SecondaryButton
-              disabled={busy}
-              onClick={() =>
-                run(
-                  () => getSuhuellaApi().deactivateLicense(),
-                  t.revokeDone,
-                )
-              }
-            >
-              {t.revokeAction}
-            </SecondaryButton>
-          </div>
-        </QuietCard>
-      ) : null}
-
-      {deviceLimitReached ? (
+      {deviceLimitReached && license?.kind !== 'free' ? (
         <QuietCard>
           <h3 className="text-sm font-semibold text-slate-900">
-            This Personal license allows 3 devices.
+            This Personal license allows 1 device.
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
             {productCopy('Deactivate another computer, then activate this one. SuHuella will not remove a device for you.')}

@@ -9,6 +9,7 @@ import {
   resolveSourceIdentity,
 } from '../lib/source-appearance'
 import { capabilitiesFor } from './capabilities'
+import { hostAccessFor } from '../lib/platform-capabilities'
 import { toLicenseStatusView } from '../lib/license-status'
 import type { SuhuellaAPI } from '../vite-env'
 import type {
@@ -33,6 +34,12 @@ import type {
 import { HOST_ACTION_COPY, HostCapabilityError } from '../lib/host-action-copy'
 import { recognisedFromNames, uniqueNameCount } from '../lib/recognised-names'
 import { browseParentPath, isDirectBrowseChild, normalizeBrowsePath } from '../lib/source-browse'
+import { sourceRecommendedAction } from '../lib/source-actions'
+import { projectBrowserSource } from './browser/source-adapter'
+import { sourceAccessState } from '../lib/source-host-vocabulary'
+import { availabilityReasonForStatus } from './handle-lifecycle-bridge'
+import { sourceCapabilities } from '../lib/source-capabilities'
+import { buildSourcePresentation } from '../lib/source-presentation'
 import {
   FolderAccessError,
   fileWriteSupported,
@@ -54,6 +61,8 @@ import {
   requestLicenseEmailCode,
   verifyLicenseEmailCode,
   updateBusinessBranding,
+  getBusinessOrganisation,
+  manageBusinessOrganisation,
   checkLicense,
   deactivateLicense,
   freeLicense,
@@ -61,6 +70,13 @@ import {
   loadLicense,
   renameDevice,
 } from './browser/license'
+import {
+  disconnectCloudIntegration,
+  getCloudIntegrationStatus,
+  listCloudIntegrations,
+  reconnectCloudIntegration,
+  startCloudIntegration,
+} from './browser/cloud-integrations'
 import { fetchPublicServiceHealth, NORMAL_SERVICE_HEALTH } from '../lib/service-health'
 import { executePlanItems, previewPlan } from './browser/plan'
 import { documentFilterForName, searchKnowledge } from './browser/search'
@@ -95,6 +111,7 @@ import {
   ORGANISE_FOLDER_UNSUPPORTED,
   transientFolderFromName,
 } from '../lib/browser-organise-selection'
+import { resolveSourceDisplayName } from '../lib/source-display-name.ts'
 import type { WebKnowledgeSource, WebPlanItem, WebWorkflow } from './browser/types'
 
 const SUGGESTED_START: Record<string, 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos'> = {
@@ -315,9 +332,50 @@ async function licenseView(context?: LicenseContext | null) {
 
 function locationStatus(status: WebKnowledgeSource['status']) {
   if (status === 'needs_permission') return 'permission_denied' as const
+  if (status === 'missing') return 'missing' as const
+  if (status === 'error') return 'error' as const
   if (status === 'unavailable') return 'unavailable' as const
   if (status === 'indexing') return 'indexing' as const
   return 'ready' as const
+}
+
+function sourceToLocation(source: WebKnowledgeSource) {
+  const projected = projectBrowserSource(source)
+  const status = locationStatus(source.status)
+  const availabilityReason =
+    projected.health.availabilityReason ??
+    availabilityReasonForStatus(projected.status, source.availabilityReason)
+  const presentation = buildSourcePresentation({
+    id: projected.source.id,
+    displayName: projected.source.displayName,
+    locationStatus: status,
+    documentCount: source.fileCount,
+    lastIndexedAt: projected.health.lastIndexedAt,
+    lastCheckedAt: projected.health.lastCheckedAt,
+    lastStateChangeAt: projected.health.lastStateChangeAt,
+    availabilityReason,
+    permission: projected.handle.permission,
+    access: hostAccessFor('browser'),
+    scanning: projected.status === 'indexing',
+  })
+  return {
+    path: source.id,
+    name: presentation.summary.title,
+    lastIndexed: source.lastIndexed,
+    folderCount: source.folderCount,
+    fileCount: source.fileCount,
+    status,
+    usefulness: 'useful' as const,
+    exists: presentation.status.accessible,
+    catalogKey: source.wellKnownToken ?? null,
+    lastCheckedAt: source.lastCheckedAt ?? null,
+    lastStateChangeAt: source.lastStateChangeAt ?? null,
+    availabilityReason,
+    recommendedAction: presentation.actions.find((action) => action !== 'remove') ?? sourceRecommendedAction(presentation.status.kind),
+    detailMessage: presentation.status.detail,
+    capabilities: presentation.capabilities,
+    presentation,
+  }
 }
 
 function storageStatus(status: WebKnowledgeSource['status'], supported: boolean) {
@@ -359,17 +417,7 @@ async function indexStatus() {
       finishedAt: null,
       estimatedRemainingSeconds: indexing ? null : null,
     },
-    locations: sources.map((source) => ({
-      path: source.id,
-      name: source.name,
-      lastIndexed: source.lastIndexed,
-      folderCount: source.folderCount,
-      fileCount: source.fileCount,
-      status: locationStatus(source.status),
-      usefulness: 'useful' as const,
-      exists: source.status !== 'unavailable',
-      catalogKey: source.wellKnownToken ?? null,
-    })),
+    locations: sources.map(sourceToLocation),
     summary: {
       topFolders: sources.map((source) => source.name).slice(0, 3),
       languages: [],
@@ -417,16 +465,20 @@ export function installBrowserHost(): void {
     getIndexStatus: () => indexStatus(),
     browseSource: async (rootPath: string): Promise<SourceBrowse> => {
       const requested = normalizeBrowsePath(rootPath)
-      const name = requested.split('/').filter(Boolean).at(-1) ?? requested
+      const lastSegment = requested.split('/').filter(Boolean).at(-1) ?? requested
       const empty: SourceBrowse = {
         path: requested,
-        name,
+        name: lastSegment,
         parentPath: browseParentPath(requested),
         entries: [],
       }
       if (!requested) return empty
       const { sourceId, relativePath } = parseKnowledgePath(requested)
-      const [files, folders] = await Promise.all([listFiles(), listFolders()])
+      const [files, folders, sources] = await Promise.all([listFiles(), listFolders(), listSources()])
+      const source = sources.find((item) => item.id === sourceId)
+      const name = relativePath
+        ? lastSegment
+        : resolveSourceDisplayName(source?.name, lastSegment)
       const sourceFiles = files.filter((file) => file.sourceId === sourceId)
       const sourceFolders = folders.filter((folder) => folder.sourceId === sourceId)
       const folderEntries = sourceFolders
@@ -504,6 +556,9 @@ export function installBrowserHost(): void {
         const documentFilter = documentFilterForName(hit.title)
         const matchedOn: SearchMatchField[] =
           hit.kind === 'file' ? ['filename'] : hit.kind === 'folder' ? ['folder'] : ['recent']
+        const file = hit.kind === 'file' ? files.find((item) => item.id === hit.id) : undefined
+        const source = file ? sources.find((item) => item.id === file.sourceId) : undefined
+        const sourceAvailable = !source || sourceCapabilities(sourceAccessState(source.status)).openable
         return {
           id: hit.id,
           kind:
@@ -526,6 +581,8 @@ export function installBrowserHost(): void {
           matchedOn,
           workflowId: hit.kind === 'workflow' ? hit.id : undefined,
           activityRunId: hit.kind === 'activity' ? hit.id : undefined,
+          sourceAvailable,
+          sourceName: source?.name,
         }
       })
       const filtered =
@@ -605,7 +662,7 @@ export function installBrowserHost(): void {
       }
       return emptySettings(await listSources())
     },
-    startIndexScan: async () => {
+    startIndexScan: async (_refresh?: 'pending' | 'all') => {
       const sources = await listSources()
       for (const source of sources) {
         if (source.status === 'indexing') continue
@@ -703,6 +760,13 @@ export function installBrowserHost(): void {
       const view = await licenseView(result.license as LicenseContext | null)
       return result.ok ? { ok: true as const, license: view } : { ok: false as const, error: result.error, license: view }
     },
+    getBusinessOrganisation: () => getBusinessOrganisation(),
+    manageBusinessOrganisation: (action, payload) => manageBusinessOrganisation(action, payload),
+    listCloudIntegrations: () => listCloudIntegrations(),
+    startCloudIntegration: (provider) => startCloudIntegration(provider),
+    disconnectCloudIntegration: (connectionId) => disconnectCloudIntegration(connectionId),
+    reconnectCloudIntegration: (connectionId) => reconnectCloudIntegration(connectionId),
+    getCloudIntegrationStatus: (connectionId) => getCloudIntegrationStatus(connectionId),
     activateLicense: async (emailProofId: string) => {
       const result = await activateLicense(emailProofId)
       const view = await licenseView(result.license as LicenseContext | null)
@@ -738,6 +802,10 @@ export function installBrowserHost(): void {
       throw new HostCapabilityError(HOST_ACTION_COPY.exportUnavailable)
     },
     finishOnboarding: async () => emptySettings(await listSources()),
+    dismissWelcomeHint: async () => ({
+      ...emptySettings(await listSources()),
+      welcomeNotificationShown: true,
+    }),
     previewSuggestions: async () => {},
     previewSuggestionName: async (fileName: string) => ({
       fileName,
