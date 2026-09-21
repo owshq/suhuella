@@ -1,11 +1,13 @@
 import { brand } from "@suhuella/brand";
+import { deriveDisplayVersion } from "../../packages/product/src/lib/display-version.ts";
 import type { Locale } from "@/lib/i18n/types";
 
-/** Public version follows BrandConfig / release metadata, not a stale Next env. */
+/** Internal release version. Customer labels use formatAppVersion. */
 export const APP_VERSION = brand.release.version;
 
 export function formatAppVersion(version = APP_VERSION): string {
-  return version.startsWith("v") ? version : `v${version}`;
+  const display = deriveDisplayVersion(version);
+  return display.startsWith("v") ? display : `v${display}`;
 }
 
 export function getHeroDownloadCta(locale: Locale): string {

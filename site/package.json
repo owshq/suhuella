@@ -14,6 +14,7 @@
     "check:business-license": "node --experimental-strip-types --disable-warning=ExperimentalWarning lib/business-license-check.ts",
     "test:license": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/license-audit-check.ts",
     "test:download-page": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/download-page-semantics-check.ts",
+    "test:display-version": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/display-version-check.ts",
     "test:desktop-artifacts": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/desktop-release-artifacts-check.ts",
     "test:app-modal-shell": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/route-overlay-check.ts",
     "test:brand-theme": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning ../brands/brand-theme-tokens-check.ts",

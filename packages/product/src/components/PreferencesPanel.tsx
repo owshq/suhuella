@@ -29,6 +29,7 @@ import { BrandMark } from './BrandMark'
 import { useAppLocale } from '../lib/app-locale'
 import { productCopy } from '../lib/product-copy'
 import { HOST_ACTION_COPY, isHostCapabilityError } from '../lib/host-action-copy'
+import { deriveDisplayVersion } from '../lib/display-version'
 import type { ReleaseDecision } from '../lib/release-lifecycle'
 
 type PreferencesPanelProps = {
@@ -799,11 +800,11 @@ function DiagnosticsSection({ appInfo }: { appInfo: AppInfo }) {
         <dl className="mt-4 grid gap-2 rounded-2xl border border-white/80 bg-white/70 px-4 py-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="text-slate-500">Version</dt>
-            <dd className="font-semibold text-slate-900">{appInfo.version || '…'}</dd>
+            <dd className="font-semibold text-slate-900">{shownVersion(appInfo.version)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-slate-500">Build</dt>
-            <dd className="font-semibold text-slate-900">{appInfo.buildVersion || '…'}</dd>
+            <dd className="font-semibold text-slate-900">{shownVersion(appInfo.buildVersion)}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-slate-500">Platform</dt>
@@ -859,20 +860,27 @@ function DiagnosticsSection({ appInfo }: { appInfo: AppInfo }) {
   )
 }
 
+function shownVersion(value: string): string {
+  const shown = deriveDisplayVersion(value)
+  return shown || '…'
+}
+
 function releaseStatusCopy(decision: ReleaseDecision): string {
+  const installed = deriveDisplayVersion(decision.installed)
+  const latest = deriveDisplayVersion(decision.latest)
   if (decision.kind === 'current') return "You're up to date"
   if (decision.kind === 'unknown') return "Couldn't check for updates"
   if (decision.kind === 'downgrade_blocked') {
-    return `This computer has ${decision.installed}. Published release is ${decision.latest}. Downgrade is not offered.`
+    return `This computer has ${installed}. Published release is ${latest}. Downgrade is not offered.`
   }
   if (decision.canInstall) {
     return decision.kind === 'update_mandatory'
-      ? `Version ${decision.latest} is required.`
-      : `Version ${decision.latest} is available.`
+      ? `Version ${latest} is required.`
+      : `Version ${latest} is available.`
   }
   return decision.kind === 'update_mandatory'
-    ? `Version ${decision.latest} is required. The installer is not available to download yet.`
-    : `Version ${decision.latest} is published. The installer is not available to download yet.`
+    ? `Version ${latest} is required. The installer is not available to download yet.`
+    : `Version ${latest} is published. The installer is not available to download yet.`
 }
 
 function AboutSection({ appInfo }: { appInfo: AppInfo }) {
@@ -941,8 +949,8 @@ function AboutSection({ appInfo }: { appInfo: AppInfo }) {
           </div>
         </div>
         <dl className="mt-3">
-          <SettingsRow label="Version" value={appInfo.version || '…'} />
-          <SettingsRow label="Build" value={appInfo.buildVersion || '…'} />
+          <SettingsRow label="Version" value={shownVersion(appInfo.version)} />
+          <SettingsRow label="Build" value={shownVersion(appInfo.buildVersion)} />
         </dl>
         {desktop ? (
           <div className="mt-4 border-t border-slate-200 pt-4">

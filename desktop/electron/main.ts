@@ -16,6 +16,7 @@ import {
   Tray,
 } from 'electron'
 import { brand } from '@suhuella/brand'
+import { deriveDisplayVersion } from '@suhuella/product/lib/display-version.ts'
 import { isCustomizableIconId } from '@suhuella/product/lib/source-appearance.ts'
 import {
   cancelIndexScan,
@@ -204,7 +205,7 @@ function applyAboutPanel(): void {
   const icon = appIconImage()
   app.setAboutPanelOptions({
     applicationName: brand.desktopProductName,
-    applicationVersion: app.getVersion(),
+    applicationVersion: deriveDisplayVersion(app.getVersion()),
     version: getBuildVersion(),
     copyright: `© ${brand.displayName}`,
     credits: `${brand.displayName} Desktop`,
@@ -912,7 +913,7 @@ function showAboutDialog(): void {
     title: `About ${brand.displayName}`,
     message: brand.displayName,
     detail: [
-      `${brand.displayName} ${app.getVersion()} (${getBuildVersion()})`,
+      `${brand.displayName} ${deriveDisplayVersion(app.getVersion())} (${getBuildVersion()})`,
       getOsComputerName(),
       '',
       `${brand.displayName} Desktop`,
