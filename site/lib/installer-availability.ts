@@ -1,5 +1,5 @@
 import type { InstallerUrls } from "./downloads.ts";
-import { publicReleaseAliases } from "@suhuella/product/lib/release-lifecycle";
+import { publicReleaseAliases } from "../../packages/product/src/lib/release-lifecycle.ts";
 
 export type VisibleInstallers = {
   windows?: string;

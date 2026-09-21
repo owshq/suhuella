@@ -1,4 +1,5 @@
 import { brand } from "@suhuella/brand";
+import { deriveDisplayVersion } from "../../packages/product/src/lib/display-version.ts";
 import { visibleInstallers } from "./installer-availability.ts";
 import type { ReleaseManifest } from "./release-manifest.ts";
 
@@ -30,9 +31,10 @@ export function catalogChannelKey(
 export function buildDownloadCatalogRows(
   release: ReleaseManifest | null,
 ): DownloadCatalogRow[] {
-  const version = release?.version ?? brand.release.version;
+  const releaseVersion = release?.version ?? brand.release.version;
+  const version = deriveDisplayVersion(releaseVersion);
   const channel = release?.channel ?? brand.release.channel;
-  const channelKey = catalogChannelKey(version, channel);
+  const channelKey = catalogChannelKey(releaseVersion, channel);
   const shown = visibleInstallers(release);
   const dateLabel = "—";
 

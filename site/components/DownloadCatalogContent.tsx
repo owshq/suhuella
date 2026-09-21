@@ -1,6 +1,7 @@
 "use client";
 
 import { brand } from "@suhuella/brand";
+import { displayVersionFromRelease } from "../../packages/product/src/lib/display-version.ts";
 import Link from "next/link";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { BrandMark } from "@/components/icons/BrandMark";
@@ -66,7 +67,7 @@ export function DownloadCatalogContent({
   const { t } = useLocale();
   const rows = buildDownloadCatalogRows(release);
   const installers = visibleInstallers(release);
-  const version = release?.version ?? brand.release.version;
+  const version = displayVersionFromRelease(release ?? { version: brand.release.version });
   const macAvailable = Boolean(installers.mac);
   const windowsAvailable = Boolean(installers.windows);
   const channelLabels = {

@@ -117,12 +117,12 @@ const es: Dictionary = {
     catalogSubtitle:
       "Aquí aparecerán las versiones públicas de SuHuella Desktop cuando estén disponibles. Mientras tanto, puedes usar SuHuella Web en este navegador.",
     catalogSubtitleWithMac:
-      "La descarga es pública. SuHuella Desktop Mac es pre-RC. Al abrir la app, la licencia comprueba edición y capacidades. El checkout de pago sigue desactivado.",
+      "La descarga es pública. Al abrir la app, la licencia comprueba edición y capacidades. El checkout de pago sigue desactivado.",
     stateWebTitle: "SuHuella Web",
     stateWebAvailable: "Disponible ahora",
     stateWebAction: "Abrir SuHuella",
     stateDesktopTitle: "SuHuella Desktop",
-    stateDesktopUnavailable: "Todavía no disponible en esta pre-RC.",
+    stateDesktopUnavailable: "Todavía no disponible.",
     stateDesktopNoInstallers:
       "No hay instaladores públicos para Mac o Windows en este momento.",
     stateMacTitle: "SuHuella Desktop Mac",
@@ -131,7 +131,7 @@ const es: Dictionary = {
     stateWindowsTitle: "SuHuella Desktop Windows",
     stateWindowsUnavailable: "Aún no disponible",
     catalogUnsignedNote:
-      "macOS puede mostrar un aviso de seguridad porque esta build pre-RC no está notarizada.",
+      "macOS puede mostrar un aviso de seguridad porque esta build no está notarizada.",
     activationNote:
       "Puedes descargar una versión pública cuando esté disponible. Al abrir SuHuella, la licencia comprueba edición, dispositivos y capacidades. El checkout de pago sigue desactivado.",
     viewPlans: "Ver planes",
@@ -146,7 +146,7 @@ const es: Dictionary = {
     platformWindows: "Windows",
     statusAvailable: "Disponible",
     statusUnavailable: "No disponible",
-    channelPreRc: "pre-RC",
+    channelPreRc: "Beta",
     channelStable: "stable",
     channelBeta: "beta",
     actionOpen: "Abrir",
@@ -382,12 +382,12 @@ const en: Dictionary = {
     catalogSubtitle:
       "Public SuHuella Desktop versions will appear here when they are available. For now, you can use SuHuella Web in this browser.",
     catalogSubtitleWithMac:
-      "The download is public. SuHuella Desktop Mac is pre-RC. When you open the app, the license checks edition and capabilities. Paid checkout stays off.",
+      "The download is public. When you open the app, the license checks edition and capabilities. Paid checkout stays off.",
     stateWebTitle: "SuHuella Web",
     stateWebAvailable: "Available now",
     stateWebAction: "Open SuHuella",
     stateDesktopTitle: "SuHuella Desktop",
-    stateDesktopUnavailable: "Not available in this pre-RC.",
+    stateDesktopUnavailable: "Not available yet.",
     stateDesktopNoInstallers:
       "There are no public Mac or Windows installers yet.",
     stateMacTitle: "SuHuella Desktop Mac",
@@ -396,7 +396,7 @@ const en: Dictionary = {
     stateWindowsTitle: "SuHuella Desktop Windows",
     stateWindowsUnavailable: "Not available yet",
     catalogUnsignedNote:
-      "macOS may show a security warning because this pre-RC build is not notarized.",
+      "macOS may show a security warning because this build is not notarized.",
     activationNote:
       "You can download a public version when it is available. When you open SuHuella, the license checks edition, devices, and capabilities. Paid checkout stays off.",
     viewPlans: "View plans",
@@ -411,7 +411,7 @@ const en: Dictionary = {
     platformWindows: "Windows",
     statusAvailable: "Available",
     statusUnavailable: "Not available yet",
-    channelPreRc: "pre-RC",
+    channelPreRc: "Beta",
     channelStable: "stable",
     channelBeta: "beta",
     actionOpen: "Open",
