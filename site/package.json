@@ -13,6 +13,7 @@
     "test:license": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/license-audit-check.ts",
     "test:download-page": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/download-page-semantics-check.ts",
     "test:desktop-artifacts": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/desktop-release-artifacts-check.ts",
+    "test:application-lifecycle": "node --experimental-strip-types --disable-warning=ExperimentalWarning lib/application-lifecycle-check.ts",
     "test:app-modal-shell": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/route-overlay-check.ts",
     "test:brand-theme": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning ../brands/brand-theme-tokens-check.ts",
     "test:browser-connect": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning lib/browser-connect-source-check.ts",

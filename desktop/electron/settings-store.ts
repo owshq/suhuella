@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   lastLearnedNewFiles: null,
   lastLearnedUpdatedFolders: null,
   firstRunCompleted: false,
-  launchAtLogin: true,
+  launchAtLogin: false,
   welcomeNotificationShown: false,
   knowledgeSourcesEnabled: { ...DEFAULT_KNOWLEDGE_SOURCES_ENABLED },
   recentFolders: [],

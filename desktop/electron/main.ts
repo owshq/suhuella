@@ -159,6 +159,7 @@ let settingsWindow: BrowserWindow | null = null
 let onboardingWindow: BrowserWindow | null = null
 let suggestionWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let trayAvailable = false
 let isQuitting = false
 let currentSuggestion: SuggestionPayload | null = null
 let restoreAfterSuggestion: 'settings' | 'onboarding' | null = null
@@ -239,9 +240,35 @@ function isWindowVisible(window: BrowserWindow | null): boolean {
   return Boolean(window && !window.isDestroyed() && window.isVisible())
 }
 
+function shouldKeepRunningInBackground(): boolean {
+  if (process.platform === 'darwin') return true
+  // Packaged Windows must stay alive for the Save As helper even if tray creation fails.
+  if (process.platform === 'win32' && app.isPackaged) return true
+  return trayAvailable && Boolean(tray && !tray.isDestroyed())
+}
+
+function hideMainWindow(window: BrowserWindow): void {
+  // Without a tray icon, hiding leaves no recovery path on Windows — minimize instead.
+  if (process.platform === 'win32' && !trayAvailable) {
+    window.minimize()
+    return
+  }
+  window.hide()
+  applyDockPolicy()
+}
+
+function handleMainWindowClose(event: Electron.Event, window: BrowserWindow | null): void {
+  if (isQuitting || !window || window.isDestroyed()) return
+  if (!shouldKeepRunningInBackground()) return
+  event.preventDefault()
+  hideMainWindow(window)
+}
+
 function applyLaunchAtLogin(enabled: boolean): void {
   app.setLoginItemSettings({
     openAtLogin: enabled,
+    // APPLICATION-LIFECYCLE-001: login item opens the window — never start hidden by default.
+    ...(process.platform === 'darwin' ? { openAsHidden: false } : {}),
   })
 }
 
@@ -383,11 +410,7 @@ async function createSettingsWindow(
   settingsWindow.setTitle(brand.displayName)
 
   settingsWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      settingsWindow?.hide()
-      applyDockPolicy()
-    }
+    handleMainWindowClose(event, settingsWindow)
   })
 
   settingsWindow.on('hide', () => applyDockPolicy())
@@ -438,11 +461,7 @@ async function createOnboardingWindow(): Promise<BrowserWindow> {
   })
 
   onboardingWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      onboardingWindow?.hide()
-      applyDockPolicy()
-    }
+    handleMainWindowClose(event, onboardingWindow)
   })
 
   onboardingWindow.on('hide', () => applyDockPolicy())
@@ -1020,47 +1039,74 @@ function applyTrayActivity(progress: IndexScanProgress): void {
   }
 }
 
-function createTray(): void {
-  tray = new Tray(createTrayImage())
-  applyTrayActivity(getScanProgress())
-  onScanProgress(applyTrayActivity)
-  const menu: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: `Open ${brand.displayName}`,
-      click: () => {
-        void openSettingsOrOnboarding()
-      },
-    },
-    {
-      label: 'Settings',
-      click: () => openPreferences(),
-    },
-  ]
-  if (isDevelopmentMode()) {
-    menu.push({
-      label: 'Preview Save As',
-      accelerator: PREVIEW_SHORTCUT,
-      click: () => {
-        void showPreviewSuggestions()
-      },
-    })
+/** Validation-only: set SUHUELLA_DESKTOP_VALIDATE_TRAY_UNAVAILABLE=1 before launch. Not a product setting. */
+function trayUnavailableForcedForValidation(): boolean {
+  return process.env.SUHUELLA_DESKTOP_VALIDATE_TRAY_UNAVAILABLE === '1'
+}
+
+function destroyTray(): void {
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy()
   }
-  menu.push(
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        isQuitting = true
-        app.quit()
+  tray = null
+  trayAvailable = false
+}
+
+function createTray(): void {
+  if (trayUnavailableForcedForValidation()) {
+    console.warn(
+      '[suhuella] tray skipped — SUHUELLA_DESKTOP_VALIDATE_TRAY_UNAVAILABLE=1 (validation only)',
+    )
+    destroyTray()
+    return
+  }
+
+  try {
+    tray = new Tray(createTrayImage())
+    applyTrayActivity(getScanProgress())
+    onScanProgress(applyTrayActivity)
+    const menu: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: `Open ${brand.displayName}`,
+        click: () => {
+          void openSettingsOrOnboarding()
+        },
       },
-    },
-  )
-  tray.setContextMenu(Menu.buildFromTemplate(menu))
-  tray.on('click', () => {
-    if (process.platform === 'win32') {
-      void openSettingsOrOnboarding()
+      {
+        label: 'Settings',
+        click: () => openPreferences(),
+      },
+    ]
+    if (isDevelopmentMode()) {
+      menu.push({
+        label: 'Preview Save As',
+        accelerator: PREVIEW_SHORTCUT,
+        click: () => {
+          void showPreviewSuggestions()
+        },
+      })
     }
-  })
+    menu.push(
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    )
+    tray.setContextMenu(Menu.buildFromTemplate(menu))
+    tray.on('click', () => {
+      if (process.platform === 'win32') {
+        void openSettingsOrOnboarding()
+      }
+    })
+    trayAvailable = !tray.isDestroyed()
+  } catch (error) {
+    console.error('[suhuella] tray unavailable — close will exit on this host', error)
+    destroyTray()
+  }
 }
 
 function registerIpc(): void {
@@ -1081,7 +1127,7 @@ function registerIpc(): void {
       osVersion: getOsVersionLabel(),
       capabilities: {
         saveAs: platform === 'win32',
-        tray: true,
+        tray: trayAvailable,
         openFolder: true,
         reveal: true,
         filesystem: true,
@@ -1779,7 +1825,7 @@ if (!gotLock) {
       return
     }
 
-    // Open the full app on launch. Closing the window hides to the tray instead.
+    // APPLICATION-LIFECYCLE-001: Launch always shows the main window.
     void openSettingsOrOnboarding()
   })
 }
@@ -1789,10 +1835,13 @@ app.on('before-quit', () => {
   saveDialogWatcher?.stop()
   saveDialogWatcher = null
   globalShortcut.unregisterAll()
+  destroyTray()
 })
 
 app.on('window-all-closed', () => {
-  // Stay in the tray until the user quits.
+  if (!shouldKeepRunningInBackground()) {
+    app.quit()
+  }
 })
 
 app.on('activate', () => {
