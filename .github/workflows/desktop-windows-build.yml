@@ -7,6 +7,11 @@ on:
         description: Branch or tag to build
         required: false
         default: main
+      publish_release:
+        description: Upload installer to GitHub Release (off for candidate validation builds)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -80,8 +85,39 @@ jobs:
           path: ${{ steps.installer.outputs.path }}
           retention-days: 14
 
+      - name: Write SHA256 sidecar
+        id: sha
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "${{ steps.installer.outputs.path }}" -Algorithm SHA256).Hash.ToLower()
+          $sidecar = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.win_name }}.sha256"
+          Set-Content -Path $sidecar -Value "$hash  ${{ steps.release.outputs.win_name }}"
+          "path=$sidecar" >> $env:GITHUB_OUTPUT
+          "digest=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Candidate build record
+        shell: pwsh
+        run: |
+          $size = (Get-Item "${{ steps.installer.outputs.path }}").Length
+          @(
+            "## Windows candidate build",
+            "",
+            "| Field | Value |",
+            "| --- | --- |",
+            "| git_ref | ${{ github.event.inputs.git_ref || 'main' }} |",
+            "| commit | ${{ github.sha }} |",
+            "| version | ${{ steps.release.outputs.version }} |",
+            "| filename | ${{ steps.release.outputs.win_name }} |",
+            "| size_bytes | $size |",
+            "| sha256 | ${{ steps.sha.outputs.digest }} |",
+            "| publish_release | ${{ github.event.inputs.publish_release }} |"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
       - name: Attach to GitHub Release
+        if: github.event.inputs.publish_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber
+        run: |
+          gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber
+          gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.sha.outputs.path }}" --clobber

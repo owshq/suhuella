@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readProductSource } from './check-source.ts'
 import { runActivityChecks } from './activity.ts'
 import { runAutopilotChecks } from './autopilot.ts'
 import { runByokChecks } from './byok-check.ts'
@@ -16,11 +15,7 @@ import { runPlanPresentationChecks } from '@suhuella/product/lib/plan-presentati
 import './license-status-check.ts'
 
 function readOrganiseSource(relativePath: string): string {
-  const candidates = [join(process.cwd(), relativePath), join(process.cwd(), 'desktop', relativePath)]
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return readFileSync(candidate, 'utf8')
-  }
-  throw new Error(`missing source: ${relativePath}`)
+  return readProductSource(relativePath)
 }
 
 function runOrganiseUxSourceChecks(): void {

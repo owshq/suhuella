@@ -205,7 +205,7 @@ function GeneralSection({
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[var(--brand-accent)] accent-[var(--brand-accent)]"
-              checked={settings?.launchAtLogin ?? true}
+              checked={settings?.launchAtLogin ?? false}
               onChange={(event) => onLaunchAtLoginChange(event.target.checked)}
             />
           </label>

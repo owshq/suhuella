@@ -42,16 +42,16 @@ const es: Dictionary = {
       "Versión inicial: algunas aplicaciones pueden no mostrar sugerencias todavía. Puedes seguir guardando como siempre.",
     support: "¿Necesitas ayuda? support@suhuella.com",
     trayNote:
-      "SuHuella espera en la bandeja del sistema y solo aparece cuando lo necesitas.",
+      "Al abrir SuHuella aparece la ventana. Si la cierras, sigue en la bandeja y continúa aprendiendo.",
     installTitle: "Qué hacer ahora",
     installSteps: [
       "Descarga el instalador de tu sistema.",
       "Si Windows o macOS avisan que no está firmado, continúa: Más información → Ejecutar de todos modos, o clic derecho → Abrir.",
-      "Abre SuHuella. No aparece una ventana: busca el icono en la bandeja (Windows) o en la barra de menús (macOS).",
-      "Pulsa la notificación o el icono, añade las carpetas que ya usas y sigue guardando.",
+      "Abre SuHuella. Aparece la ventana principal.",
+      "Añade las carpetas que ya usas y sigue guardando. Si cierras la ventana, SuHuella sigue en la bandeja.",
     ],
     unsignedNote:
-      "El instalador aún no está firmado. La advertencia del sistema es esperada. Luego SuHuella espera en la bandeja.",
+      "El instalador aún no está firmado. La advertencia del sistema es esperada. Luego abre SuHuella: aparece la ventana.",
     downloadUnavailableTitle: "La descarga aún no está lista",
     downloadUnavailableDescription:
       "Tu pago está confirmado. El instalador no está listo todavía. Puedes seguir: escríbenos a support@suhuella.com y te lo enviamos.",
@@ -110,7 +110,7 @@ const es: Dictionary = {
     mac: "macOS",
     orBuy: "¿Aún no has comprado?",
     trayNote:
-      "Espera en la bandeja del sistema y solo aparece cuando lo necesitas.",
+      "Al abrir SuHuella aparece la ventana. Si la cierras, sigue en la bandeja.",
     unavailable: "Aún no disponible",
     comingSoon: "La app de escritorio estará disponible pronto. Mientras tanto, ábrela en este navegador.",
     catalogTitle: "Descargas de SuHuella",
@@ -307,16 +307,16 @@ const en: Dictionary = {
       "Early version: some apps may not show suggestions yet. You can keep saving as usual.",
     support: "Need help? support@suhuella.com",
     trayNote:
-      "SuHuella waits in the tray and only appears when you need it.",
+      "When you open SuHuella, the window appears. If you close it, SuHuella stays in the tray and keeps learning.",
     installTitle: "What to do next",
     installSteps: [
       "Download the installer for your system.",
       "If Windows or macOS warns that it is unsigned, continue: More info → Run anyway, or right-click → Open.",
-      "Open SuHuella. No window appears — look for the icon in the tray (Windows) or the menu bar (macOS).",
-      "Click the notification or the icon, add the folders you already use, then keep saving.",
+      "Open SuHuella. The main window appears.",
+      "Add the folders you already use and keep saving. If you close the window, SuHuella stays in the tray.",
     ],
     unsignedNote:
-      "The installer is not signed yet. The system warning is expected. After that, SuHuella waits in the tray.",
+      "The installer is not signed yet. The system warning is expected. Then open SuHuella — the window appears.",
     downloadUnavailableTitle: "The download is not ready yet",
     downloadUnavailableDescription:
       "Your payment is confirmed. The installer is not ready yet. You can continue: email support@suhuella.com and we will send it to you.",
@@ -375,7 +375,7 @@ const en: Dictionary = {
     mac: "macOS",
     orBuy: "Haven't purchased yet?",
     trayNote:
-      "It waits in the tray and only appears when you need it.",
+      "When you open SuHuella, the window appears. If you close it, SuHuella stays in the tray.",
     unavailable: "Not ready yet",
     comingSoon: "The desktop app is coming soon. Until then, open SuHuella in this browser.",
     catalogTitle: "SuHuella downloads",

@@ -98,7 +98,7 @@ assert(cards[0]?.current === true, 'free is current')
 assert(cards.some((card) => card.cta === 'Buy once'), 'lifetime buy once')
 assert(cards.some((card) => card.cta === 'Subscribe'), 'monthly subscribe')
 assert(cards.some((card) => card.cta === 'Contact sales'), 'business contact sales')
-assert(cards.some((card) => card.summary.includes('3 devices')), 'personal device limit')
+assert(cards.some((card) => card.summary.includes('One device')), 'personal device limit')
 assert(!cards.some((card) => card.cta === 'Upgrade'), 'no generic upgrade')
 assert(!cards.some((card) => String(card.id) === 'partner_annual' || card.title.toLowerCase().includes('partner')), 'partner license is not an end-customer plan card')
 assert(checkoutPath('lifetime') === '/checkout/lifetime', 'lifetime CTA resolves lifetime checkout')
@@ -116,7 +116,7 @@ assert(!unavailablePlanMessage('monthly').toLowerCase().includes('lifetime'), 'm
 assert(licenseErrorMessage('no_license') === 'No active license was found for this email.', 'no license copy')
 assert(licenseErrorMessage('unknown_email') === 'No active license was found for this email.', 'unknown email copy')
 assert(
-  licenseErrorMessage('device_limit').includes('3 devices'),
+  licenseErrorMessage('device_limit').includes('1 device'),
   'device limit copy',
 )
 assert(
