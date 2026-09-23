@@ -34,7 +34,8 @@ jobs:
         run: |
           npm install --prefix packages/product --ignore-scripts
           npm install --prefix brands --ignore-scripts
-          npm install --prefix desktop
+          npm install --prefix desktop --ignore-scripts
+          node desktop/node_modules/electron/install.js
 
       - name: Prepare brand entry
         run: |
