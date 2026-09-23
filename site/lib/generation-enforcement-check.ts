@@ -384,7 +384,7 @@ async function runGenerationEnforcementCheck(): Promise<void> {
     setBrowserRegistry(null);
 
     const wrangler = readFileSync(join(siteRoot, "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "no checkout deploy");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout enabled in wrangler");
     assert(!wrangler.includes("COMMERCIAL_GENERATION_ENFORCEMENT_ENABLED"), "enforcement not in worker env");
 
     const indexer = readFileSync(join(siteRoot, "../desktop/electron/indexer.ts"), "utf8");

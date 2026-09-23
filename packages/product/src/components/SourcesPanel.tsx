@@ -507,7 +507,7 @@ export function SourcesPanel({
   developerSources?: ReactNode
 }) {
   const { locale, t } = useAppLocale()
-  const [viewMode, setViewMode] = useState<SourceLayout>('list')
+  const [viewMode, setViewMode] = useState<SourceLayout>('grid')
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [pendingWait, setPendingWait] = useState<{

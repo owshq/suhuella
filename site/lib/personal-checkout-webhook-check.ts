@@ -159,7 +159,7 @@ async function runPersonalCheckoutWebhookCheck(): Promise<void> {
 
   try {
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "commercial checkout switch stays off in wrangler");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial checkout switch is on in wrangler");
     assert(isPaidCheckoutPubliclyEnabled() === false, "this check does not enable public checkout");
 
     const dbasenet = JSON.parse(

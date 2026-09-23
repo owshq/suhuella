@@ -82,7 +82,7 @@ async function runLifetimeUpgradeProductionActivationCheck(): Promise<void> {
     assert(open.allowed === true, "audit opens when full controlled window env is set");
 
     const wrangler = readFileSync(join(siteRoot, "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "wrangler default stays off");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
     assert(!wrangler.includes('"LIFETIME_UPGRADE_CHECKOUT_ENABLED": "true"'), "upgrade not hard-open in wrangler");
 
     console.log("lifetime-upgrade-production-activation-check: PASS");

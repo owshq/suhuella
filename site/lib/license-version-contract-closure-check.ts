@@ -297,7 +297,7 @@ async function runLicenseVersionContractClosureCheck(): Promise<void> {
 
     const wrangler = readFileSync(join(siteRoot, "wrangler.jsonc"), "utf8");
     assert(!wrangler.includes('"COMMERCIAL_GENERATION_ENFORCEMENT_ENABLED": "true"'), "enforcement flag unchanged");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "commercial checkout flag unchanged");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial checkout flag on");
   } finally {
     globalThis.fetch = fetch;
     resetLicensePersistenceStoreForTests();

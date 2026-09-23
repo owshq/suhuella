@@ -607,7 +607,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     await assertRawCardDataIsRejected();
 
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "commercial checkout switch stays off in wrangler");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial checkout switch is on in wrangler");
     assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout switch is explicitly off");
     assert(wrangler.includes('"CLOUD_INTEGRATIONS_ENABLED": "false"'), "cloud integrations stay gated off");
     assertNoMatch(wrangler, /buy\.stripe\.com/, "wrangler has no Payment Links");

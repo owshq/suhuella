@@ -239,7 +239,7 @@ async function run(): Promise<void> {
   setPartnerApplicationStoreForTests(createMemoryPartnerApplicationStore());
 
   const wrangler = readFileSync(path.join(siteRoot, "wrangler.jsonc"), "utf8");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
   assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout flag stays false");
   assert(isPartnerCheckoutPubliclyEnabled() === false, "partner checkout is not public");
 

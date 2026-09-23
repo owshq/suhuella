@@ -27,7 +27,7 @@ function read(relative: string): string {
 
 function runLicenseCopyAuditCheck(): void {
   const wrangler = read("wrangler.jsonc");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "paid checkout stays off");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "paid checkout is on");
   assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout stays off");
   assert(lifetimeUpgradeSaleEnabled() === false, "lifetime upgrade sale stays closed");
   assert(STRIPE_CATALOG.lifetime_upgrade.checkoutEnabled === false, "lifetime upgrade catalog off");

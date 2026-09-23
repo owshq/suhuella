@@ -366,7 +366,7 @@ async function runCommercialGenerationsFoundationCheck(): Promise<void> {
     assert(d1After?.commercialGenerationId === FIXTURE_COMMERCIAL_GENERATION.id, "local D1 survives reopen");
 
     const wrangler = readFileSync(join(siteRoot, "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "remote personal checkout stays off");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
     assert(
       !wrangler.includes("COMMERCIAL_GENERATION_ENFORCEMENT_ENABLED"),
       "remote enforcement flag not deployed",

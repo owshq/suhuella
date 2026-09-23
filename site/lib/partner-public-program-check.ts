@@ -473,7 +473,7 @@ async function runPartnerPublicProgramCheck(): Promise<void> {
 
   const wrangler = readFileSync(path.join(siteRoot, "wrangler.jsonc"), "utf8");
   assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout flag stays false");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
 
   if (previous.NODE_ENV === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = previous.NODE_ENV;

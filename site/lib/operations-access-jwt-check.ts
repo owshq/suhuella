@@ -218,7 +218,7 @@ async function main() {
     path.join(path.dirname(fileURLToPath(import.meta.url)), "../wrangler.jsonc"),
     "utf8",
   );
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
 
   console.log("OPERATIONS access JWT check passed");
 }

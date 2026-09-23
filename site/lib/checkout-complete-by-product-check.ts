@@ -311,7 +311,7 @@ async function runCheckoutCompleteByProductCheck(): Promise<void> {
   assert(rejected?.status === 400, "PAN rejected on checkout routes");
 
   const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "commercial switch stays off in wrangler");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial switch is on in wrangler");
   assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner switch stays off in wrangler");
 
   const doc = readFileSync(join(process.cwd(), "../CHECKOUT-COMPLETE-BY-PRODUCT-001.md"), "utf8");

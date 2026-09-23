@@ -44,7 +44,7 @@ function tryRemoteMigrationList(): { ok: true; output: string } | { ok: false; r
 function runPartnerProductionBlockersCheck(): void {
   const wrangler = readWrangler();
   assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout stays off in wrangler");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off in wrangler");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
 
   for (const migration of PARTNER_MIGRATIONS) {
     const sql = readFileSync(path.join(siteRoot, "migrations", migration.file), "utf8");
@@ -55,9 +55,9 @@ function runPartnerProductionBlockersCheck(): void {
   console.log("PARTNER-PUBLIC-PROGRAM-001 production blockers — code preflight PASS");
   console.log("B1 (D1 0009–0010 remote): operator must confirm `migrations list --remote` shows none pending.");
   console.log("");
-  console.log("Checkout flags (must stay off until commercial enablement):");
-  console.log("  PARTNER_CHECKOUT_ENABLED=false");
-  console.log("  PAID_CHECKOUT_ENABLED=false");
+  console.log("Checkout flags:");
+  console.log("  PARTNER_CHECKOUT_ENABLED=false (partner annual still gated)");
+  console.log("  PAID_CHECKOUT_ENABLED=true (personal Lifetime/Monthly live on suhuella.com)");
   console.log("");
   console.log("Operator steps still manual:");
   console.log("  1. wrangler login  (account with D1 suhuella-license access)");

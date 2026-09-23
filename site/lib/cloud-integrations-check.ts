@@ -634,7 +634,7 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     assert(childrenRoute.includes("browseCloudChildren"), "children uses browse service");
 
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
     assert(wrangler.includes('"CLOUD_INTEGRATIONS_ENABLED": "false"'), "cloud integrations stay gated");
     assert(!wrangler.includes("CLOUD_GOOGLE_DRIVE_CLIENT_SECRET"), "no oauth secrets in wrangler");
     assert(!wrangler.includes("CLOUD_ONEDRIVE_CLIENT_SECRET"), "no onedrive secrets in wrangler");

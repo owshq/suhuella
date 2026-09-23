@@ -281,7 +281,7 @@ const es: Dictionary = {
       "Para cualquier duda: support@suhuella.com",
     ],
     termsParagraphs: [
-      "SuHuella es una compra digital de pago único, sin suscripción. El importe final se muestra en el checkout de Stripe antes de pagar.",
+      "Lifetime y Monthly se pagan en Stripe Checkout. El importe final se muestra antes de pagar.",
       "Esta es una versión inicial. El producto puede cambiar y algunas aplicaciones pueden no ser compatibles todavía.",
       "No garantizamos que la app de escritorio, cuando exista, detecte la ventana Guardar / Guardar como en todos los programas.",
       "SuHuella sugiere una carpeta de destino y tú confirmas. En el navegador lo haces desde Modo Plan. SuHuella no mueve archivos por ti.",
@@ -587,7 +587,7 @@ const en: Dictionary = {
       "Questions: support@suhuella.com",
     ],
     termsParagraphs: [
-      "SuHuella is a one-time digital purchase with no subscription. The final amount is shown in Stripe checkout before you pay.",
+      "Lifetime and Monthly are paid on Stripe Checkout. The final amount is shown before you pay.",
       "This is an early version. The product may change, and some apps may not work yet.",
       "We do not guarantee that the desktop app, when it exists, will detect the Save / Save As window in every application.",
       "SuHuella suggests a destination folder and you confirm. In the browser you do that from Plan Mode. SuHuella does not move files for you.",
