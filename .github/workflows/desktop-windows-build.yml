@@ -56,6 +56,15 @@ jobs:
           "win_name=SuHuella-$($manifest.version).exe" >> $env:GITHUB_OUTPUT
           "tag=v$($manifest.version)" >> $env:GITHUB_OUTPUT
 
+      - name: Resolve license verify public keys
+        shell: pwsh
+        run: |
+          if (-not $env:SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS) {
+            Write-Warning "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS secret unset — ephemeral test SPKI for candidate build only (not production Worker keys)"
+            $pub = node desktop/scripts/emit-candidate-license-public-key.mjs
+            "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS=$pub" >> $env:GITHUB_ENV
+          }
+
       - name: Build Windows installer
         run: npm run package:win --prefix desktop
 
