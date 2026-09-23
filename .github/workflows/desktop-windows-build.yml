@@ -36,11 +36,13 @@ jobs:
           npm install --prefix desktop --ignore-scripts
           npm install --prefix site --ignore-scripts
 
+      - name: Prepare brand entry
+        run: |
+          node brands/project-brand.mjs
+          node brands/project-site.mjs
+
       - name: Health (build coherence)
         run: npm run health:ci
-
-      - name: Prepare brand entry
-        run: node brands/project-site.mjs
 
       - name: Read release version
         id: release
