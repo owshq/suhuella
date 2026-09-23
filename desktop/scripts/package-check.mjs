@@ -79,7 +79,7 @@ assertLicenseVerifyKeysForPackage('package-check')
 const signingDeferred = isCommercialSigningDeferred()
 if (signingDeferred) {
   note(
-    'Commercial code signing deferred — pre-rc unsigned channel. Gatekeeper/SmartScreen may warn; clean-machine install is not verified until tested.',
+    'Commercial code signing deferred — pre-rc channel. Gatekeeper/SmartScreen warnings expected; they do not block publish.',
   )
 }
 

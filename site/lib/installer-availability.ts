@@ -60,7 +60,11 @@ export function publicReleasePayload(release: {
       windows: {
         authenticode: string;
       };
-      cleanMachineInstallVerified: boolean;
+      osInstall?: {
+        mac?: { gatekeeperWarningExpected: boolean; installPath: string };
+        windows?: { smartScreenWarningExpected: boolean; installPath: string };
+      };
+      publishBlockedByCommercialCodeSigning?: boolean;
     };
   };
   windows: string;

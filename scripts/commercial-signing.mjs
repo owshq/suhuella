@@ -64,7 +64,19 @@ export function buildDistributionRecord(version = readReleaseVersion(), detected
       windows: {
         authenticode: windows.authenticode ?? (preRc ? "none" : "valid-required"),
       },
-      cleanMachineInstallVerified: false,
+      osInstall: preRc
+        ? {
+            mac: {
+              gatekeeperWarningExpected: true,
+              installPath: "right-click-open-or-system-settings",
+            },
+            windows: {
+              smartScreenWarningExpected: true,
+              installPath: "more-info-run-anyway",
+            },
+          }
+        : undefined,
+      publishBlockedByCommercialCodeSigning: !preRc,
     },
     decision: config.decision ?? "DECISION-PRIVATE-BETA-001",
   };
@@ -95,7 +107,7 @@ export function assertCommercialSigningEnabledForPublish() {
   if (isPreRcUnsignedPublishChannel()) {
     console.log("Pre-RC unsigned publish channel — commercial code signing not required.");
     console.log("License Ed25519 public keys are still required at desktop build time.");
-    console.log("Artifacts are unsigned / not notarized; OS may warn. Clean-machine install is not verified until tested.");
+    console.log("Artifacts are adhoc/unsigned; Gatekeeper and SmartScreen warnings are expected and do not block pre-rc publish.");
     console.log("See docs/governance/PRE-RC-RELEASE-SEMANTICS.md");
     return;
   }

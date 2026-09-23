@@ -24,12 +24,26 @@ export type ReleaseWindowsCodeSigning = {
   authenticode: string;
 };
 
+export type ReleaseOsInstallExpectation = {
+  mac?: {
+    gatekeeperWarningExpected: boolean;
+    installPath: string;
+  };
+  windows?: {
+    smartScreenWarningExpected: boolean;
+    installPath: string;
+  };
+};
+
 export type ReleaseDistribution = {
   channel: string;
   commercialCodeSigning: {
     mac: ReleaseMacCodeSigning;
     windows: ReleaseWindowsCodeSigning;
-    cleanMachineInstallVerified: boolean;
+    osInstall?: ReleaseOsInstallExpectation;
+    publishBlockedByCommercialCodeSigning?: boolean;
+    /** @deprecated pre-rc — use osInstall; never a publish gate */
+    cleanMachineInstallVerified?: boolean;
   };
   decision?: string;
 };
@@ -181,7 +195,14 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
                   authenticode:
                     typeof signingRaw.windows === "string" ? signingRaw.windows.trim() : "unknown",
                 },
-            cleanMachineInstallVerified: signingRaw.cleanMachineInstallVerified === true,
+            ...(signingRaw.osInstall && typeof signingRaw.osInstall === "object"
+              ? { osInstall: signingRaw.osInstall as ReleaseOsInstallExpectation }
+              : {}),
+            publishBlockedByCommercialCodeSigning:
+              signingRaw.publishBlockedByCommercialCodeSigning === true,
+            ...(signingRaw.cleanMachineInstallVerified === true
+              ? { cleanMachineInstallVerified: true }
+              : {}),
           },
           ...(typeof distributionRaw.decision === "string" && distributionRaw.decision.trim()
             ? { decision: distributionRaw.decision.trim() }

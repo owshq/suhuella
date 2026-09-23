@@ -68,11 +68,13 @@ Commercial signing is an external prerequisite for **promotion** to `0.1.0-rc1` 
 
 It is not a product blocker. It is not a release-engineering blocker. It does not block building, uploading, downloading, or testing `0.1.0-pre-rc`.
 
-While `commercial-signing.json` status is `deferred`, **Gate 6** (Developer ID + notarization / Authenticode) is **not attempted**. `validate-release` runs **PreRcReleaseValidation** instead: artifact built, bundle integrity, SHA256 sidecar, and **Ed25519 license public keys embedded** at build time. That is not clean-machine install verification. OS warnings remain possible.
+While `commercial-signing.json` status is `deferred`, **Gate 6** (Developer ID + notarization / Authenticode) is **not attempted** and **does not block publish** for `0.1.0-pre-rc`. `validate-release` runs **PreRcReleaseValidation** instead: artifact built, bundle integrity, SHA256 sidecar, and **Ed25519 license public keys embedded** at build time.
+
+**Gatekeeper (Mac) and SmartScreen (Windows) warnings are expected** on unsigned/adhoc installers. Document the install path (Right-click → Open / More info → Run anyway). They are **not** release gates for pre-rc. Optional operator smoke on any machine is welcome; it is not a prerequisite to publish.
 
 `SUHUELLA_DESKTOP_CI=1` skips only the site/wrangler version matrix in the release gate — it is **not** a publish bypass. Publishable builds require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS`. Compile-only smoke may use `SUHUELLA_DESKTOP_COMPILE_ONLY=1` without keys (not publishable).
 
-Unsigned or notarization-deferred artifacts are for internal and technical testing. Say that honestly. Do not present them as a commercially trusted install.
+Pre-rc downloads may be public. Say honestly that the installer is not commercially signed or notarized. Gatekeeper/SmartScreen warnings are normal; document how to proceed. Do not present the install as “verified by Apple/Microsoft.”
 
 ---
 

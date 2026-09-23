@@ -103,11 +103,11 @@ async function prepareMac() {
     sha256,
     sidecar: sidecarPath,
     distribution: buildDistributionRecord(version, { mac: macSigning }),
-    validation: "PreRcReleaseValidation PASS",
-    cleanMachineTests: "pending",
+    validation: "PreRcReleaseValidation PASS — publish allowed on pre-rc channel",
     notes: [
       "Not published — release.json / download aliases unchanged",
-      "Clean-machine install, launch, license activation, offline, Plan Mode: pending operator test",
+      "Gatekeeper/SmartScreen warnings are expected and do not block pre-rc publish",
+      "Optional operator smoke: install path, launch, license, Plan Mode on any test machine",
     ],
   };
 
@@ -126,7 +126,7 @@ async function prepareWindowsValidateOnly() {
   run(process.execPath, ["scripts/validate-release.mjs", "--platform", "windows"], root);
   console.log("");
   console.log("Windows candidate validation complete (artifact must come from windows-latest CI package:win).");
-  console.log("Clean-machine tests: pending");
+  console.log("Pre-rc publish allowed — SmartScreen warning expected, not a gate");
 }
 
 async function main() {

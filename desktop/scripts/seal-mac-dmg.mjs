@@ -1,6 +1,6 @@
 /**
  * Sign + notarize + staple the shipping DMG when Developer ID credentials exist.
- * No-op for local adhoc builds (publish must still refuse those).
+ * No-op for local adhoc builds (pre-rc publish allowed without Developer ID seal).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -40,7 +40,7 @@ if (!existsSync(dmgPath)) {
 
 const signingIdentity = resolveMacCodesignIdentity();
 if (!isDeveloperIdIdentity(signingIdentity)) {
-  console.log("[dmg] skip seal — no Developer ID (local adhoc only; publish will refuse)");
+  console.log("[dmg] skip seal — no Developer ID (pre-rc adhoc publish allowed without notarization)");
   process.exit(0);
 }
 
