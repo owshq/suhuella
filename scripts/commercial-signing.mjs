@@ -9,6 +9,21 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const configPath = path.join(root, "brands/suhuella/commercial-signing.json");
+const releaseJsonPath = path.join(root, "brands/suhuella/release.json");
+
+export function readReleaseVersion() {
+  try {
+    const manifest = JSON.parse(readFileSync(releaseJsonPath, "utf8"));
+    return String(manifest.version ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** PRE-RC-RELEASE-SEMANTICS-001 — signing deferred does not block pre-rc publication. */
+export function isPreRcReleaseVersion(version = readReleaseVersion()) {
+  return version.includes("-pre-rc");
+}
 
 export function readCommercialSigningConfig() {
   try {
@@ -41,6 +56,12 @@ export function printCommercialSigningSkipped(platformLabel) {
 
 export function assertCommercialSigningEnabledForPublish() {
   if (!isCommercialSigningDeferred()) return;
+  if (isPreRcReleaseVersion()) {
+    console.log("Pre-RC publish allowed — commercial signing deferred (DECISION-PRIVATE-BETA-001).");
+    console.log("Unsigned / not notarized artifacts are for internal and technical testing only.");
+    console.log("See docs/governance/PRE-RC-RELEASE-SEMANTICS.md");
+    return;
+  }
   const config = readCommercialSigningConfig();
   console.error("Publish blocked — commercial signing intentionally deferred.");
   console.error(`Decision: ${config.decision ?? "DECISION-PRIVATE-BETA-001"}`);
