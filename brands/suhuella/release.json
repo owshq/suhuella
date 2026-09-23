@@ -9,9 +9,9 @@
     "mac": {
       "available": true,
       "url": "https://download.suhuella.com/latest/mac",
-      "sha256": "2db738fe4f11f9c3983274080c0b3dc9c9cdf7340560cb46a3a9ea0849003c4d",
-      "filename": "SuHuella-0.1.0-pre-rc.dmg",
-      "size": 131533425
+      "sha256": "749c4c39642fd5decf83727d77bb3fbfc3356daa0b9040e9de0a104188480412",
+      "filename": "SuHuella-0.1.0-pre-rc-749c4c39642f.dmg",
+      "size": 145764768
     },
     "windows": {
       "available": true,
