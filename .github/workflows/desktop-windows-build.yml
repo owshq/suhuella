@@ -29,12 +29,12 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Install brands + desktop
+      - name: Install monorepo deps
         shell: pwsh
         run: |
-          npm install --prefix brands
+          npm install --prefix packages/product --ignore-scripts
+          npm install --prefix brands --ignore-scripts
           npm install --prefix desktop --ignore-scripts
-          npm install --prefix site --ignore-scripts
 
       - name: Prepare brand entry
         run: |

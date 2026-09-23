@@ -18,6 +18,11 @@ import { fileURLToPath } from "node:url";
 import { root, runNodeScript } from "./health-lib.mjs";
 
 const isGate = process.argv.includes("--gate");
+const npmSpawnOptions = {
+  encoding: "utf8",
+  env: process.env,
+  shell: process.platform === "win32",
+};
 const gateIds = process.argv.includes("--ids")
   ? process.argv[process.argv.indexOf("--ids") + 1]?.split(",").map((id) => id.trim()).filter(Boolean)
   : null;
@@ -101,8 +106,7 @@ const GATE_RUNNERS = {
   "release-lifecycle": () =>
     spawnSync("npm", ["run", "test:release-lifecycle", "--prefix", "desktop"], {
       cwd: root,
-      encoding: "utf8",
-      env: process.env,
+      ...npmSpawnOptions,
     }),
 };
 
@@ -178,7 +182,7 @@ function meaningfulLine(output) {
 }
 
 function runNpmCheck(id, label, npmArgs) {
-  const result = spawnSync("npm", npmArgs, { cwd: root, encoding: "utf8", env: process.env });
+  const result = spawnSync("npm", npmArgs, { cwd: root, ...npmSpawnOptions });
   return result.status === 0
     ? okCheck(id, label, meaningfulLine(result.stderr || result.stdout || "").replace(/^\[.*?\]\s*/, "") || "passed")
     : actionCheck(id, label, meaningfulLine(result.stderr || result.stdout || "").slice(0, 160) || "check failed", actionFor(id));
