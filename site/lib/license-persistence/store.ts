@@ -1,5 +1,6 @@
 import { parseLicenseGrant } from "../license-entitlement.ts";
 import type { LicenseGrant } from "../license-context.ts";
+import type { CheckoutGenerationBinding } from "../commercial-generations/types.ts";
 import {
   emptyLicensePersistenceDocument,
   LicensePersistenceUnavailableError,
@@ -51,12 +52,10 @@ function parseDocument(value: unknown): LicensePersistenceDocument {
       ? (value.commercialGenerationPrices as LicensePersistenceDocument["commercialGenerationPrices"])
       : [],
     checkoutGenerationBindings: Array.isArray(value.checkoutGenerationBindings)
-      ? (value.checkoutGenerationBindings as LicensePersistenceDocument["checkoutGenerationBindings"])
-          .filter((row): row is NonNullable<typeof row> => row != null)
-          .map((row) => ({
-            ...row,
-            versionModelActiveAtBind: row.versionModelActiveAtBind === true,
-          }))
+      ? (value.checkoutGenerationBindings as CheckoutGenerationBinding[]).map((row) => ({
+          ...row,
+          versionModelActiveAtBind: row.versionModelActiveAtBind === true,
+        }))
       : [],
     licenseAcquisitions: Array.isArray(value.licenseAcquisitions)
       ? (value.licenseAcquisitions as LicensePersistenceDocument["licenseAcquisitions"])
