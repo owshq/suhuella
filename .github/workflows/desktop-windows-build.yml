@@ -51,7 +51,7 @@ jobs:
         run: |
           $manifest = Get-Content brands/suhuella/release.json | ConvertFrom-Json
           "version=$($manifest.version)" >> $env:GITHUB_OUTPUT
-          "win_name=SuHuella-Setup-$($manifest.version).exe" >> $env:GITHUB_OUTPUT
+          "win_name=SuHuella-$($manifest.version).exe" >> $env:GITHUB_OUTPUT
           "tag=v$($manifest.version)" >> $env:GITHUB_OUTPUT
 
       - name: Build Windows installer
@@ -61,19 +61,18 @@ jobs:
         id: installer
         shell: pwsh
         run: |
-          $patterns = @(
-            "desktop/.build/suhuella/release/SuHuella-Setup-*.exe",
-            "desktop/release/SuHuella Setup *.exe",
-            "desktop/release/SuHuella-Setup-*.exe"
+          $searchDirs = @(
+            "desktop/.build/suhuella/release",
+            "desktop/release"
           )
           $exe = $null
-          foreach ($p in $patterns) {
-            $dir = Split-Path $p -Parent
-            $filter = Split-Path $p -Leaf
-            if (Test-Path $dir) {
-              $found = Get-ChildItem -Path $dir -Filter $filter -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($found) { $exe = $found; break }
-            }
+          foreach ($dir in $searchDirs) {
+            if (-not (Test-Path $dir)) { continue }
+            $found = Get-ChildItem -Path $dir -Filter "SuHuella-*.exe" -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -notmatch "__uninstaller" } |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+            if ($found) { $exe = $found; break }
           }
           if (-not $exe) { throw "Installer not found under desktop/" }
           $dest = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.win_name }}"
