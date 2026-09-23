@@ -17,9 +17,9 @@
     "windows": {
       "available": true,
       "url": "https://download.suhuella.com/latest/win",
-      "sha256": "5b0d1ba2aab4b48f817ea87fb8e58193dc21b09e55aabc66bf3e6bcac4ba234b",
-      "filename": "SuHuella-Setup-0.1.0-pre-rc.exe",
-      "size": 226177159
+      "sha256": "15f27916c4d2fa7bdb408931fc6538806f15114594fe5c19a4c54e9772761106",
+      "filename": "SuHuella-0.1.0-pre-rc.exe",
+      "size": 233207713
     }
   },
   "minimumVersion": "0.1.0-pre-rc",
