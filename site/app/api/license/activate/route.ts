@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   if (!result.ok) {
     return Response.json(
-      { ok: false, error: result.error },
+      { ok: false, error: result.error, devices: result.devices ?? [] },
       { status: licenseErrorStatus(result.error), headers: { "Cache-Control": "no-store" } },
     );
   }

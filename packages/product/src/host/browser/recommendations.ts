@@ -1,4 +1,4 @@
-import { descriptorDisplayName } from './descriptors'
+import { descriptorDisplayName } from './descriptors.ts'
 import type {
   ConfidenceLabel,
   FileFamily,

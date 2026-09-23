@@ -27,6 +27,8 @@ const TRIGGERS: ActivityTrigger[] = [
   'workflow',
   'autopilot',
   'undo',
+  'source_event',
+  'save_as',
 ]
 
 const ITEM_STATUSES: ActivityItemStatus[] = ['moved', 'skipped', 'failed']
@@ -90,7 +92,14 @@ const PLAN_ACTIONS: OrganisationPlanAction[] = [
   'ignore',
 ]
 
-const PLAN_STATUSES: OrganisationPlanItemStatus[] = ['preview', 'applied', 'skipped', 'failed']
+const PLAN_STATUSES: OrganisationPlanItemStatus[] = [
+  'preview',
+  'applied',
+  'skipped',
+  'failed',
+  'source_unavailable',
+  'source_needs_access',
+]
 
 function normalizeKnowledgeSet(value: unknown): KnowledgeSet | null {
   if (!isRecord(value) || !Array.isArray(value.items)) return null
@@ -132,6 +141,8 @@ function normalizePlanItem(value: unknown): OrganisationPlanItem | null {
     alternatives: [],
     skipReason: asString(value.skipReason),
     ...(createdFolders ? { createdFolders } : {}),
+    ...(asString(value.sourceId) ? { sourceId: asString(value.sourceId)! } : {}),
+    ...(asString(value.sourceName) ? { sourceName: asString(value.sourceName)! } : {}),
   }
 }
 
@@ -173,6 +184,8 @@ function normalizeItem(value: unknown): ActivityItem | null {
     ...(createdFolders ? { createdFolders } : {}),
     undoAvailable: value.undoAvailable === true,
     ...(undoReason ? { undoReason } : {}),
+    ...(asString(value.sourceId) ? { sourceId: asString(value.sourceId)! } : {}),
+    ...(asString(value.sourceName) ? { sourceName: asString(value.sourceName)! } : {}),
   }
 }
 

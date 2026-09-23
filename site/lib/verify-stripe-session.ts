@@ -22,6 +22,12 @@ type StripeCheckoutSession = {
         current_period_end?: number;
       }
     | null;
+  line_items?: {
+    data?: Array<{
+      quantity?: number;
+      price?: string | { id?: string };
+    }>;
+  };
 };
 
 export type FulfilledCheckoutSession = {
@@ -32,6 +38,8 @@ export type FulfilledCheckoutSession = {
   edition?: string;
   currentPeriodEnd?: string | null;
   subscriptionId?: string | null;
+  priceId?: string | null;
+  quantity?: number;
 };
 
 export type VerifiedSession = {
@@ -93,6 +101,13 @@ function periodEndFrom(session: StripeCheckoutSession): string | null {
   return null;
 }
 
+function priceIdFrom(session: StripeCheckoutSession): string | null {
+  const price = session.line_items?.data?.[0]?.price;
+  if (typeof price === "string") return price;
+  if (price && typeof price.id === "string") return price.id;
+  return null;
+}
+
 function subscriptionIdFrom(session: StripeCheckoutSession): string | null {
   if (typeof session.subscription === "string") return session.subscription;
   if (session.subscription && typeof session.subscription === "object") {
@@ -114,7 +129,7 @@ export async function verifyStripeCheckoutSession(
 
   try {
     const response = await fetch(
-      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription`,
+      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=line_items`,
       {
         method: "GET",
         headers: {
@@ -164,6 +179,8 @@ export async function verifyStripeCheckoutSession(
         edition: session.metadata?.edition,
         currentPeriodEnd: periodEndFrom(session),
         subscriptionId: subscriptionIdFrom(session),
+        priceId: priceIdFrom(session),
+        quantity: session.line_items?.data?.[0]?.quantity,
       },
     };
   } catch {

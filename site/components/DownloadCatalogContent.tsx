@@ -1,19 +1,27 @@
 "use client";
 
 import { brand } from "@suhuella/brand";
-import { displayVersionFromRelease } from "../../packages/product/src/lib/display-version.ts";
 import Link from "next/link";
+import { ArrowDownToLine } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { AppleIcon } from "@/components/icons/AppleIcon";
 import { BrandMark } from "@/components/icons/BrandMark";
 import { SuhuellaWordmark } from "@/components/icons/SuhuellaWordmark";
+import { WindowsIcon } from "@/components/icons/WindowsIcon";
 import { SiteFooter } from "@/components/SiteFooter";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import {
-  buildDownloadCatalogRows,
+  buildAllDesktopCatalogRows,
+  buildCurrentDesktopRows,
+  filterCatalogRowsByPlatform,
   type DownloadCatalogRow,
 } from "@/lib/download-catalog";
-import { visibleInstallers } from "@/lib/installer-availability";
+import {
+  detectClientDownloadPlatform,
+  type DesktopDownloadPlatform,
+} from "@/lib/desktop-download-flow";
 import type { ReleaseManifest } from "@/lib/release-manifest";
 
 type DownloadCatalogContentProps = {
@@ -21,19 +29,6 @@ type DownloadCatalogContentProps = {
   embedded?: boolean;
   onClose?: () => void;
 };
-
-function channelLabel(
-  row: DownloadCatalogRow,
-  labels: {
-    preRc: string;
-    stable: string;
-    beta: string;
-  },
-): string {
-  if (row.channelKey === "preRc") return labels.preRc;
-  if (row.channelKey === "beta") return labels.beta;
-  return labels.stable;
-}
 
 function platformLabel(
   row: DownloadCatalogRow,
@@ -44,19 +39,279 @@ function platformLabel(
   return labels.windows;
 }
 
-function statusLabel(
-  row: DownloadCatalogRow,
-  labels: { available: string; unavailable: string },
-): string {
-  return row.status === "available" ? labels.available : labels.unavailable;
+function platformIcon(row: DownloadCatalogRow) {
+  return row.platformKey === "mac" ? AppleIcon : WindowsIcon;
 }
 
-function actionLabel(
-  row: DownloadCatalogRow,
-  labels: { open: string; download: string; none: string },
-): string {
-  if (row.action.kind === "none") return labels.none;
-  return row.action.labelKey === "open" ? labels.open : labels.download;
+function CorporateDownloadButton({
+  href,
+  label,
+  external,
+  compact,
+  inline,
+}: {
+  href: string;
+  label: string;
+  external?: boolean;
+  compact?: boolean;
+  inline?: boolean;
+}) {
+  const className = inline
+    ? "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--brand-on-accent)] shadow-sm transition hover:bg-[var(--brand-accent-hover)] sm:px-4 sm:py-2 sm:text-sm"
+    : compact
+      ? "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[var(--brand-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--brand-on-accent)] shadow-sm transition hover:bg-[var(--brand-accent-hover)]"
+      : "inline-flex items-center justify-center gap-2 rounded-full bg-[var(--brand-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--brand-on-accent)] transition hover:bg-[var(--brand-accent-hover)]";
+
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        <ArrowDownToLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className={className}>
+      <ArrowDownToLine className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+      {label}
+    </Link>
+  );
+}
+
+function IconDownloadButton({
+  row,
+  ariaLabel,
+}: {
+  row: DownloadCatalogRow;
+  ariaLabel: string;
+}) {
+  if (row.action.kind !== "link") return null;
+
+  const Icon = platformIcon(row);
+  const className =
+    "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/60 bg-white/80 text-[var(--brand-accent)] shadow-sm transition hover:border-[color-mix(in_srgb,var(--brand-accent)_35%,white)] hover:bg-[var(--brand-accent)] hover:text-[var(--brand-on-accent)]";
+
+  if (row.action.external) {
+    return (
+      <a
+        href={row.action.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={ariaLabel}
+        className={className}
+      >
+        <Icon className="h-4 w-4" />
+      </a>
+    );
+  }
+
+  return (
+    <Link href={row.action.href} aria-label={ariaLabel} className={className}>
+      <Icon className="h-4 w-4" />
+    </Link>
+  );
+}
+
+function CurrentReleaseCard({
+  rows,
+  compact,
+  platformLabels,
+  statusLabels,
+  macActionLabel,
+  windowsActionLabel,
+}: {
+  rows: DownloadCatalogRow[];
+  compact: boolean;
+  platformLabels: { mac: string; windows: string };
+  statusLabels: { available: string; unavailable: string };
+  macActionLabel: string;
+  windowsActionLabel: string;
+}) {
+  if (rows.length === 0) return null;
+
+  if (compact) {
+    return (
+      <GlassCard className="p-4">
+        <div className="flex items-start gap-3">
+          <BrandMark className="h-10 w-10 shrink-0" size={40} aria-label={brand.displayName} />
+          <div className="min-w-0 flex-1 space-y-2">
+            {rows.map((row) => {
+              const PlatformIcon = platformIcon(row);
+              const label = row.platformKey === "mac" ? platformLabels.mac : platformLabels.windows;
+              const actionLabel =
+                row.platformKey === "mac" ? macActionLabel : windowsActionLabel;
+              const available = row.status === "available" && row.action.kind === "link";
+
+              return (
+                <div
+                  key={row.id}
+                  className="flex min-w-0 items-center gap-2 py-0.5 sm:gap-2.5"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--brand-accent)] shadow-sm">
+                    <PlatformIcon className="h-3.5 w-3.5" />
+                  </div>
+                  <p className="min-w-0 flex-1 truncate text-sm text-slate-800">
+                    <span className="font-semibold text-slate-900">{label}</span>
+                    <span className="text-slate-400"> · </span>
+                    <span
+                      className={`font-medium ${available ? "text-emerald-700" : "text-amber-700"}`}
+                    >
+                      {available ? statusLabels.available : statusLabels.unavailable}
+                    </span>
+                  </p>
+                  {available ? (
+                    <CorporateDownloadButton
+                      href={row.action.href}
+                      label={actionLabel}
+                      external={row.action.external}
+                      inline
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="p-5">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {rows.map((row) => {
+          const PlatformIcon = platformIcon(row);
+          const label = row.platformKey === "mac" ? platformLabels.mac : platformLabels.windows;
+          const actionLabel = row.platformKey === "mac" ? macActionLabel : windowsActionLabel;
+          const available = row.status === "available" && row.action.kind === "link";
+
+          return (
+            <div
+              key={row.id}
+              className="flex flex-col gap-2 rounded-xl border border-white/50 bg-white/35 p-3"
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--brand-accent)] shadow-sm">
+                  <PlatformIcon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">{label}</p>
+                  <p
+                    className={`text-xs font-medium ${
+                      available ? "text-emerald-700" : "text-amber-700"
+                    }`}
+                  >
+                    {available ? statusLabels.available : statusLabels.unavailable}
+                  </p>
+                </div>
+              </div>
+              {available ? (
+                <CorporateDownloadButton
+                  href={row.action.href}
+                  label={actionLabel}
+                  external={row.action.external}
+                  compact={false}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </GlassCard>
+  );
+}
+
+function DownloadVersionsTable({
+  rows,
+  compact,
+  title,
+  platformLabels,
+  statusLabels,
+  actionLabels,
+  tableLabels,
+  latestLabel,
+}: {
+  rows: DownloadCatalogRow[];
+  compact: boolean;
+  title: string;
+  platformLabels: { web: string; mac: string; windows: string };
+  statusLabels: { available: string; unavailable: string };
+  actionLabels: { download: string };
+  tableLabels: {
+    version: string;
+    platform: string;
+    size: string;
+    date: string;
+  };
+  latestLabel: string;
+}) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={compact ? "mt-3" : "mt-8"}>
+      <h2
+        className={
+          compact
+            ? "mb-2 text-sm font-semibold text-slate-900"
+            : "mb-3 text-lg font-semibold text-slate-900"
+        }
+      >
+        {title}
+      </h2>
+      <GlassCard className="overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-white/60 bg-white/30 text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
+              <tr>
+                <th className="px-3 py-2.5 font-semibold sm:px-4 sm:py-3">{tableLabels.version}</th>
+                <th className="px-3 py-2.5 font-semibold sm:px-4 sm:py-3">{tableLabels.platform}</th>
+                <th className="hidden px-3 py-2.5 font-semibold sm:table-cell sm:px-4 sm:py-3">
+                  {tableLabels.size}
+                </th>
+                <th className="px-3 py-2.5 font-semibold sm:px-4 sm:py-3">{tableLabels.date}</th>
+                <th className="px-3 py-2.5 text-right font-semibold sm:px-4 sm:py-3"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const available = row.status === "available" && row.action.kind === "link";
+                const isCurrent = row.id.startsWith("current-");
+                const ariaLabel = `${actionLabels.download} ${platformLabel(row, platformLabels)} ${row.version}`;
+
+                return (
+                  <tr key={row.id} className="border-b border-white/40 last:border-b-0">
+                    <td className="px-3 py-2.5 font-mono text-xs text-slate-800 sm:px-4 sm:py-3 sm:text-sm">
+                      {row.version}
+                      {isCurrent ? (
+                        <span className="ml-1.5 rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_12%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--brand-accent)]">
+                          {latestLabel}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-700 sm:px-4 sm:py-3">
+                      {platformLabel(row, platformLabels)}
+                    </td>
+                    <td className="hidden px-3 py-2.5 font-mono text-xs text-slate-600 sm:table-cell sm:px-4 sm:py-3 sm:text-sm">
+                      {row.sizeLabel}
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500 sm:px-4 sm:py-3">{row.dateLabel}</td>
+                    <td className="px-3 py-2.5 text-right sm:px-4 sm:py-3">
+                      {available ? (
+                        <IconDownloadButton row={row} ariaLabel={ariaLabel} />
+                      ) : (
+                        <span className="text-xs text-slate-400">{statusLabels.unavailable}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </GlassCard>
+    </div>
+  );
 }
 
 export function DownloadCatalogContent({
@@ -65,16 +320,23 @@ export function DownloadCatalogContent({
   onClose,
 }: DownloadCatalogContentProps) {
   const { t } = useLocale();
-  const rows = buildDownloadCatalogRows(release);
-  const installers = visibleInstallers(release);
-  const version = displayVersionFromRelease(release ?? { version: brand.release.version });
-  const macAvailable = Boolean(installers.mac);
-  const windowsAvailable = Boolean(installers.windows);
-  const channelLabels = {
-    preRc: t.download.channelPreRc,
-    stable: t.download.channelStable,
-    beta: t.download.channelBeta,
-  };
+  const [detectedPlatform, setDetectedPlatform] = useState<DesktopDownloadPlatform | null>(null);
+  const currentRows = buildCurrentDesktopRows(release);
+  const allDesktopRows = buildAllDesktopCatalogRows(release);
+
+  useEffect(() => {
+    setDetectedPlatform(detectClientDownloadPlatform());
+  }, []);
+
+  const visibleCurrentRows = useMemo(
+    () => filterCatalogRowsByPlatform(currentRows, detectedPlatform),
+    [currentRows, detectedPlatform],
+  );
+  const visibleTableRows = useMemo(
+    () => filterCatalogRowsByPlatform(allDesktopRows, detectedPlatform),
+    [allDesktopRows, detectedPlatform],
+  );
+
   const platformLabels = {
     web: t.download.platformWeb,
     mac: t.download.platformMac,
@@ -90,7 +352,6 @@ export function DownloadCatalogContent({
     none: t.download.actionNone,
   };
   const plansHref = "/license";
-  const subtitle = macAvailable ? t.download.catalogSubtitleWithMac : t.download.catalogSubtitle;
 
   const webAction =
     embedded && onClose ? (
@@ -113,201 +374,95 @@ export function DownloadCatalogContent({
   const catalogBody = (
     <>
       {!embedded ? (
-        <>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
-            {t.download.catalogTitle}
-          </h1>
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">{subtitle}</p>
-        </>
-      ) : (
-        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">{subtitle}</p>
-      )}
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
+          {t.download.catalogTitle}
+        </h1>
+      ) : null}
 
       {embedded ? (
-        <GlassCard className="mt-4 p-5">
-          <div className="flex items-center gap-3">
-            <BrandMark className="h-10 w-10" aria-label={brand.displayName} />
-            <div className="min-w-0">
-              <p className="text-lg font-semibold tracking-[-0.02em] text-slate-900">{brand.displayName}</p>
-              <p className="font-mono text-xs text-slate-500">{version}</p>
+        <>
+          <CurrentReleaseCard
+            rows={visibleCurrentRows}
+            compact
+            platformLabels={platformLabels}
+            statusLabels={statusLabels}
+            macActionLabel={t.download.stateMacAction}
+            windowsActionLabel={t.download.stateWindowsAction}
+          />
+          <DownloadVersionsTable
+            rows={visibleTableRows}
+            compact
+            title={t.download.catalogTableTitle}
+            platformLabels={platformLabels}
+            statusLabels={statusLabels}
+            actionLabels={actionLabels}
+            tableLabels={{
+              version: t.download.tableVersion,
+              platform: t.download.tablePlatform,
+              size: t.download.tableSize,
+              date: t.download.tableDate,
+            }}
+            latestLabel={t.download.catalogLatestLabel}
+          />
+        </>
+      ) : (
+        <>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                {t.download.stateWebTitle}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-emerald-700">
+                {t.download.stateWebAvailable}
+              </p>
+              <div className="mt-4">{webAction}</div>
+            </GlassCard>
+
+            <div className="md:col-span-2">
+              <CurrentReleaseCard
+                rows={visibleCurrentRows}
+                compact={false}
+                platformLabels={platformLabels}
+                statusLabels={statusLabels}
+                macActionLabel={t.download.stateMacAction}
+                windowsActionLabel={t.download.stateWindowsAction}
+              />
             </div>
           </div>
 
-          <ul className="mt-4 space-y-3">
-            <li className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{t.download.stateWebTitle}</p>
-                <p className="text-sm font-medium text-emerald-700">{t.download.stateWebAvailable}</p>
-              </div>
-              {webAction}
-            </li>
-            <li className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{t.download.stateMacTitle}</p>
-                {macAvailable && installers.mac ? (
-                  <p className="text-sm font-medium text-emerald-700">{t.download.stateMacAvailable}</p>
-                ) : (
-                  <p className="text-sm font-medium text-amber-700">{t.download.statusUnavailable}</p>
-                )}
-              </div>
-              {macAvailable && installers.mac ? (
-                <a
-                  href={installers.mac}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex rounded-full bg-[var(--brand-accent)] px-4 py-2 text-sm font-semibold text-[var(--brand-on-accent)] transition hover:bg-[var(--brand-accent-hover)]"
-                >
-                  {t.download.stateMacAction}
-                </a>
-              ) : null}
-            </li>
-            <li className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{t.download.stateWindowsTitle}</p>
-                <p className="text-sm font-medium text-amber-700">{t.download.stateWindowsUnavailable}</p>
-              </div>
-            </li>
-          </ul>
-          {macAvailable ? (
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">{t.download.catalogUnsignedNote}</p>
-          ) : null}
-        </GlassCard>
-      ) : (
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <GlassCard className="p-5">
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {t.download.stateWebTitle}
-            </p>
-            <p className="mt-2 text-lg font-semibold text-emerald-700">{t.download.stateWebAvailable}</p>
-            <div className="mt-4">{webAction}</div>
-          </GlassCard>
-
-          <GlassCard className="p-5">
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {t.download.stateMacTitle}
-            </p>
-            {macAvailable && installers.mac ? (
-              <>
-                <p className="mt-2 text-lg font-semibold text-emerald-700">{t.download.stateMacAvailable}</p>
-                <a
-                  href={installers.mac}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 inline-flex rounded-full bg-[var(--brand-accent)] px-4 py-2 text-sm font-semibold text-[var(--brand-on-accent)] transition hover:bg-[var(--brand-accent-hover)]"
-                >
-                  {t.download.stateMacAction}
-                </a>
-                <p className="mt-3 text-xs leading-relaxed text-slate-500">{t.download.catalogUnsignedNote}</p>
-              </>
-            ) : (
-              <p className="mt-2 text-lg font-semibold text-amber-700">{t.download.statusUnavailable}</p>
-            )}
-          </GlassCard>
-
-          <GlassCard className="p-5">
-            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {t.download.stateWindowsTitle}
-            </p>
-            {windowsAvailable && installers.windows ? (
-              <>
-                <p className="mt-2 text-lg font-semibold text-emerald-700">{t.download.statusAvailable}</p>
-                <a
-                  href={installers.windows}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-4 inline-flex rounded-full bg-[var(--brand-accent)] px-4 py-2 text-sm font-semibold text-[var(--brand-on-accent)] transition hover:bg-[var(--brand-accent-hover)]"
-                >
-                  {t.download.actionDownload}
-                </a>
-              </>
-            ) : (
-              <p className="mt-2 text-lg font-semibold text-amber-700">{t.download.stateWindowsUnavailable}</p>
-            )}
-          </GlassCard>
-        </div>
+          <DownloadVersionsTable
+            rows={visibleTableRows}
+            compact={false}
+            title={t.download.catalogTableTitle}
+            platformLabels={platformLabels}
+            statusLabels={statusLabels}
+            actionLabels={actionLabels}
+            tableLabels={{
+              version: t.download.tableVersion,
+              platform: t.download.tablePlatform,
+              size: t.download.tableSize,
+              date: t.download.tableDate,
+            }}
+            latestLabel={t.download.catalogLatestLabel}
+          />
+        </>
       )}
 
       {!embedded ? (
-        <GlassCard className="mt-8 overflow-hidden p-0">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-white/60 bg-white/30 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">{t.download.tableVersion}</th>
-                  <th className="px-4 py-3 font-semibold">{t.download.tableChannel}</th>
-                  <th className="px-4 py-3 font-semibold">{t.download.tablePlatform}</th>
-                  <th className="px-4 py-3 font-semibold">{t.download.tableStatus}</th>
-                  <th className="px-4 py-3 font-semibold">{t.download.tableDate}</th>
-                  <th className="px-4 py-3 font-semibold">{t.download.tableAction}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const action = actionLabel(row, actionLabels);
-                  const actionCell =
-                    row.action.kind === "link" ? (
-                      row.action.external ? (
-                        <a
-                          href={row.action.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-semibold text-[var(--brand-accent)] hover:underline"
-                        >
-                          {action}
-                        </a>
-                      ) : (
-                        <Link href={row.action.href} className="font-semibold text-[var(--brand-accent)] hover:underline">
-                          {action}
-                        </Link>
-                      )
-                    ) : (
-                      <span className="text-slate-400">{action}</span>
-                    );
-
-                  return (
-                    <tr key={row.id} className="border-b border-white/40 last:border-b-0">
-                      <td className="px-4 py-3 font-mono text-slate-800">{row.version}</td>
-                      <td className="px-4 py-3 text-slate-700">{channelLabel(row, channelLabels)}</td>
-                      <td className="px-4 py-3 text-slate-700">{platformLabel(row, platformLabels)}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={
-                            row.status === "available"
-                              ? "font-medium text-emerald-700"
-                              : "font-medium text-amber-700"
-                          }
-                        >
-                          {statusLabel(row, statusLabels)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">{row.dateLabel}</td>
-                      <td className="px-4 py-3">{actionCell}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
+        <div className="mt-8">
+          <Link
+            href={plansHref}
+            className="text-sm font-semibold text-[var(--brand-accent)] underline-offset-2 hover:underline"
+          >
+            {t.download.viewPlans}
+          </Link>
+        </div>
       ) : null}
-
-      <p className={`max-w-2xl text-sm leading-relaxed text-slate-600 ${embedded ? "mt-4" : "mt-6"}`}>
-        {t.download.activationNote}
-      </p>
-
-      <div className={embedded ? "mt-3" : "mt-4"}>
-        <Link
-          href={plansHref}
-          className="text-sm font-semibold text-[var(--brand-accent)] underline-offset-2 hover:underline"
-        >
-          {t.download.viewPlans}
-        </Link>
-      </div>
     </>
   );
 
   if (embedded) {
-    return <div className="space-y-1">{catalogBody}</div>;
+    return <div className="space-y-3">{catalogBody}</div>;
   }
 
   return (

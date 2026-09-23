@@ -1,14 +1,16 @@
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { stopSiteDevProcesses } from "./dev-process.mjs";
+import { nextLockPaths, resolveNextDistDir, stopSiteDevProcesses } from "./dev-process.mjs";
 
 const siteDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ports = [Number(process.env.PORT || 3000), 3001];
+const nextDistDir = resolveNextDistDir({ siteDir });
 
 const stopped = stopSiteDevProcesses(siteDir, ports);
 
 for (const lockPath of [
+  ...nextLockPaths(nextDistDir),
   path.join(siteDir, ".next", "dev", "lock"),
   path.join(siteDir, ".next", "dev", "lock.json"),
 ]) {

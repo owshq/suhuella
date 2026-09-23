@@ -23,6 +23,12 @@ import {
   validUntilForEdition,
 } from "./license-entitlement.ts";
 import type { LicenseGrant } from "./license-context.ts";
+import {
+  BUSINESS_DEFAULT_DEVICE_LIMIT,
+  deviceLimitForEdition,
+  PERSONAL_LIFETIME_DEVICE_LIMIT,
+  PERSONAL_MONTHLY_DEVICE_LIMIT,
+} from "./license-context.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -39,6 +45,25 @@ function grant(partial: Partial<LicenseGrant> & Pick<LicenseGrant, "origin" | "e
 }
 
 export async function runLicenseAuditCheck(): Promise<void> {
+  assert(deviceLimitForEdition("free") === 1, "free is one device");
+  assert(
+    deviceLimitForEdition("personal_lifetime") === PERSONAL_LIFETIME_DEVICE_LIMIT,
+    "personal lifetime is one device",
+  );
+  assert(
+    deviceLimitForEdition("personal_monthly") === PERSONAL_MONTHLY_DEVICE_LIMIT,
+    "personal monthly is three devices",
+  );
+  assert(
+    deviceLimitForEdition("personal_lifetime", 3) === PERSONAL_LIFETIME_DEVICE_LIMIT,
+    "lifetime ignores a stored 3-device override",
+  );
+  assert(
+    deviceLimitForEdition("business") === BUSINESS_DEFAULT_DEVICE_LIMIT,
+    "business seat license defaults to three devices",
+  );
+  assert(deviceLimitForEdition("business", 2) === 2, "business respects an explicit override");
+
   const lifetimePaid = classifyLicenseGrant(
     grant({ origin: "stripe", edition: "personal_lifetime", validUntil: "2026-12-01T00:00:00.000Z" }),
   );
@@ -166,7 +191,7 @@ export async function runLicenseAuditCheck(): Promise<void> {
   assert(checkout.includes("prefilled_email=ada%40example.com"), "checkout can carry email");
   assert(!checkout.toLowerCase().includes("price_"), "checkout helper does not add price ids");
   assert(typeof checkoutUrlForPlan("business") === "string", "business checkout exists");
-  assert(checkoutUrlForPlan("business").startsWith("mailto:"), "business is contact sales by default");
+  assert(checkoutUrlForPlan("business") === "", "business checkout page stays closed while flags are off");
   assert(
     lifetimeCheckoutUrl({
       STRIPE_LIFETIME_PAYMENT_LINK: "https://buy.stripe.com/lifetime_only",

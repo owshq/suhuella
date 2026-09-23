@@ -47,6 +47,13 @@ export type SourceAppearanceOverride = {
   iconId?: SourceIconId
 }
 
+export type AppPermissionPreferences = {
+  /** When false, Confirm Plan cannot apply folder changes. Default true. */
+  allowFolderChanges: boolean
+  /** Trash permission — visible only; delete_file remains forbidden until implemented. */
+  trashEnabled: boolean
+}
+
 export type AppSettings = {
   indexedLocations: string[]
   indexedFolderCount: number
@@ -60,6 +67,7 @@ export type AppSettings = {
   knowledgeSourcesEnabled: KnowledgeSourcesEnabled
   recentFolders: string[]
   sourceAppearance: Record<string, SourceAppearanceOverride>
+  permissions: AppPermissionPreferences
 }
 
 export type IndexBrowseFolder = {
@@ -248,6 +256,9 @@ export type FolderIndex = {
 
 export type IndexScanStatus = 'idle' | 'scanning' | 'ready' | 'error' | 'cancelled'
 
+/** `pending` reuses already-learned locations. `all` walks every location again. */
+export type IndexRefreshMode = 'pending' | 'all'
+
 export type IndexScanProgress = {
   status: IndexScanStatus
   foldersScanned: number
@@ -257,6 +268,11 @@ export type IndexScanProgress = {
   finishedAt: string | null
   estimatedRemainingSeconds: number | null
   error?: string
+  refresh?: IndexRefreshMode
+  currentRoot?: string
+  locationsTotal?: number
+  locationsDone?: number
+  foldersReused?: number
 }
 
 export type SuggestedLocationKind = 'user_folder' | 'cloud_folder' | 'volume'
@@ -627,7 +643,14 @@ export type OrganisationPlanAction =
   | 'archive'
   | 'ignore'
 
-export type OrganisationPlanItemStatus = 'preview' | 'applied' | 'skipped' | 'failed'
+export type OrganisationPlanItemStatus =
+  | 'preview'
+  | 'applied'
+  | 'skipped'
+  | 'failed'
+  | 'source_unavailable'
+  /** Track C spike — indexed source never granted; no sourceId until user connects. */
+  | 'source_needs_access'
 
 export type OrganisationReviewGroup = 'ready' | 'review' | 'skipped'
 
@@ -663,6 +686,16 @@ export type OrganisationPlanItem = {
   renameReasons?: string[]
   /** Folders this action will create, or did create, from nearest existing parent to leaf. */
   createdFolders?: string[]
+  /** Source that owns `currentPath`. Immutable id from Sources. */
+  sourceId?: string
+  /** Display label captured when the Plan was built or executed. */
+  sourceName?: string
+  /** Track C spike — filesystem path the host can see but the user has not indexed. */
+  candidateSourcePath?: string
+  /** Track C spike — grant token (`suhuella:onedrive`) or absolute path for desktop add. */
+  candidateSourceGrantHint?: string
+  /** Optional display label when `proposedPath` is not set yet. */
+  destinationLabel?: string
 }
 
 export type OrganisationPlanPreview = {
@@ -727,12 +760,40 @@ export type OrganisationPlan = {
   items: OrganisationPlanItem[]
 }
 
+/** A Plan stored on this device. Deleting it removes the record only. */
+export type SavedPlan = {
+  id: string
+  title: string
+  revision: number
+  createdAt: string
+  updatedAt: string
+  knowledgeSet: KnowledgeSet
+  items: OrganisationPlanItem[]
+}
+
+export type SavedPlanDraft = {
+  id?: string
+  title: string
+  knowledgeSet: KnowledgeSet
+  items: OrganisationPlanItem[]
+}
+
+export type PlanExecutionMode = 'background' | 'watch'
+
+export type PlanExecutionProgressEvent = {
+  item: OrganisationPlanItem
+  index: number
+  total: number
+}
+
 export type OrganisationExecutionRequest = {
   plan: OrganisationPlan
   confirmed: boolean
   runNumber?: number
   trigger?: 'organise_documents' | 'move_this_file' | 'workflow'
   workflowId?: string
+  /** Default background — same behaviour as today. Watch streams per-item progress. */
+  executionMode?: PlanExecutionMode
 }
 
 export type OrganisationExecutionResult = {
@@ -756,6 +817,7 @@ export type ActivityTrigger =
   | 'autopilot'
   | 'undo'
   | 'source_event'
+  | 'save_as'
 
 export type SourceLifecycleEventKind = 'connected' | 'removed' | 'restored' | 'unavailable' | 'transition'
 
@@ -783,6 +845,8 @@ export type ActivityItem = {
   createdFolders?: string[]
   undoAvailable: boolean
   undoReason?: string
+  sourceId?: string
+  sourceName?: string
 }
 
 export type ActivityRunSummary = {
@@ -1006,6 +1070,8 @@ export type ByokStatus = {
   assistantLabel: string | null
   model: string | null
   hasKey: boolean
+  /** Desktop only — false when OS key storage is unavailable. */
+  keyStorageAvailable?: boolean
 }
 
 export type ByokConnectRequest = {
@@ -1136,6 +1202,7 @@ export type KnowledgeSetValidationErrorCode =
   | 'workflow_not_approved'
   | 'autopilot_disabled'
   | 'assistant_unavailable'
+  | 'generation_required'
 
 export type KnowledgeSetValidationError = {
   code: KnowledgeSetValidationErrorCode
@@ -1152,6 +1219,26 @@ export type LicenseEdition =
 export type LicenseStatus = 'active' | 'expired' | 'revoked'
 
 export type LicenseChannel = 'stable' | 'beta'
+
+export type GenerationAccessMode =
+  | 'legacy_unassigned'
+  | 'purchased_generation'
+  | 'active_subscription'
+  /** Post-model checkout fulfilled without a server version binding — not legacy. */
+  | 'version_binding_required'
+
+export type LicenseOrigin =
+  | 'stripe'
+  | 'gift'
+  | 'promo'
+  | 'manual'
+  | 'internal'
+  | 'test'
+  | 'partner'
+  | 'business'
+  | 'education'
+  | 'enterprise'
+  | 'migration'
 
 export type LicenseContext = {
   licenseId: string
@@ -1173,6 +1260,16 @@ export type LicenseContext = {
   offlineUntil: string
   channel: LicenseChannel
   licenseToken: string
+  commercialGenerationId?: string | null
+  /** All license versions acquired (initial purchase + upgrades). Server-signed. */
+  acquiredCommercialGenerationIds?: string[]
+  generationAccessMode?: GenerationAccessMode
+  /** Signed at issuance. Executor authority — not Worker env or renderer flags. */
+  generationEnforcementActive?: boolean
+  /** Registry revision at sign time. Audit only when capabilities are signed. */
+  policyRevision?: string | null
+  /** Absent on pre-006 tokens. */
+  signedContractVersion?: number
 }
 
 export type LicenseApiError =
@@ -1236,6 +1333,7 @@ export type LicenseStatusView = {
   organisationName: string | null
   organisationLogo: string | null
   canEditBranding: boolean
+  canManageOrganisation: boolean
   organisationId: string | null
   deviceCount: number | null
   deviceLimit: number | null
@@ -1247,8 +1345,59 @@ export type LicenseStatusView = {
   periodEndLabel: string | null
   supportCode: string | null
   health: LicenseHealthItem[]
+  /** Effective rights after edition + generation evaluation (server-signed when online). */
+  effectiveCapabilities: string[]
 }
 
 export type LicenseActionResult =
   | { ok: true; license: LicenseStatusView }
-  | { ok: false; error: LicenseApiError; license?: LicenseStatusView }
+  | {
+      ok: false
+      error: LicenseApiError
+      license?: LicenseStatusView
+      devices?: LicenseDeviceInfo[]
+    }
+
+export type BusinessOrganisationSeatStatus = 'active' | 'available' | 'invited' | 'revoked' | 'expired'
+
+export type BusinessOrganisationRow = {
+  seatId: string | null
+  email: string
+  seatStatus: BusinessOrganisationSeatStatus
+  deviceName: string
+  platform: string
+  lastActive: string
+}
+
+/** Desktop-facing organisation view. Price is a server total, never a Desktop pricing table. */
+export type BusinessOrganisationOverview = {
+  organisationName: string
+  organisationId: string
+  plan: 'Business'
+  seats: number
+  assigned: number
+  available: number
+  monthlyAmountCents: number
+  currency: string
+  nextBilling: string | null
+  billingAction: 'checkout_business' | 'change_seats'
+  rows: BusinessOrganisationRow[]
+}
+
+export type BusinessOrganisationError =
+  | LicenseApiError
+  | 'forbidden'
+  | 'seat_limit'
+  | 'seat_in_use'
+  | 'duplicate_email'
+  | 'not_found'
+  | 'min_seats'
+  | 'subscription_missing'
+  | 'stripe_unavailable'
+  | 'stripe_timeout'
+
+export type BusinessOrganisationResult =
+  | { ok: true; organisation: BusinessOrganisationOverview }
+  | { ok: false; error: BusinessOrganisationError }
+
+export type BusinessOrganisationAction = 'invite' | 'remove' | 'reset_devices' | 'change_seats'

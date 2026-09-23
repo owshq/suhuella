@@ -35,6 +35,7 @@ export async function POST(
     ownerKind,
     ownerId,
     origin: request.nextUrl.origin,
+    returnPath: typeof body.returnPath === "string" ? body.returnPath : "/sources",
   });
 
   if (!result.ok) {

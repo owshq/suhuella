@@ -1,0 +1,33 @@
+.source-connect-busy-track {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-fg) 14%, transparent);
+}
+
+.source-connect-busy-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  border-radius: inherit;
+  background: var(--brand-accent);
+  animation: source-connect-busy 1.15s ease-in-out infinite;
+}
+
+@keyframes source-connect-busy {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(380%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .source-connect-busy-bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}

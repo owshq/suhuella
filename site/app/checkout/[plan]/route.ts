@@ -6,6 +6,7 @@ import {
 } from "@/lib/checkout";
 import { createStripeCheckoutSession } from "@/lib/checkout-session";
 import { clientIpFromRequest } from "@/lib/client-ip";
+import { rawCardRejection } from "@/lib/raw-card-guard";
 import { rejectIfCapabilityLimited, rejectIfRateLimited } from "@/lib/service-capability-guard";
 import type { NextRequest } from "next/server";
 
@@ -15,6 +16,9 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ plan: string }> },
 ) {
+  const cardRejected = rawCardRejection({ searchParams: request.nextUrl.searchParams });
+  if (cardRejected) return cardRejected;
+
   const limited = await rejectIfCapabilityLimited("checkout");
   if (limited) {
     const origin = request.nextUrl.origin;

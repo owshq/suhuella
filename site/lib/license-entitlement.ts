@@ -3,6 +3,7 @@ import {
   deviceLimitForEdition,
   parseLicenseEdition,
   parseLicenseOrigin,
+  type GenerationAccessMode,
   type LicenseEdition,
   type LicenseGrant,
   type LicenseOrigin,
@@ -79,6 +80,17 @@ const NOT_REVOCABLE_ERROR = "This license is not admin-revocable.";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
+}
+
+function parseGenerationAccessMode(value: unknown): GenerationAccessMode | undefined {
+  if (
+    value === "legacy_unassigned" ||
+    value === "purchased_generation" ||
+    value === "active_subscription"
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 export function isGiftedOrigin(origin: LicenseOrigin): origin is GiftedOrigin {
@@ -238,11 +250,24 @@ export function parseLicenseGrant(value: unknown): LicenseGrant | null {
     revokedAt: typeof value.revokedAt === "string" ? value.revokedAt : undefined,
     revokedBy: typeof value.revokedBy === "string" ? value.revokedBy : undefined,
     revocationReason: typeof value.revocationReason === "string" ? value.revocationReason : undefined,
+    issuedByOperator: typeof value.issuedByOperator === "string" ? value.issuedByOperator : undefined,
+    acceptedBrands: Array.isArray(value.acceptedBrands)
+      ? value.acceptedBrands.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : undefined,
+    presentationBrandAtPurchase:
+      typeof value.presentationBrandAtPurchase === "string" ? value.presentationBrandAtPurchase : undefined,
     entitlementStatus:
       typeof value.entitlementStatus === "string" &&
       (LICENSE_ENTITLEMENT_STATUSES as readonly string[]).includes(value.entitlementStatus)
         ? (value.entitlementStatus as LicenseEntitlementStatus)
         : undefined,
+    commercialGenerationId:
+      value.commercialGenerationId === null
+        ? null
+        : typeof value.commercialGenerationId === "string"
+          ? value.commercialGenerationId
+          : undefined,
+    generationAccessMode: parseGenerationAccessMode(value.generationAccessMode),
   };
   return normalizeLicenseGrant(grant);
 }

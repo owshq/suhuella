@@ -2,6 +2,10 @@ import { brand } from "@suhuella/brand";
 import { productCopy } from '../../lib/product-copy'
 import { getBrowserComputerName, persistBrowserComputerName, upgradeGenericDeviceName } from "../../lib/device-identity";
 import type { LicenseApiError, LicenseContext } from "./types";
+import type {
+  BusinessOrganisationAction,
+  BusinessOrganisationResult,
+} from "../../types";
 import { idbGet, idbSet, STORE } from "./idb";
 
 const DEVICE_KEY = "device";
@@ -77,7 +81,7 @@ export function editionLabel(edition: LicenseContext["edition"]): string {
 export function licenseErrorMessage(error: LicenseApiError): string {
   if (error === "unknown_email" || error === "no_license") return "No active license was found for this email.";
   if (error === "device_limit") {
-    return "This Personal license allows 3 devices. Deactivate another computer, then activate this one.";
+    return "This Personal license allows 1 device. Deactivate another computer, then activate this one.";
   }
   if (error === "payment_incomplete") return "Payment was not completed.";
   if (error === "revoked") return "This complimentary license is no longer active.";
@@ -233,6 +237,46 @@ export async function updateBusinessBranding(dataUrl: string | null): Promise<Li
   } catch {
     return { ok: false, error: "offline", license: current };
   }
+}
+
+async function postOrganisation(body: Record<string, string | number>): Promise<BusinessOrganisationResult> {
+  const current = await loadLicense();
+  const device = await getDevice();
+  if (!current || (current.edition !== "business" && current.edition !== "enterprise")) {
+    return { ok: false, error: "forbidden" };
+  }
+  try {
+    const response = await fetch("/api/license/organisation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceId: device.deviceId,
+        licenseToken: current.licenseToken,
+        ...body,
+      }),
+    });
+    const data = (await response.json()) as BusinessOrganisationResult;
+    if (!data || typeof data !== "object") return { ok: false, error: "server_error" };
+    return data;
+  } catch {
+    return { ok: false, error: "offline" };
+  }
+}
+
+export async function getBusinessOrganisation(): Promise<BusinessOrganisationResult> {
+  return postOrganisation({});
+}
+
+export async function manageBusinessOrganisation(
+  action: BusinessOrganisationAction,
+  payload: { email?: string; seatId?: string; seatCount?: number } = {},
+): Promise<BusinessOrganisationResult> {
+  return postOrganisation({
+    action,
+    email: payload.email ?? "",
+    seatId: payload.seatId ?? "",
+    ...(payload.seatCount != null ? { seatCount: payload.seatCount } : {}),
+  });
 }
 
 export async function activateLicense(emailProofId: string): Promise<LicenseActionResult> {

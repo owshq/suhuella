@@ -51,7 +51,7 @@ BrandConfig.release            (imports release.json — never duplicate version
 deploy Worker  →  /api/release live
 ```
 
-See [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md) — **do not reopen architecture tracks**.
+See [release-architecture.md](docs/architecture/constitution/release-architecture.md) — **do not reopen architecture tracks**.
 
 **Rules:**
 

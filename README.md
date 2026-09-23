@@ -8,21 +8,7 @@ Paid utility that suggests the right folder when you save. SuHuella runs on Desk
 
 ## Release Architecture
 
-```text
-STATUS = FROZEN
-
-Changes require a documented architectural decision.
-
-Do not introduce:
-- second version authority
-- second release manifest
-- client knowledge of hosting provider
-- release information outside release.json
-
-All future work must build on this architecture.
-```
-
-Detail: [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md). Operators edit `brands/suhuella/release.json` and run **`npm run build`**.
+The release contract is [release-architecture.md](docs/architecture/constitution/release-architecture.md). Operators edit `brands/suhuella/release.json` and run **`npm run build`**.
 
 ---
 
@@ -764,7 +750,7 @@ Not Windows. Not opened. **Question:** can SuHuella recommend a folder for the f
 
 **Dev:** `npm run desktop` (root) · `cd desktop && npm run dev` · `npm run desktop:stop` if port 5173 busy.
 
-**Release:** edit `brands/suhuella/release.json` · `npm run build` · deploy. Desktop DMG: `npm run package:mac` (see [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md)).
+**Release:** edit `brands/suhuella/release.json` · `npm run build` · deploy. Desktop DMG: `npm run package:mac` (see [release-architecture.md](docs/architecture/constitution/release-architecture.md)).
 
 ---
 

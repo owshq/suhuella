@@ -34,6 +34,8 @@ import type {
   OrganisationExecutionResult,
   OrganisationPlan,
   OrganisationPlanPreview,
+  SavedPlan,
+  SavedPlanDraft,
   PlanAssistantStatus,
   PlanAssistantTurn,
   DeviceMetrics,
@@ -70,6 +72,10 @@ export type SuhuellaAPI = {
   onIndexProgress: (listener: (progress: IndexScanProgress) => void) => () => void
   matchFoldersForFile: (file: File) => Promise<FolderMatchPreview | null>
   setLaunchAtLogin: (enabled: boolean) => Promise<AppSettings>
+  setPermissionPreferences: (prefs: {
+    allowFolderChanges?: boolean
+    trashEnabled?: boolean
+  }) => Promise<AppSettings>
   setSourceAppearanceColor: (path: string, color: string | null) => Promise<AppSettings>
   setSourceAppearance: (
     path: string,
@@ -104,6 +110,7 @@ export type SuhuellaAPI = {
   listCloudIntegrations: () => Promise<
     | {
         ok: true
+        enabled: boolean
         catalog: Array<{
           provider: string
           displayName: string
@@ -125,6 +132,14 @@ export type SuhuellaAPI = {
           lastErrorMessage: string | null
           createdAt: string
           updatedAt: string
+        }>
+        sources: Array<{
+          id: string
+          displayName: string
+          provider: string
+          status: string
+          accountEmail: string | null
+          browseRoot: string
         }>
       }
     | { ok: false; error: string }
@@ -200,7 +215,7 @@ export type SuhuellaAPI = {
   proposeOrganisationPlan: (
     knowledgeSet: KnowledgeSet,
     note?: string,
-    extras?: { workflowNames?: string[] },
+    extras?: { workflowNames?: string[]; assistantPreference?: 'on_device' | 'local' },
   ) => Promise<PlanAssistantTurn>
   getPlanAssistantStatus: () => Promise<PlanAssistantStatus>
   executeOrganisationPlan: (
@@ -209,7 +224,11 @@ export type SuhuellaAPI = {
     | { ok: true; result: OrganisationExecutionResult }
     | { ok: false; error: KnowledgeSetValidationError }
   >
+  onPlanExecutionProgress: (
+    listener: (event: import('./types').PlanExecutionProgressEvent) => void,
+  ) => () => void
   getByokStatus: () => Promise<ByokStatus>
+  probeLocalModels: () => Promise<import('./lib/local-model-discovery.ts').LocalModelProbeResult>
   connectByok: (request: ByokConnectRequest) => Promise<ByokConnectResult>
   disconnectByok: () => Promise<ByokStatus>
   assistWithByok: (request: ByokAssistRequest) => Promise<ByokAssistResult>
@@ -230,6 +249,16 @@ export type SuhuellaAPI = {
   clearLogs: () => Promise<StorageUsage>
   clearActivityHistory: () => Promise<StorageUsage>
   exportActivity: () => Promise<string | null>
+  listSavedPlans: () => Promise<SavedPlan[]>
+  saveSavedPlan: (
+    draft: SavedPlanDraft,
+  ) => Promise<{ ok: true; plan: SavedPlan } | { ok: false; error: KnowledgeSetValidationError }>
+  deleteSavedPlan: (
+    planId: string,
+  ) => Promise<{ ok: true; plans: SavedPlan[] } | { ok: false; error: KnowledgeSetValidationError }>
+  duplicateSavedPlan: (
+    planId: string,
+  ) => Promise<{ ok: true; plan: SavedPlan } | { ok: false; error: KnowledgeSetValidationError }>
   listWorkflows: () => Promise<Workflow[]>
   saveWorkflow: (draft: {
     name: string

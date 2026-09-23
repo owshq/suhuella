@@ -1,4 +1,10 @@
+import {
+  browserCapabilityDialogCopy,
+  type BrowserLimitationPresentation,
+} from './browser-capability-notice.ts'
 import { productCopy } from './product-copy.ts'
+import type { HostAccessCapabilities } from './platform-capabilities.ts'
+import { isTechnicalSourceId, resolveSourceDisplayName } from './source-display-name.ts'
 import type { IndexedLocationSummary, SuggestedLocation, SuggestedLocationKind } from '../types.ts'
 
 export type SourceSightGroup = 'computer' | 'external' | 'cloud'
@@ -38,7 +44,9 @@ export function sourceSightState(args: {
       !args.hostCanSee ||
       args.status === 'unavailable' ||
       args.status === 'permission_denied' ||
-      args.status === 'external_drive_disconnected'
+      args.status === 'external_drive_disconnected' ||
+      args.status === 'missing' ||
+      args.status === 'error'
     ) {
       return 'unavailable'
     }
@@ -49,11 +57,19 @@ export function sourceSightState(args: {
 }
 
 export function sourceUnavailableActionLabel(permissionLost: boolean): string {
-  return permissionLost ? 'Restore permission' : 'Refresh'
+  return permissionLost ? 'Restore permission' : 'Locate again'
 }
 
-export function sourcePickActionLabel(desktop: boolean): string {
-  return desktop ? 'Add' : 'Connect'
+function connectGrantFrom(
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'>,
+): boolean {
+  return typeof access === 'boolean' ? !access : access.connectGrant
+}
+
+export function sourcePickActionLabel(
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'>,
+): string {
+  return connectGrantFrom(access) ? 'Connect' : 'Add'
 }
 
 export function sourceGrantActionLabel(): string {
@@ -68,10 +84,32 @@ export function sourcesEmptyLead(): string {
   return 'No sources yet.'
 }
 
-export function sourcesEmptyBody(desktop = true): string {
-  return desktop
-    ? productCopy('No sources yet. Add a folder so SuHuella can see it.')
-    : productCopy('No sources yet. Connect a folder so SuHuella can see it.')
+export function sourcesEmptyBody(
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'> = { connectGrant: false },
+): string {
+  return connectGrantFrom(access)
+    ? productCopy('No sources yet. Connect a folder so SuHuella can see it.')
+    : productCopy('No sources yet. Add a folder so SuHuella can see it.')
+}
+
+export function searchNoSourcesCopy(
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'> = { connectGrant: true },
+): string {
+  return connectGrantFrom(access)
+    ? 'Connect a folder first.'
+    : 'Add a folder first.'
+}
+
+export function searchEmptyQueryCopy(
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'>,
+  sourceCount: number,
+  locale: 'en' | 'es' = 'en',
+): string {
+  if (sourceCount === 0) return searchNoSourcesCopy(access)
+  if (locale === 'es') {
+    return productCopy('Escribe un nombre para buscar en tus fuentes conectadas.')
+  }
+  return productCopy('Type a name to search your connected sources.')
 }
 
 export const SOURCES_PRIVACY_LINES = [
@@ -118,9 +156,30 @@ export function isProtectedFolderConnectError(error: unknown): boolean {
   )
 }
 
+export function folderConnectPermissionCopy(): string {
+  return productCopy('Permission was not granted. Choose the folder again so SuHuella can see it.')
+}
+
+export function folderConnectFailedCopy(): string {
+  return productCopy('SuHuella could not open that folder. Choose it again, or pick a different work folder.')
+}
+
+function folderAccessErrorCode(error: unknown): string | null {
+  if (error instanceof Error && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
+    return (error as { code: string }).code
+  }
+  return null
+}
+
 export function folderConnectErrorMessage(error: unknown): string | null {
   if (isFolderPickAbort(error)) return null
   if (isProtectedFolderConnectError(error)) return null
+  const code = folderAccessErrorCode(error)
+  if (code === 'denied') return folderConnectPermissionCopy()
+  if (code === 'failed') return folderConnectFailedCopy()
+  if (code === 'unavailable') {
+    return 'That folder is no longer available. Choose it again if it is still on this device.'
+  }
   if (error instanceof Error) {
     const text = error.message.toLowerCase()
     if (text.includes('cannot choose files') || text.includes('cannot choose documents')) {
@@ -130,13 +189,79 @@ export function folderConnectErrorMessage(error: unknown): string | null {
       return `${sourcesUnsupportedTitle()} ${sourcesUnsupportedBody()}`
     }
     if (text.includes('permission') || text.includes('not allowed') || text.includes('denied')) {
-      return null
+      return folderConnectPermissionCopy()
     }
     if (text.includes('no longer available') || text.includes('unavailable')) {
       return 'That folder is no longer available. Choose it again if it is still on this device.'
     }
   }
-  return `${productCopy('SuHuella could not open that folder.')} ${sourcesUnsupportedBody()}`
+  return folderConnectFailedCopy()
+}
+
+/** Idle Add stays Add. Idle Connect stays Connect. Busy never looks like a dead button. */
+export function sourceWorkingActionLabel(idle: string | null | undefined, busy?: boolean): string | null {
+  if (!idle) return null
+  if (!busy) return idle
+  if (idle === 'Add' || idle === 'Choose another folder') return 'Adding…'
+  if (idle === 'Restore permission') return 'Restoring…'
+  if (idle === 'Locate again' || idle === 'Retry') return 'Trying again…'
+  if (idle === 'Remove') return 'Removing…'
+  return 'Connecting…'
+}
+
+export type SourceConnectWaitKind = 'picker' | 'add' | 'restore' | 'retry' | 'remove'
+
+export function sourceConnectWaitKind(idleLabel: string, opensPicker: boolean): SourceConnectWaitKind {
+  if (idleLabel === 'Restore permission') return 'restore'
+  if (idleLabel === 'Locate again' || idleLabel === 'Retry') return 'retry'
+  if (idleLabel === 'Remove') return 'remove'
+  if (opensPicker) return 'picker'
+  return 'add'
+}
+
+/** Announced wait copy. No percent — the picker and grant prompt have no known duration. */
+export function sourceConnectWaitingStatus(
+  workingLabel: string | null | undefined,
+  kind?: SourceConnectWaitKind | null,
+): string | null {
+  if (!workingLabel && !kind) return null
+  if (kind === 'picker') return 'Opening folder picker…'
+  if (kind === 'add') return 'Adding folder…'
+  if (kind === 'restore') return 'Asking for permission again.'
+  if (kind === 'retry') return 'Checking this folder again.'
+  if (kind === 'remove') return 'Removing this source…'
+  if (workingLabel === 'Adding…' || workingLabel === 'Connecting…') return 'Opening folder picker…'
+  if (workingLabel === 'Restoring…') return 'Asking for permission again.'
+  if (workingLabel === 'Trying again…') return 'Checking this folder again.'
+  if (workingLabel === 'Removing…') return 'Removing this source…'
+  return workingLabel ?? null
+}
+
+export function sourceConnectWaitingHint(
+  workingLabel: string | null | undefined,
+  kind?: SourceConnectWaitKind | null,
+): string | null {
+  if (kind === 'restore' || kind === 'retry' || kind === 'add' || kind === 'remove') return null
+  if (workingLabel === 'Adding…') {
+    return productCopy('Choose a folder to add to SuHuella.')
+  }
+  if (workingLabel === 'Connecting…' || kind === 'picker') {
+    return productCopy('Choose a folder so SuHuella can see it.')
+  }
+  return null
+}
+
+export function sourceRemovedCopy(
+  name: string,
+  access: boolean | Pick<HostAccessCapabilities, 'connectGrant'> = { connectGrant: false },
+): string {
+  const again = connectGrantFrom(access) ? 'Connect it again' : 'Add it again'
+  return productCopy(`Removed ${sourceDisplayName(name, name)}. ${again} if you still want SuHuella to see it.`)
+}
+
+export function sourceRemoveFailedCopy(name?: string): string {
+  const label = name ? sourceDisplayName(name, name) : 'that source'
+  return productCopy(`SuHuella could not remove ${label}. Try again.`)
 }
 
 export function browserLocalFoldersLabel(locale: 'es' | 'en'): string {
@@ -167,7 +292,7 @@ export function browserConnectDialogCopy(locale: 'es' | 'en') {
   if (locale === 'es') {
     return {
       title: 'Conecta una carpeta local',
-      body: 'Elige una carpeta de trabajo para que SuHuella pueda aprender de sus nombres y ayudarte a organizar documentos. Tus archivos permanecen en este dispositivo. Nada se sube. Para usar todas las funciones, descarga la app de escritorio.',
+      body: 'Elige una carpeta de trabajo para que SuHuella pueda ver sus documentos y ayudarte a organizarlos. Tus archivos permanecen en este dispositivo. Nada se sube. Si el navegador bloquea una carpeta, descarga la aplicación de escritorio para trabajar con ella. Las funciones disponibles dependen de tu licencia.',
       note: 'Si el navegador bloquea una carpeta del sistema, elige una subcarpeta normal.',
       primary: 'Elegir carpeta',
       secondary: 'Cancelar',
@@ -175,7 +300,7 @@ export function browserConnectDialogCopy(locale: 'es' | 'en') {
   }
   return {
     title: 'Connect a local folder',
-    body: 'Choose a work folder so SuHuella can learn from its names and help you organise documents. Your files stay on this device. Nothing is uploaded. To use every function, download the desktop app.',
+    body: 'Choose a work folder so SuHuella can see its documents and help you organise them. Your files stay on this device. Nothing is uploaded. If the browser blocks a folder, download the desktop app to work with it. Available features depend on your license.',
     note: 'If the browser blocks a system folder, choose a regular subfolder.',
     primary: 'Choose folder',
     secondary: 'Cancel',
@@ -183,32 +308,54 @@ export function browserConnectDialogCopy(locale: 'es' | 'en') {
 }
 
 export function browserBlockedFolderDialogCopy(locale: 'es' | 'en') {
-  if (locale === 'es') {
-    return {
-      title: 'Esta carpeta no está disponible en este navegador',
-      body: 'El navegador no puede usar esa carpeta. Elige una carpeta de trabajo o una subcarpeta. Tus archivos permanecen en este dispositivo. Para usar todas las funciones, descarga la app de escritorio.',
-      primary: 'Elegir otra carpeta',
-      secondary: 'Cancelar',
+  const copy = browserCapabilityDialogCopy('protected_folder', locale)
+  return {
+    title: copy.title,
+    body: copy.body,
+    primary: copy.primary ?? '',
+    secondary: copy.secondary,
+  }
+}
+
+export function presentFolderConnectError(
+  error: unknown,
+  host: 'browser' | 'electron' | string = 'browser',
+  locale: 'es' | 'en' = 'en',
+): BrowserLimitationPresentation {
+  if (isFolderPickAbort(error)) return { kind: 'silent' }
+  if (host !== 'browser') return { kind: 'silent' }
+  const code = folderAccessErrorCode(error)
+  if (code === 'denied') {
+    return { kind: 'desktop_dialog', notice: browserCapabilityDialogCopy('permission_denied', locale) }
+  }
+  if (code === 'unsupported') {
+    return { kind: 'desktop_dialog', notice: browserCapabilityDialogCopy('browser_unsupported', locale) }
+  }
+  if (code === 'protected' || isProtectedFolderConnectError(error)) {
+    return { kind: 'desktop_dialog', notice: browserCapabilityDialogCopy('protected_folder', locale) }
+  }
+  if (code === 'failed' || code === 'unavailable') {
+    return { kind: 'inline', message: folderConnectFailedCopy() }
+  }
+  if (error instanceof Error) {
+    const text = error.message.toLowerCase()
+    if (text.includes('not available in this browser') || text.includes('requires chrome or edge')) {
+      return { kind: 'desktop_dialog', notice: browserCapabilityDialogCopy('browser_unsupported', locale) }
+    }
+    if (text.includes('permission') || text.includes('not allowed') || text.includes('denied')) {
+      return { kind: 'desktop_dialog', notice: browserCapabilityDialogCopy('permission_denied', locale) }
     }
   }
-  return {
-    title: 'This folder is not available in this browser',
-    body: 'The browser cannot use that folder. Choose a regular work folder or a subfolder. Your files stay on this device. To use every function, download the desktop app.',
-    primary: 'Choose another folder',
-    secondary: 'Cancel',
-  }
+  return { kind: 'inline', message: folderConnectFailedCopy() }
 }
 
 export function sourceDisplayName(
   name: string | undefined,
   path: string,
-  isTechnicalId: (value: string) => boolean,
+  isTechnicalId: (value: string) => boolean = isTechnicalSourceId,
 ): string {
-  const visible = name?.trim()
-  if (visible && !isTechnicalId(visible)) return visible
   const last = path.split(/[/\\]/).filter(Boolean).at(-1) ?? path
-  if (last && !isTechnicalId(last)) return last
-  return 'Folder'
+  return resolveSourceDisplayName(name, isTechnicalId(last) ? undefined : last)
 }
 
 export function sourceSightLabel(state: SourceSightState, scanning?: boolean): string {
@@ -254,6 +401,17 @@ export type BrowserCapabilityCard = {
   kind: SuggestedLocationKind
   group: SourceSightGroup
   capability: BrowserCatalogCapability
+}
+
+export function hostCapabilityCatalog(
+  access: Pick<HostAccessCapabilities, 'connectGrant' | 'directoryCatalog' | 'limitedSystemFolders'>,
+  platform: 'darwin' | 'win32' | 'linux' | string = 'darwin',
+): BrowserCapabilityCard[] {
+  return browserCapabilityCatalog(platform).filter((card) => {
+    if (card.capability === 'limited') return access.limitedSystemFolders
+    if (card.capability === 'coming_later') return access.connectGrant && !access.directoryCatalog
+    return false
+  })
 }
 
 export function browserCapabilityCatalog(
@@ -324,6 +482,55 @@ export function lastUpdatedCopy(iso: string | null): string | null {
   return `Last updated ${date.toLocaleDateString()}`
 }
 
+export type HomeQuickConnectSource = {
+  id: string
+  label: string
+  path: string
+  connectable: boolean
+  statusNote?: string
+}
+
+export function homeQuickConnectSources(
+  access: Pick<HostAccessCapabilities, 'connectGrant' | 'limitedSystemFolders' | 'directoryCatalog'>,
+  platform: 'darwin' | 'win32' | 'linux' | string = 'darwin',
+): { visible: HomeQuickConnectSource[]; more: HomeQuickConnectSource[] } {
+  if (!access.connectGrant && access.directoryCatalog) {
+    const shortcuts: HomeQuickConnectSource[] = [
+      { id: 'documents', label: 'Documents', path: '', connectable: true },
+      { id: 'downloads', label: 'Downloads', path: '', connectable: true },
+      { id: 'desktop', label: 'Desktop', path: '', connectable: true },
+      { id: 'pictures', label: 'Pictures', path: '', connectable: true },
+    ]
+    return { visible: shortcuts.slice(0, 3), more: shortcuts.slice(3) }
+  }
+
+  const catalog = browserCapabilityCatalog(platform)
+  const mapped = catalog.map((card): HomeQuickConnectSource => {
+    if (card.capability === 'limited') {
+      return {
+        id: card.id,
+        label: card.label,
+        path: card.path,
+        connectable: access.limitedSystemFolders,
+      }
+    }
+    return {
+      id: card.id,
+      label: card.label,
+      path: card.path,
+      connectable: false,
+      statusNote: 'Coming later',
+    }
+  })
+  const computer = mapped.filter((item) => catalog.find((card) => card.id === item.id)?.group === 'computer')
+  const cloud = mapped.filter((item) => catalog.find((card) => card.id === item.id)?.group === 'cloud')
+  const connectableComputer = computer.filter((item) => item.connectable)
+  return {
+    visible: connectableComputer.slice(0, 3),
+    more: [...connectableComputer.slice(3), ...cloud],
+  }
+}
+
 export function includedStatusLabel(
   status: IndexedLocationSummary['status'],
   scanning: boolean,
@@ -333,7 +540,13 @@ export function includedStatusLabel(
   }
   if (status === 'indexing') return 'Indexed'
   if (status === 'needs_refresh') return 'Indexed'
-  if (status === 'unavailable' || status === 'permission_denied' || status === 'external_drive_disconnected') {
+  if (
+    status === 'unavailable' ||
+    status === 'permission_denied' ||
+    status === 'external_drive_disconnected' ||
+    status === 'missing' ||
+    status === 'error'
+  ) {
     return 'Unavailable'
   }
   return 'Indexed'

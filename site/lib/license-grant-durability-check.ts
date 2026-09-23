@@ -1,4 +1,5 @@
 import { readFileSync, unlinkSync } from "node:fs";
+import { stripeTestFixtureSecret } from "./test/stripe-fixture-secret.ts";
 import { join } from "node:path";
 import {
   bindActivationAttemptToCheckout,
@@ -20,14 +21,21 @@ import {
   upsertStoredGrant,
 } from "./license-store.ts";
 import { isValidSessionId, verifyStripeCheckoutSession } from "./verify-stripe-session.ts";
+import {
+  applyTestLicenseSigningEnv,
+  generateTestLicenseSigningKeypair,
+} from "./test/license-signing-fixtures.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function runLicenseGrantDurabilityCheck(): Promise<void> {
+  const keypair = generateTestLicenseSigningKeypair();
   const previous = {
     NODE_ENV: process.env.NODE_ENV,
+    LICENSE_SIGNING_PRIVATE_KEY: process.env.LICENSE_SIGNING_PRIVATE_KEY,
+    LICENSE_SIGNING_PUBLIC_KEYS: process.env.LICENSE_SIGNING_PUBLIC_KEYS,
     LICENSE_SIGNING_SECRET: process.env.LICENSE_SIGNING_SECRET,
     LICENSE_STORE_PATH: process.env.LICENSE_STORE_PATH,
     LICENSE_GRANTS: process.env.LICENSE_GRANTS,
@@ -37,7 +45,7 @@ async function runLicenseGrantDurabilityCheck(): Promise<void> {
 
   try {
     process.env.NODE_ENV = "development";
-    process.env.LICENSE_SIGNING_SECRET = "grant-durability-check-secret";
+    applyTestLicenseSigningEnv(keypair);
     process.env.LICENSE_STORE_PATH = storePath;
     delete process.env.STRIPE_SECRET_KEY;
     resetLicensePersistenceStoreForTests();
@@ -175,7 +183,7 @@ async function runLicenseGrantDurabilityCheck(): Promise<void> {
     assert(secondDevice.ok === false && secondDevice.error === "device_limit", "device limit still applies");
 
     assert(isValidSessionId("fake") === false, "forged success token is not a Stripe session");
-    const forged = await verifyStripeCheckoutSession("not-a-session", "sk_test_dummy");
+    const forged = await verifyStripeCheckoutSession("not-a-session", stripeTestFixtureSecret("DummyNotReal00001"));
     assert(forged.ok === false && forged.error === "invalid_session", "forged success session fails");
 
     const unbound = await createActivationAttempt({ deviceId: "dev_unbound", plan: "lifetime" });

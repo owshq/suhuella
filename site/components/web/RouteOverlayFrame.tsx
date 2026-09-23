@@ -1,25 +1,33 @@
 "use client";
 
 import { X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatedMeshBackground } from "@/components/AnimatedMeshBackground";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { SuhuellaWordmark } from "@/components/icons/SuhuellaWordmark";
+import { SuhuellaLogo } from "@/components/icons/SuhuellaLogo";
+import { useLocale } from "@/components/providers/LocaleProvider";
+import { brand } from "@suhuella/brand";
+import { formatAppVersion } from "@/lib/release";
 
 type RouteOverlayFrameProps = {
   ariaLabel: string;
   onClose: () => void;
+  badgeChannel?: string;
   children: ReactNode;
 };
 
 export function RouteOverlayFrame({
   ariaLabel,
   onClose,
+  badgeChannel,
   children,
 }: RouteOverlayFrameProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
+  const { t } = useLocale();
+  const version = formatAppVersion();
 
   useEffect(() => {
     setMounted(true);
@@ -76,24 +84,39 @@ export function RouteOverlayFrame({
         onClick={onClose}
       />
 
-      <div className="route-overlay-island landing-surface relative z-10 flex h-[min(50dvh,28rem)] w-[min(36rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/50 text-slate-900 shadow-2xl [color-scheme:light]">
+      <div className="route-overlay-island landing-surface relative z-10 flex h-[min(56dvh,32rem)] w-[min(40rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-white/50 text-slate-900 shadow-2xl [color-scheme:light]">
         <AnimatedMeshBackground landing contained />
         <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 py-5 text-slate-900 sm:px-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <SuhuellaWordmark
-              glyphClassName="h-6 w-6"
-              textClassName="text-sm font-semibold tracking-[-0.02em]"
-            />
-            <div className="flex items-center gap-2">
-              <LanguageSwitcher inline />
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/80 text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:text-slate-950"
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </button>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-white/60 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm transition hover:bg-white hover:text-slate-900"
+            >
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                <SuhuellaLogo className="h-4 w-4 shrink-0 text-slate-900" />
+                {t.hero.badge.name || brand.displayName}
+              </span>
+              <span className="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden />
+              <span className="rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--brand-accent)]">
+                {version}
+              </span>
+              {badgeChannel ? (
+                <>
+                  <span className="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden />
+                  <span className="text-[10px] font-medium text-slate-500">{badgeChannel}</span>
+                </>
+              ) : null}
+            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+            <LanguageSwitcher inline />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/70 bg-white/80 text-slate-800 shadow-sm backdrop-blur-sm transition hover:bg-white hover:text-slate-950"
+            >
+              <X className="h-4 w-4" strokeWidth={2} />
+            </button>
             </div>
           </div>
           {children}

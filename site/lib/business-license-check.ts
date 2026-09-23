@@ -1,5 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getBusinessPricingConfig, monthlyAmountCents } from "./business-config.ts";
-import { createBusinessService, licenseContextFromBusinessSeat } from "./business-service.ts";
+import { organisationOverviewFromInspection } from "./business-organisation.ts";
+import {
+  businessDeviceLimitForAccount,
+  createBusinessService,
+  licenseContextFromBusinessSeat,
+} from "./business-service.ts";
 import { createMemoryBusinessStore } from "./business-store.ts";
 import type { LicenseGrant } from "./license-context.ts";
 
@@ -157,11 +164,22 @@ export async function runBusinessLicenseCheck(): Promise<void> {
   assert(converted.value.grant.origin === "gift", "origin is preserved on convert");
   assert(converted.value.seat.licenseId === "lic_gift", "converted seat keeps licenseId");
 
+  const managed = service.findManagedOrganisation("owner@acme.test");
+  assert(managed?.account.organisationId === account.organisationId, "owner can manage the organisation");
+  assert(
+    service.findManagedOrganisation("ben@acme.test") === undefined,
+    "member cannot manage the organisation",
+  );
+
   const grant = service.findBusinessGrantByEmail("ada@acme.test");
   assert(grant?.edition === "business", "active seat resolves to Business edition");
   assert(grant?.organisationId === account.organisationId, "grant includes organisationId");
   assert(grant?.organisationName === "ACME Ltd", "grant includes organisationName");
   assert(grant?.seatId === invited.value.seatId, "grant includes seatId");
+  assert(
+    grant?.deviceLimit === businessDeviceLimitForAccount({}),
+    "business seat defaults to three devices",
+  );
   assert(!("seatPriceCents" in (grant ?? {})), "LicenseContext/grant has no price");
 
   const context = licenseContextFromBusinessSeat(account, invited.value, 1);
@@ -169,6 +187,10 @@ export async function runBusinessLicenseCheck(): Promise<void> {
   assert(context?.organisationId === account.organisationId, "LicenseContext has organisationId");
   assert(context?.organisationName === "ACME Ltd", "LicenseContext has organisationName");
   assert(context?.seatId === invited.value.seatId, "LicenseContext has seatId");
+  assert(
+    context?.deviceLimit === businessDeviceLimitForAccount(account),
+    "LicenseContext exposes organisation device limit",
+  );
   assert((context?.capabilities.length ?? 0) > 0, "LicenseContext has capabilities");
   assert(context && !("seatPriceCents" in context), "LicenseContext has no price");
   assert(
@@ -266,6 +288,47 @@ export async function runBusinessLicenseCheck(): Promise<void> {
     inspected.value.seats.every((item) => item.context === null || item.context.edition === "business"),
     "inspected seats map to Business LicenseContext",
   );
+
+  const overview = organisationOverviewFromInspection(account, inspected.value.seats);
+  assert(overview.plan === "Business", "organisation overview is a Business product, not a partner channel");
+  assert(overview.seats === 25, "overview reports contracted seats");
+  assert(overview.assigned >= 1, "overview reports assigned seats");
+  assert(overview.available === overview.seats - overview.assigned, "available seats are contracted minus assigned");
+  assert(overview.monthlyAmountCents === 5000, "monthly total is computed server-side");
+  assert(overview.billingAction === "checkout_business", "orgs without Stripe use Business checkout, not sales mailto");
+  assert(overview.rows.some((row) => row.email === "owner@acme.test"), "overview lists assigned users");
+  assert(overview.rows.some((row) => row.seatStatus === "available"), "overview lists available seats");
+
+  const lowered = await service.setOrganisationDeviceLimit(superadmin, account.organisationId, 1);
+  assert(lowered.ok && lowered.value.account.deviceLimitPerSeat === 1, "superadmin can lower device limit");
+  assert(
+    service.findBusinessGrantByEmail("ada@acme.test")?.deviceLimit === 1,
+    "seat grant picks up organisation device limit",
+  );
+  const memberDenied = await service.setOrganisationDeviceLimit(adminActor, account.organisationId, 3);
+  assert(!memberDenied.ok && memberDenied.error === "forbidden", "business admin cannot change device limit");
+  const restoredLimit = await service.setOrganisationDeviceLimit(
+    superadmin,
+    account.organisationId,
+    businessDeviceLimitForAccount({}),
+  );
+  assert(restoredLimit.ok, "superadmin can restore default device limit");
+
+  const licensePanel = readFileSync(
+    join(process.cwd(), "../packages/product/src/components/LicenseStatusPanel.tsx"),
+    "utf8",
+  );
+  assert(licensePanel.includes("BusinessOrganisationSection"), "Business admin stays inside License");
+  assert(!licensePanel.includes("siteUrl('/business')"), "Business is not a customer web portal");
+
+  const settingsNav = readFileSync(
+    join(process.cwd(), "../packages/product/src/lib/settings-tabs.ts"),
+    "utf8",
+  );
+  assert(settingsNav.includes("'general', 'ai', 'license', 'support'"), "Settings stays four tabs");
+  assert(!settingsNav.includes("'billing'"), "Billing is not a Settings tab");
+  assert(!settingsNav.includes("'team'"), "Team is not a Settings tab");
+  assert(!settingsNav.includes("'partner'"), "Partner is not a Settings tab");
 
   console.log("BUSINESS-LICENSE-001 check passed");
 }

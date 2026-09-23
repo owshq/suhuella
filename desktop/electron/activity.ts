@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { activityItemFromPlanItem, humanActivityReason } from '@suhuella/product/lib/activity-copy.ts'
+import {
+  buildSaveAsActivityRun,
+  buildSourceActivityRun,
+} from '@suhuella/product/lib/activity-general-events.ts'
 import { summarizeActivity, summarizeActivityProgress } from '@suhuella/product/lib/activity-summary.ts'
+import { runActivityWhenChecks } from '@suhuella/product/lib/activity-when-check.ts'
 import { estimateTimeSaved } from '@suhuella/product/lib/time-saved.ts'
 import type {
   ActivityRun,
@@ -61,7 +66,7 @@ export function activityRunFromExecution(
 
 export function organisationActivityTrigger(
   value: unknown,
-): Exclude<ActivityTrigger, 'autopilot' | 'undo'> {
+): Exclude<ActivityTrigger, 'autopilot' | 'undo' | 'source_event'> {
   if (value === 'move_this_file' || value === 'workflow') return value
   return 'organise_documents'
 }
@@ -103,6 +108,46 @@ export function persistAutopilotActivity(
   return recordActivityRun(
     userDataDir,
     activityRunFromExecution(result, { startedAt, trigger: 'autopilot' }),
+  )
+}
+
+export function persistSourceConnectedActivity(userDataDir: string, sourceName: string): ActivityRun[] {
+  const runs = loadActivityRuns(userDataDir)
+  return recordActivityRun(
+    userDataDir,
+    buildSourceActivityRun({
+      kind: 'connected',
+      sourceName,
+      toStatus: 'ready',
+      runNumber: nextActivityRunNumber(runs),
+    }),
+  )
+}
+
+export function persistSourceRemovedActivity(userDataDir: string, sourceName: string): ActivityRun[] {
+  const runs = loadActivityRuns(userDataDir)
+  return recordActivityRun(
+    userDataDir,
+    buildSourceActivityRun({
+      kind: 'removed',
+      sourceName,
+      runNumber: nextActivityRunNumber(runs),
+    }),
+  )
+}
+
+export function persistSaveAsActivity(
+  userDataDir: string,
+  input: { fileName: string; folder: string },
+): ActivityRun[] {
+  const runs = loadActivityRuns(userDataDir)
+  return recordActivityRun(
+    userDataDir,
+    buildSaveAsActivityRun({
+      fileName: input.fileName,
+      folder: input.folder,
+      runNumber: nextActivityRunNumber(runs),
+    }),
   )
 }
 
@@ -239,7 +284,9 @@ export function runActivityChecks(): void {
     assert(estimateTimeSaved(8) === '≈ 3 minutes', '8 documents estimate locally')
     const progress = summarizeActivityProgress(recorded)
     assert(progress?.todayMoved === 1, 'today counts real moves')
+    assert(progress.todayUndoExpiresInDays === null, 'moves without undo stay without an expiry')
     assert(progress.estimatedTimeSaved === null, 'one move is not enough for an estimate')
+    runActivityWhenChecks()
 
     const stale = persistOrganisationActivity(
       root,

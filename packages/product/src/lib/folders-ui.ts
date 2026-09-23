@@ -77,6 +77,8 @@ export function statusLabel(status: IndexedLocationStatus): string {
     case 'needs_refresh':
       return 'Needs refresh'
     case 'unavailable':
+    case 'missing':
+    case 'error':
       return 'Unavailable'
     case 'permission_denied':
       return 'Needs permission'

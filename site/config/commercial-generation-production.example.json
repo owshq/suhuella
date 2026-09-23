@@ -1,0 +1,31 @@
+{
+  "COMMERCIAL_GENERATION_REGISTRY": [
+    {
+      "id": "gen_license_v1_0",
+      "label": "SuHuella license 1.x",
+      "requiredCapabilities": ["apply_bulk_organisation"],
+      "effectiveFrom": "2020-01-01T00:00:00.000Z",
+      "createdAt": "2026-09-23T00:00:00.000Z"
+    },
+    {
+      "id": "gen_license_v2_0",
+      "label": "SuHuella license 2.x",
+      "requiredCapabilities": ["apply_bulk_organisation", "rename_file"],
+      "effectiveFrom": "2026-01-01T00:00:00.000Z",
+      "createdAt": "2026-09-23T00:00:00.000Z"
+    }
+  ],
+  "COMMERCIAL_GENERATION_PRICE_MAP": [
+    {
+      "priceId": "REPLACE_WITH_LIFETIME_PRICE_ID",
+      "commercialGenerationId": "gen_license_v1_0",
+      "product": "lifetime"
+    },
+    {
+      "priceId": "REPLACE_WITH_LIFETIME_UPGRADE_PRICE_ID",
+      "commercialGenerationId": "gen_license_v2_0",
+      "product": "lifetime_upgrade"
+    }
+  ],
+  "COMMERCIAL_GENERATION_UPGRADE_MAP": [{ "from": "gen_license_v1_0", "to": "gen_license_v2_0" }]
+}

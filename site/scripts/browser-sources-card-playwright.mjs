@@ -31,7 +31,9 @@ async function main() {
 
     const card = page.locator("article").filter({ hasText: "dev-data" }).first();
     await card.waitFor({ timeout: 6000 });
-    await card.locator("div.aspect-square").first().click();
+    const gridIcon = card.locator("div.aspect-square");
+    if (await gridIcon.count()) await gridIcon.first().click();
+    else await card.locator("svg").first().click();
     await page.getByRole("heading", { name: "dev-data" }).waitFor({ timeout: 4000 });
     if (await page.getByText("Indexed", { exact: true }).count()) {
       throw new Error("Icon click stayed on the Sources catalog instead of opening the source");
@@ -57,7 +59,21 @@ async function main() {
     await card.waitFor({ timeout: 4000 });
   }
 
+  const downloads = [];
+  page.on("download", (download) => downloads.push(download.url()));
   const connect = page.getByRole("button", { name: /Connect folder|Conectar carpeta/ }).first();
+  await page.evaluate(() => {
+    window.showDirectoryPicker = async () => {
+      const error = new DOMException("The user aborted a request.", "AbortError");
+      throw error;
+    };
+  });
+  await connect.click();
+  await page.waitForTimeout(400);
+  if (await page.getByRole("dialog").count()) {
+    throw new Error("Cancelling the folder picker opened a download dialog");
+  }
+
   await page.evaluate(() => {
     window.showDirectoryPicker = async () => {
       const error = new Error("Can't open this folder because it contains system files");
@@ -67,24 +83,16 @@ async function main() {
   });
   await connect.click();
   const dialog = page.getByRole("dialog");
-  if (await dialog.waitFor({ timeout: 4000 }).then(() => true).catch(() => false)) {
-    const connectParagraphs = dialog.locator("p");
-    const connectCount = await connectParagraphs.count();
-    if (connectCount >= 2) {
-      const body = await connectParagraphs.nth(0).innerText();
-      const note = await connectParagraphs.nth(1).innerText();
-      if (!/download the desktop app|descarga la app/i.test(body)) {
-        throw new Error("Connect body must include the desktop download sentence");
-      }
-      if (!/system folder|carpeta del sistema/i.test(note)) {
-        throw new Error("Connect note must mention system folders");
-      }
-    }
-    await page.getByRole("button", { name: /Choose folder|Choose another folder|Elegir/ }).click();
+  await dialog.waitFor({ timeout: 4000 });
+  const title = await dialog.getByRole("heading").innerText();
+  const body = await dialog.locator("p").first().innerText();
+  if (!/Desktop/.test(title)) throw new Error(`Protected folder title missing Desktop: ${title}`);
+  if (/every function|todas las funciones/i.test(body)) {
+    throw new Error("Protected folder dialog promises every function");
   }
-  await page.getByRole("heading", { name: /not available in this browser|no está disponible/i }).waitFor({
-    timeout: 4000,
-  });
+  if (downloads.length > 0) throw new Error("Opening the dialog started a download");
+  await dialog.getByRole("button", { name: /Not now|Ahora no/ }).click();
+  await dialog.waitFor({ state: "hidden", timeout: 4000 });
 
   if (hasDemo) {
     await page.getByRole("button", { name: /Close|Cerrar|OK|Cancel|Cancelar/ }).first().click().catch(() => {});

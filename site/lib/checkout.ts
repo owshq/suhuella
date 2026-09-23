@@ -1,4 +1,5 @@
-import { brand, salesMailto } from "@suhuella/brand";
+import { brand } from "@suhuella/brand";
+import { isBusinessCheckoutPubliclyEnabled } from "./business/checkout.ts";
 import { isPaidCheckoutPubliclyEnabled, type EnvLike } from "./paid-checkout.ts";
 
 export type CheckoutPlan = "lifetime" | "monthly" | "business";
@@ -31,9 +32,10 @@ export function monthlyCheckoutUrl(env: EnvLike = process.env): string {
   return readUrl(env.STRIPE_MONTHLY_PAYMENT_LINK);
 }
 
-/** Business stays Contact Sales. No automated Stripe checkout. */
-export function businessCheckoutUrl(): string {
-  return salesMailto(`${brand.displayName} Business`);
+/** Business self-serve checkout page. Empty while the commercial switch is off. */
+export function businessCheckoutUrl(env: EnvLike = process.env): string {
+  if (!isBusinessCheckoutPubliclyEnabled(env)) return "";
+  return "/checkout/business";
 }
 
 export function checkoutUrlForPlan(plan: CheckoutPlan): string {

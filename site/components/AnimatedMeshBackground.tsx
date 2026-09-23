@@ -111,11 +111,13 @@ const floatingFolders: FloatingFolder[] = [
 type AnimatedMeshBackgroundProps = {
   landing?: boolean;
   contained?: boolean;
+  themeAdaptive?: boolean;
 };
 
 export function AnimatedMeshBackground({
   landing = false,
   contained = false,
+  themeAdaptive = false,
 }: AnimatedMeshBackgroundProps) {
   const visibleFolders = landing
     ? floatingFolders.filter((folder) => !folder.hideOnLanding)
@@ -126,8 +128,16 @@ export function AnimatedMeshBackground({
       aria-hidden
       className={
         contained
-          ? "pointer-events-none absolute inset-0 overflow-hidden bg-[var(--brand-surface,#A7D8F9)]"
-          : "pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[var(--brand-surface,#A7D8F9)]"
+          ? `pointer-events-none absolute inset-0 overflow-hidden ${
+              themeAdaptive
+                ? "partner-mesh-bg bg-[var(--partner-page-bg,var(--brand-surface,#A7D8F9))]"
+                : "bg-[var(--brand-surface,#A7D8F9)]"
+            }`
+          : `pointer-events-none fixed inset-0 -z-10 overflow-hidden ${
+              themeAdaptive
+                ? "partner-mesh-bg bg-[var(--partner-page-bg,var(--brand-surface,#A7D8F9))]"
+                : "bg-[var(--brand-surface,#A7D8F9)]"
+            }`
       }
     >
       <motion.div

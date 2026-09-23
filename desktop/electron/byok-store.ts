@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { safeStorage } from 'electron'
+import { productCopy } from '@suhuella/product/lib/product-copy.ts'
 import { clearByokConversation } from './byok-conversation.ts'
 import {
   assistantLabel,
@@ -34,6 +35,10 @@ export function getByokFilePath(userDataDir: string): string {
   return path.join(userDataDir, BYOK_FILE)
 }
 
+function keyStorageAvailable(): boolean {
+  return safeStorage.isEncryptionAvailable()
+}
+
 function emptyStatus(): ByokStatus {
   return {
     connected: false,
@@ -41,6 +46,7 @@ function emptyStatus(): ByokStatus {
     assistantLabel: null,
     model: null,
     hasKey: false,
+    keyStorageAvailable: keyStorageAvailable(),
   }
 }
 
@@ -52,6 +58,7 @@ function toStatus(record: StoredByokRecord): ByokStatus {
     assistantLabel: assistantLabel(record.assistant),
     model: record.model,
     hasKey: Boolean(record.encryptedKey),
+    keyStorageAvailable: keyStorageAvailable(),
   }
 }
 
@@ -122,7 +129,9 @@ export function connectByok(userDataDir: string, input: unknown): ByokConnectRes
   if (!encryptedKey) {
     return {
       ok: false,
-      error: 'This computer cannot store your key right now. Try again or contact support.',
+      error: productCopy(
+        'This computer cannot store encrypted keys right now. Connect a local model in Settings → AI instead, or try again later.',
+      ),
     }
   }
 

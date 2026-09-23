@@ -2,6 +2,7 @@ export const ROUTE_OVERLAY_PATHS = {
   landing: "/",
   license: "/license",
   download: "/download",
+  downloadPreparing: "/download/preparing",
   success: "/license/success",
 } as const;
 
@@ -11,6 +12,7 @@ export function overlayFromPathname(pathname: string): RouteOverlay | null {
   const path = pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return "landing";
   if (path === "/license") return "license";
+  if (path === "/download/preparing" || path === "/download/success") return "downloadPreparing";
   if (path === "/download") return "download";
   if (path === "/license/success" || path === "/success" || path === "/descarga-exitosa") {
     return "success";

@@ -59,7 +59,7 @@ export const dbasenetBrand = {
   },
   download: {
     macArtifactName: "${productName}-${version}.${ext}",
-    windowsArtifactName: "${productName}-Setup-${version}.${ext}",
+    windowsArtifactName: "${productName}-${version}.${ext}",
   },
   release: brandReleaseFromManifest(dbasenetRelease),
 } satisfies BrandConfig;

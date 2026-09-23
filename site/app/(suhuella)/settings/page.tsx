@@ -1,1 +1,1 @@
-export { suhuellaShellMetadata as metadata, SuhuellaShellPage as default } from "@/lib/suhuella-shell";
+export { generateMetadata, SuhuellaShellPage as default } from "@/lib/suhuella-shell";

@@ -1,5 +1,9 @@
 import { Sparkles } from 'lucide-react'
-import { isPlanAssistantQuestion, planAssistantUsingLine } from '../lib/plan-assistant-copy'
+import {
+  isPlanAssistantQuestion,
+  PLAN_ASSISTANT_CONFIRM_HINT,
+  planAssistantUsingLine,
+} from '../lib/plan-assistant-copy'
 import { ORGANISE_ASSISTANT_LABEL } from '../lib/organise-copy'
 import { groundedAssistantChips } from '../lib/plan-presentation'
 import type { ByokConversationMessage, OrganisationPlanItem, PlanAssistantUsing, PlanWorkflowIdea } from '../types'
@@ -140,9 +144,7 @@ export function PlanAssistantBanner({
         <div>
           <p className="text-sm font-semibold text-slate-900">Suggested updates to this Plan</p>
           <p className="mt-0.5 text-xs font-medium text-slate-500">{planAssistantUsingLine(using)}</p>
-          <p className="mt-1 text-sm leading-relaxed text-slate-600">
-            Review every action. Nothing changes until you apply accepted changes.
-          </p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-600">{PLAN_ASSISTANT_CONFIRM_HINT}</p>
         </div>
         <button
           type="button"
@@ -155,14 +157,17 @@ export function PlanAssistantBanner({
         </button>
       </div>
       {workflows.length > 0 ? (
-        <ul className="mt-4 space-y-2">
-          {workflows.map((workflow) => (
-            <li key={workflow.id} className="rounded-2xl border border-white/80 bg-white/90 px-3 py-2.5">
-              <p className="text-sm font-medium text-slate-900">{workflow.title}</p>
-              <p className="mt-1 text-xs leading-relaxed text-slate-500">{workflow.explanation}</p>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-4 space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Suggestions</p>
+          <ul className="space-y-2">
+            {workflows.map((idea) => (
+              <li key={idea.id} className="rounded-2xl border border-white/80 bg-white/90 px-3 py-2.5">
+                <p className="text-sm font-medium text-slate-900">{idea.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{idea.explanation}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   )

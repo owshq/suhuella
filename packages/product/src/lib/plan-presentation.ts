@@ -1,4 +1,5 @@
-import type { KnowledgeSetItem, OrganisationPlanItem, OrganisationPlanPreview } from '../types.ts'
+import type { ConfidenceLabel, KnowledgeSetItem, OrganisationPlanItem, OrganisationPlanPreview } from '../types.ts'
+import { fileNameMatchesDocumentHint } from './document-hints.ts'
 import { isConfirmablePlanItem } from './plan-editor-copy.ts'
 
 export type PlanPresentationState =
@@ -21,6 +22,16 @@ export type PlanPresentationCounts = {
   skipped: number
 }
 
+export type PlanConfidenceCounts = {
+  strong: number
+  good: number
+  possible: number
+  weak: number
+}
+
+const CONFIDENCE_EXPLANATION = /^(Strong|Good|Possible|Weak) match \(\d+%\) — /i
+const REVIEWABLE_STATES = new Set<PlanPresentationState>(['suggested', 'accepted', 'needs_review'])
+
 const USER_SKIP = 'Skipped by you'
 
 const BLOCKED_REASONS = [
@@ -30,6 +41,10 @@ const BLOCKED_REASONS = [
   'This folder is no longer available.',
   'This folder needs permission.',
   'Name taken',
+  'Source unavailable',
+  'Connect ',
+  'Reconnect ',
+  'Grant access to ',
 ]
 
 const NO_CHANGE_REASONS = [
@@ -38,11 +53,10 @@ const NO_CHANGE_REASONS = [
   'Unsupported item',
 ]
 
-const INVOICE_HINT = /\b(invoice|invoices|factura|facturas|factures|facturacion|facturación)\b/i
 const SCREENSHOT_HINT = /(screenshot|screen[ _-]?shot|captura)/i
 
 export function looksLikeInvoice(fileName: string): boolean {
-  return INVOICE_HINT.test(fileName.replace(/[_-]+/g, ' '))
+  return fileNameMatchesDocumentHint(fileName, 'invoice')
 }
 
 export function looksLikeScreenshot(fileName: string): boolean {
@@ -74,6 +88,7 @@ export function isNoChangeReason(reason: string): boolean {
 }
 
 export function planPresentationState(item: OrganisationPlanItem): PlanPresentationState {
+  if (item.status === 'source_unavailable' || item.status === 'source_needs_access') return 'blocked'
   if (item.status === 'applied') return 'applied'
   if (item.status === 'failed') return 'failed'
   if (isUserSkip(item)) return 'skipped'
@@ -208,6 +223,114 @@ export function reanalyseWouldReplaceReview(items: OrganisationPlanItem[]): bool
     const state = planPresentationState(item)
     return state === 'suggested' || state === 'accepted' || state === 'needs_review'
   })
+}
+
+export function planRecommendationConfidence(item: OrganisationPlanItem): ConfidenceLabel | null {
+  if (!REVIEWABLE_STATES.has(planPresentationState(item))) return null
+  return item.confidenceLabel
+}
+
+export function planNeedsCloserLook(item: OrganisationPlanItem): boolean {
+  const label = planRecommendationConfidence(item)
+  return label === 'Possible match' || label === 'Weak match'
+}
+
+export function planConfidenceCounts(items: OrganisationPlanItem[]): PlanConfidenceCounts {
+  const counts: PlanConfidenceCounts = { strong: 0, good: 0, possible: 0, weak: 0 }
+  for (const item of items) {
+    if (planPresentationState(item) !== 'suggested' && planPresentationState(item) !== 'needs_review') {
+      continue
+    }
+    const label = planRecommendationConfidence(item)
+    if (label === 'Strong match') counts.strong += 1
+    else if (label === 'Good match') counts.good += 1
+    else if (label === 'Possible match') counts.possible += 1
+    else if (label === 'Weak match') counts.weak += 1
+  }
+  return counts
+}
+
+export function planConfidenceLines(counts: PlanConfidenceCounts): string[] {
+  const lines: string[] = []
+  if (counts.strong > 0) {
+    lines.push(`${counts.strong} strong match${counts.strong === 1 ? '' : 'es'}`)
+  }
+  if (counts.good > 0) {
+    lines.push(`${counts.good} good match${counts.good === 1 ? '' : 'es'}`)
+  }
+  if (counts.possible > 0) {
+    lines.push(`${counts.possible} possible match${counts.possible === 1 ? '' : 'es'}`)
+  }
+  if (counts.weak > 0) {
+    lines.push(`${counts.weak} weak match${counts.weak === 1 ? '' : 'es'}`)
+  }
+  return lines
+}
+
+export function planCloserLookCount(items: OrganisationPlanItem[]): number {
+  return items.filter(
+    (item) =>
+      (planPresentationState(item) === 'suggested' || planPresentationState(item) === 'needs_review') &&
+      planNeedsCloserLook(item),
+  ).length
+}
+
+export function planDecisionLead(items: OrganisationPlanItem[]): string | null {
+  const closer = planCloserLookCount(items)
+  if (closer === 0) return null
+  return closer === 1
+    ? '1 recommendation needs a closer look.'
+    : `${closer} recommendations need a closer look.`
+}
+
+export function planExplanationWithoutConfidence(explanation: string): string {
+  return explanation.replace(CONFIDENCE_EXPLANATION, '').trim()
+}
+
+/** Presentation only. The engine may still speak tokens; the Plan must not. */
+export function planHumanReason(reason: string): string {
+  const trimmed = reason.trim()
+  if (!trimmed) return ''
+  const tokensMatch = trimmed.match(/^(.+?)\s+tokens match (.+?)\.?$/i)
+  if (tokensMatch) {
+    return `Matches your existing ${tokensMatch[2].trim()} folder.`
+  }
+  if (/recognised destination hint/i.test(trimmed)) {
+    return trimmed.replace(/recognised destination hint/gi, 'existing folder')
+  }
+  if (/^folder path match\.?$/i.test(trimmed)) {
+    return 'Matches the folder name.'
+  }
+  return trimmed
+}
+
+function reviewRank(item: OrganisationPlanItem): number {
+  const state = planPresentationState(item)
+  if (state === 'needs_review') return 0
+  if (state === 'suggested' && planNeedsCloserLook(item)) return 1
+  if (state === 'suggested') return 2
+  if (state === 'accepted') return 3
+  if (state === 'blocked') return 4
+  if (state === 'failed') return 5
+  if (state === 'no_change') return 6
+  if (state === 'skipped') return 7
+  return 8
+}
+
+export function sortPlanItemsForReview(items: OrganisationPlanItem[]): OrganisationPlanItem[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const delta = reviewRank(left.item) - reviewRank(right.item)
+      return delta !== 0 ? delta : left.index - right.index
+    })
+    .map((entry) => entry.item)
+}
+
+export function planConfidenceClass(label: ConfidenceLabel): string {
+  if (label === 'Strong match') return 'text-emerald-700'
+  if (label === 'Good match') return 'text-[var(--app-fg)] opacity-70'
+  return 'text-amber-700'
 }
 
 export function planSummaryLines(counts: PlanPresentationCounts): string[] {
@@ -411,4 +534,130 @@ export function runPlanPresentationChecks(): void {
     throw new Error(`expected Confirm Plan CTA, got ${allAccepted.label}`)
   }
 
+  const strongSuggested = fixtureItem({
+    fileName: 'Invoice_ACME_2026.pdf',
+    currentPath: '/Users/demo/Downloads/Invoice_ACME_2026.pdf',
+    action: 'move',
+    proposedPath: '/Users/demo/Documents/Invoices/Invoice_ACME_2026.pdf',
+    reviewGroup: 'ready',
+    selected: false,
+    score: 80,
+    confidenceLabel: 'Strong match',
+    skipReason: null,
+  })
+  const possibleSuggested = fixtureItem({
+    fileName: 'notes.txt',
+    currentPath: '/Users/demo/Downloads/notes.txt',
+    action: 'move',
+    proposedPath: '/Users/demo/Documents/Notes/notes.txt',
+    reviewGroup: 'review',
+    selected: false,
+    score: 34,
+    confidenceLabel: 'Possible match',
+    skipReason: null,
+  })
+  const weakSuggested = fixtureItem({
+    fileName: 'scan.png',
+    currentPath: '/Users/demo/Downloads/scan.png',
+    action: 'move',
+    proposedPath: '/Users/demo/Documents/Images/scan.png',
+    reviewGroup: 'review',
+    selected: false,
+    score: 22,
+    confidenceLabel: 'Weak match',
+    skipReason: null,
+  })
+  const alreadyFineConfident = fixtureItem({
+    fileName: 'kept.pdf',
+    currentPath: '/Users/demo/Documents/Invoices/kept.pdf',
+    skipReason: 'Already in the recommended folder',
+    score: 88,
+    confidenceLabel: 'Strong match',
+  })
+
+  if (planRecommendationConfidence(strongSuggested) !== 'Strong match') {
+    throw new Error('suggested items must expose recommendation confidence')
+  }
+  if (planRecommendationConfidence(alreadyFineConfident) !== null) {
+    throw new Error('no-change items must not show recommendation confidence')
+  }
+  if (planNeedsCloserLook(strongSuggested) !== false || planNeedsCloserLook(possibleSuggested) !== true) {
+    throw new Error('possible matches need a closer look; strong matches do not')
+  }
+  if (planNeedsCloserLook(alreadyFineConfident)) {
+    throw new Error('already-fine items are not closer-look recommendations')
+  }
+
+  const confidenceItems = [strongSuggested, possibleSuggested, weakSuggested, alreadyFineConfident, move]
+  const confidence = planConfidenceCounts(confidenceItems)
+  if (confidence.strong !== 1 || confidence.possible !== 1 || confidence.weak !== 1) {
+    throw new Error(`expected 1 strong / 1 possible / 1 weak still to review, got ${JSON.stringify(confidence)}`)
+  }
+  const acceptedStrong = fixtureItem({
+    fileName: 'Contract.pdf',
+    currentPath: '/Users/demo/Downloads/Contract.pdf',
+    action: 'move',
+    proposedPath: '/Users/demo/Documents/Contracts/Contract.pdf',
+    reviewGroup: 'ready',
+    selected: true,
+    score: 76,
+    confidenceLabel: 'Strong match',
+    skipReason: null,
+  })
+  if (planConfidenceCounts([acceptedStrong, possibleSuggested]).strong !== 0) {
+    throw new Error('accepted items must leave the confidence summary')
+  }
+
+  const confidenceLines = planConfidenceLines(confidence)
+  if (
+    !confidenceLines.includes('1 strong match') ||
+    !confidenceLines.includes('1 possible match') ||
+    !confidenceLines.includes('1 weak match')
+  ) {
+    throw new Error(`confidence summary is wrong: ${confidenceLines.join(' / ')}`)
+  }
+  if (planConfidenceLines({ strong: 8, good: 2, possible: 0, weak: 0 }).join(' · ') !== '8 strong matches · 2 good matches') {
+    throw new Error('plural confidence lines are wrong')
+  }
+
+  if (planCloserLookCount(confidenceItems) !== 2) {
+    throw new Error('closer-look count must include possible and weak suggestions only')
+  }
+  if (planDecisionLead([strongSuggested, alreadyFineConfident]) !== null) {
+    throw new Error('confident plans must not add a closer-look sentence')
+  }
+  if (planDecisionLead(confidenceItems) !== '2 recommendations need a closer look.') {
+    throw new Error('mixed plans must say how many recommendations need a closer look')
+  }
+
+  if (
+    planExplanationWithoutConfidence('Strong match (82%) — Invoice tokens match Invoices') !==
+    'Invoice tokens match Invoices'
+  ) {
+    throw new Error('why text must drop the confidence prefix')
+  }
+  if (planExplanationWithoutConfidence('Already in Invoices.') !== 'Already in Invoices.') {
+    throw new Error('why text without a confidence prefix must stay intact')
+  }
+  if (planHumanReason('Invoice tokens match Invoices') !== 'Matches your existing Invoices folder.') {
+    throw new Error('token-match reasons must name the existing folder')
+  }
+  if (planHumanReason('Already in Invoices.') !== 'Already in Invoices.') {
+    throw new Error('already-human reasons stay intact')
+  }
+
+  const ordered = sortPlanItemsForReview([
+    alreadyFineConfident,
+    strongSuggested,
+    possibleSuggested,
+    acceptedStrong,
+  ])
+  if (
+    ordered[0]?.fileName !== possibleSuggested.fileName ||
+    ordered[1]?.fileName !== strongSuggested.fileName ||
+    ordered[2]?.fileName !== acceptedStrong.fileName ||
+    ordered[3]?.fileName !== alreadyFineConfident.fileName
+  ) {
+    throw new Error(`review order must put closer-look first: ${ordered.map((item) => item.fileName).join(' / ')}`)
+  }
 }

@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { stripeLiveFixtureSecret, stripeTestFixtureSecret } from "./test/stripe-fixture-secret.ts";
 import { join } from "node:path";
 import {
   bindActivationAttemptToCheckout,
@@ -13,11 +14,13 @@ import {
   monthlyCheckoutUrl,
 } from "./checkout.ts";
 import { fulfillLicenseFromCheckout, stripeCustomerImpliesPaidGrant } from "./license-fulfillment.ts";
+import { isPartnerCheckoutPubliclyEnabled } from "./partners/program-journey.ts";
 import { resetLicensePersistenceStoreForTests } from "./license-persistence/store.ts";
 import { withLicensePersistence } from "./license-persistence/store.ts";
 import { findGrantByEmail } from "./license-store.ts";
 import {
   isPaidCheckoutPubliclyEnabled,
+  isPartnerCheckoutEnvEnabled,
   isStripeLiveSecret,
   isStripeLiveSessionId,
   isStripeTestSecret,
@@ -104,6 +107,7 @@ async function assertRawCardDataIsRejected(): Promise<void> {
     "app/api/verify-session/route.ts",
     "app/api/license/activate-from-checkout/route.ts",
     "app/api/license/checkout-attempt/route.ts",
+    "app/api/business/checkout/route.ts",
   ]) {
     const source = readFileSync(join(process.cwd(), relative), "utf8");
     assert(source.includes("rawCardRejection"), `${relative} rejects raw card fields`);
@@ -111,7 +115,13 @@ async function assertRawCardDataIsRejected(): Promise<void> {
 
   const allowedStripe = /api\.stripe\.com\/v1\/(?:checkout\/sessions|prices\/|subscriptions)/;
   for (const file of sourceFiles(process.cwd())) {
-    if (file.endsWith("raw-card-guard.ts") || file.endsWith("checkout-enablement-check.ts")) continue;
+    if (
+      file.endsWith("raw-card-guard.ts") ||
+      file.endsWith("checkout-enablement-check.ts") ||
+      file.endsWith("checkout-complete-by-product-check.ts")
+    ) {
+      continue;
+    }
     const source = readFileSync(file, "utf8");
     assert(!RAW_CARD_SOURCE.test(source), `${file} does not send raw card data to Stripe`);
     if (!source.includes("api.stripe.com/v1/")) continue;
@@ -119,6 +129,23 @@ async function assertRawCardDataIsRejected(): Promise<void> {
       assert(source.includes("subscriptions/"), "business billing reads subscriptions");
       assert(source.includes("subscription_items/"), "business billing updates subscription items");
       assert(!source.includes("payment_method"), "business billing does not create payment methods");
+      continue;
+    }
+    if (file.endsWith("partners/stripe-account.ts") || file.endsWith("business/stripe-account.ts")) {
+      assert(source.includes("v1/account"), `${file} reads the platform Stripe account`);
+      continue;
+    }
+    if (
+      file.endsWith("business-checkout-webhook.ts") ||
+      file.endsWith("business/checkout.ts") ||
+      file.endsWith("partners/checkout.ts") ||
+      file.endsWith("partners/stripe-fulfillment.ts")
+    ) {
+      assert(
+        source.includes("checkout/sessions") || source.includes("subscriptions/"),
+        `${file} creates or verifies Checkout Sessions and subscriptions only`,
+      );
+      assert(!source.includes("payment_method"), `${file} does not create payment methods`);
       continue;
     }
     assert(allowedStripe.test(source), `${file} only calls Checkout, Price, or Subscription APIs`);
@@ -176,7 +203,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
 
   try {
     delete process.env.PAID_CHECKOUT_ENABLED;
-    process.env.STRIPE_SECRET_KEY = "sk_live_51ShouldNotBeUsed01";
+    process.env.STRIPE_SECRET_KEY = stripeLiveFixtureSecret("ShouldNotBeUsed01");
     process.env.STRIPE_LIFETIME_PRICE_ID = "price_should_not_be_used";
     process.env.STRIPE_MONTHLY_PRICE_ID = "price_should_not_be_used";
     process.env.LICENSE_STORE_PATH = storePath;
@@ -188,6 +215,20 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(
       isPaidCheckoutPubliclyEnabled({ PAID_CHECKOUT_ENABLED: "true" }) === true,
       "exact true enables public checkout for SuHuella",
+    );
+    assert(isPartnerCheckoutEnvEnabled({}) === false, "missing partner checkout switch is off");
+    assert(isPartnerCheckoutEnvEnabled({ PARTNER_CHECKOUT_ENABLED: "false" }) === false, "partner switch off");
+    assert(
+      isPartnerCheckoutPubliclyEnabled({
+        PAID_CHECKOUT_ENABLED: "true",
+        PARTNER_CHECKOUT_ENABLED: "false",
+      }) === false,
+      "personal checkout on does not open partner checkout without partner switch",
+    );
+    const paidCheckoutSource = readFileSync(join(process.cwd(), "lib/paid-checkout.ts"), "utf8");
+    assert(
+      !paidCheckoutSource.includes("isPaidCheckoutOperational"),
+      "no hostname bypass: checkout requires PAID_CHECKOUT_ENABLED on every origin",
     );
 
     fetchCount = 0;
@@ -213,8 +254,8 @@ async function runCheckoutEnablementCheck(): Promise<void> {
       origin: "https://suhuella.com",
       returnTo: "public",
     });
-    assert(business.startsWith("mailto:sales@suhuella.com"), "business stays Contact Sales");
-    assert(businessCheckoutUrl().startsWith("mailto:sales@suhuella.com"), "business helper is mailto");
+    assert(business === "", "business checkout stays closed while flags are off");
+    assert(businessCheckoutUrl() === "", "business helper is empty while closed");
     assert(
       lifetimeCheckoutUrl({ STRIPE_LIFETIME_PAYMENT_LINK: "https://buy.stripe.com/test_hidden" }) === "",
       "payment links stay unused while checkout is off",
@@ -226,13 +267,13 @@ async function runCheckoutEnablementCheck(): Promise<void> {
 
     assert(isValidSessionId("cs_test_forged") === true, "forged-looking id still needs Stripe");
     assert(isValidSessionId("not-a-session") === false, "success token is not a session");
-    const forged = await verifyStripeCheckoutSession("not-a-session", "sk_test_51DummyNotReal00001");
+    const forged = await verifyStripeCheckoutSession("not-a-session", stripeTestFixtureSecret("DummyNotReal00001"));
     assert(forged.ok === false && forged.error === "invalid_session", "forged verify-session fails");
 
     fetchCount = 0;
     const liveForged = await verifyStripeCheckoutSession(
       "cs_test_forged",
-      "sk_live_51DummyNotReal00001",
+      stripeLiveFixtureSecret("DummyNotReal00001"),
       "https://suhuella.com",
     );
     assert(liveForged.ok === false && liveForged.error === "invalid_session", "test session on live origin fails");
@@ -241,14 +282,14 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     fetchCount = 0;
     const testKeyOnLive = await verifyStripeCheckoutSession(
       "cs_live_forged",
-      "sk_test_51DummyNotReal00001",
+      stripeTestFixtureSecret("DummyNotReal00001"),
       "https://suhuella.com",
     );
     assert(testKeyOnLive.ok === false && testKeyOnLive.error === "invalid_session", "test key on live origin fails closed");
     assert(fetchCount === 0, "test key on live origin does not call Stripe");
 
     fetchCount = 0;
-    const mismatch = await verifyStripeCheckoutSession("cs_test_forged", "sk_live_51DummyNotReal00001");
+    const mismatch = await verifyStripeCheckoutSession("cs_test_forged", stripeLiveFixtureSecret("DummyNotReal00001"));
     assert(mismatch.ok === false && mismatch.error === "invalid_session", "live key cannot verify a test session");
     assert(fetchCount === 0, "mode mismatch does not call Stripe");
 
@@ -307,7 +348,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     fetchCount = 0;
     const localForged = await verifyStripeCheckoutSession(
       "cs_test_forged",
-      "sk_test_51DummyNotReal00001",
+      stripeTestFixtureSecret("DummyNotReal00001"),
       "http://localhost:3000",
     );
     assert(localForged.ok === false && localForged.error === "invalid_session", "unknown test session fails closed locally");
@@ -376,18 +417,18 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(stripeCustomerImpliesPaidGrant(true, false) === false, "Stripe customer alone creates no entitlement");
     assert(stripeCustomerImpliesPaidGrant(true, true) === false, "Stripe customer + subscription invents nothing");
 
-    assert(isStripeTestSecret("sk_test_51SyntCheckOnly0001") === true, "test secret is recognized");
-    assert(isStripeLiveSecret("sk_live_51SyntCheckOnly0001") === true, "live secret is recognized");
-    assert(isStripeTestSecret("sk_test_abc") === false, "short test placeholder is rejected");
-    assert(isStripeLiveSecret("sk_live_abc") === false, "short live placeholder is rejected");
+    assert(isStripeTestSecret(stripeTestFixtureSecret("SyntCheckOnly0001")) === true, "test secret is recognized");
+    assert(isStripeLiveSecret(stripeLiveFixtureSecret("SyntCheckOnly0001")) === true, "live secret is recognized");
+    assert(isStripeTestSecret(stripeTestFixtureSecret("abc")) === false, "short test placeholder is rejected");
+    assert(isStripeLiveSecret(stripeLiveFixtureSecret("abc")) === false, "short live placeholder is rejected");
     assert(isStripeTestSessionId("cs_test_abc") === true, "test session is recognized");
     assert(isStripeLiveSessionId("cs_live_abc") === true, "live session is recognized");
     assert(
-      stripeSecretAllowedForOrigin("sk_test_51SyntCheckOnly0001", "https://suhuella.com") === false,
+      stripeSecretAllowedForOrigin(stripeTestFixtureSecret("SyntCheckOnly0001"), "https://suhuella.com") === false,
       "production origin rejects test Stripe keys",
     );
     assert(
-      stripeSecretAllowedForOrigin("sk_live_51SyntCheckOnly0001", "https://suhuella.com") === true,
+      stripeSecretAllowedForOrigin(stripeLiveFixtureSecret("SyntCheckOnly0001"), "https://suhuella.com") === true,
       "production origin accepts live Stripe keys",
     );
     assert(
@@ -399,40 +440,40 @@ async function runCheckoutEnablementCheck(): Promise<void> {
       "www production origin accepts live sessions",
     );
     assert(
-      stripeSessionMatchesSecret("cs_test_abc", "sk_test_51SyntCheckOnly0001") === true,
+      stripeSessionMatchesSecret("cs_test_abc", stripeTestFixtureSecret("SyntCheckOnly0001")) === true,
       "test secret matches test session",
     );
     assert(
-      stripeSessionMatchesSecret("cs_live_abc", "sk_test_51SyntCheckOnly0001") === false,
+      stripeSessionMatchesSecret("cs_live_abc", stripeTestFixtureSecret("SyntCheckOnly0001")) === false,
       "test secret does not match live session",
     );
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: true }, "sk_live_51SyntCheckOnly0001") === true,
+      stripeWebhookLivemodeAllowed({ livemode: true }, stripeLiveFixtureSecret("SyntCheckOnly0001")) === true,
       "live event + live secret is allowed",
     );
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: false }, "sk_test_51SyntCheckOnly0001") === true,
+      stripeWebhookLivemodeAllowed({ livemode: false }, stripeTestFixtureSecret("SyntCheckOnly0001")) === true,
       "test event + test secret is allowed",
     );
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: true }, "sk_test_51SyntCheckOnly0001") === false,
+      stripeWebhookLivemodeAllowed({ livemode: true }, stripeTestFixtureSecret("SyntCheckOnly0001")) === false,
       "live event + test secret is rejected",
     );
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: false }, "sk_live_51SyntCheckOnly0001") === false,
+      stripeWebhookLivemodeAllowed({ livemode: false }, stripeLiveFixtureSecret("SyntCheckOnly0001")) === false,
       "test event + live secret is rejected",
     );
     assert(
-      stripeWebhookLivemodeAllowed({}, "sk_live_51SyntCheckOnly0001") === false,
+      stripeWebhookLivemodeAllowed({}, stripeLiveFixtureSecret("SyntCheckOnly0001")) === false,
       "missing livemode is rejected",
     );
     assert(stripeWebhookLivemodeAllowed({ livemode: true }, "") === false, "empty secret is rejected");
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: true }, "sk_live_abc") === false,
+      stripeWebhookLivemodeAllowed({ livemode: true }, stripeLiveFixtureSecret("abc")) === false,
       "placeholder live secret is rejected",
     );
     assert(
-      stripeWebhookLivemodeAllowed({ livemode: false }, "sk_test_abc") === false,
+      stripeWebhookLivemodeAllowed({ livemode: false }, stripeTestFixtureSecret("abc")) === false,
       "placeholder test secret is rejected",
     );
     assert(
@@ -452,7 +493,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(desktopReturn.cancelUrl.includes("checkout=canceled"), "desktop cancel is explicit");
 
     process.env.PAID_CHECKOUT_ENABLED = "true";
-    process.env.STRIPE_SECRET_KEY = "sk_test_51ShouldNotBeUsed01";
+    process.env.STRIPE_SECRET_KEY = stripeTestFixtureSecret("ShouldNotBeUsed01");
     fetchCount = 0;
     const testOnLive = await createStripeCheckoutSession({
       plan: "lifetime",
@@ -462,7 +503,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(testOnLive === "", "enabled checkout still refuses test key on suhuella.com");
     assert(fetchCount === 0, "test key on live origin does not create a Stripe session");
 
-    process.env.STRIPE_SECRET_KEY = "sk_live_51ReadyNotReal000001";
+    process.env.STRIPE_SECRET_KEY = stripeLiveFixtureSecret("ReadyNotReal000001");
     delete process.env.STRIPE_LIFETIME_PRICE_ID;
     fetchCount = 0;
     const enabledWithoutPrice = await createStripeCheckoutSession({
@@ -566,7 +607,8 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     await assertRawCardDataIsRejected();
 
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "production var switch is explicitly off");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "commercial checkout switch stays off in wrangler");
+    assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout switch is explicitly off");
     assert(wrangler.includes('"CLOUD_INTEGRATIONS_ENABLED": "false"'), "cloud integrations stay gated off");
     assertNoMatch(wrangler, /buy\.stripe\.com/, "wrangler has no Payment Links");
     assertNoMatch(wrangler, /sk_test_|sk_live_|whsec_/, "wrangler has no Stripe secrets");
@@ -574,7 +616,8 @@ async function runCheckoutEnablementCheck(): Promise<void> {
 
     const landing = readFileSync(join(process.cwd(), "lib/i18n/dictionary.ts"), "utf8");
     assertNoMatch(landing, /buy\.stripe\.com/, "landing copy has no Stripe Payment Links");
-    assert(landing.includes("Paid plans are not available yet"), "landing does not sell paid checkout as live");
+    assert(landing.includes("Lifetime and Monthly are paid on Stripe Checkout"), "landing offers personal paid plans");
+    assert(!landing.includes("Paid plans are not available yet"), "landing does not say personal checkout is closed");
 
     const licensePage = readFileSync(join(process.cwd(), "app/(suhuella)/license/page.tsx"), "utf8");
     assert(licensePage.includes("SuhuellaLicenseOverlayPage"), "license route opens plans overlay in app shell");
@@ -582,9 +625,15 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(licensePlans.includes('checkout === "unavailable"'), "license plans handle unavailable checkout returns");
     assert(licensePlans.includes("paidPlanUnavailableCta"), "license plans use Not available yet while gated");
     assert(licensePlans.includes("paidCheckoutClosedMessage"), "license plans explain closed checkout");
+    assert(
+      licensePlans.includes("not signed or notarized yet"),
+      "license plans explain unsigned desktop installers before purchase",
+    );
     assert(licensePlans.includes("disabled"), "gated lifetime/monthly CTAs are disabled buttons");
     assert(licensePlans.includes('checkoutPath(planId, { returnTo: "public" })'), "enabled plans navigate via checkoutPath");
-    assert(licensePlans.includes('planId === "business"'), "Business stays Contact sales");
+    assert(licensePlans.includes('planId === "business"'), "Business uses its own checkout path");
+    assert(licensePlans.includes('href="/partners"'), "Partner stays on its own program, not personal checkout");
+    assert(!licensePlans.includes('checkoutPath("partner"'), "Partner is not a personal Checkout plan");
     assert(!licensePlans.includes("Coming soon"), "gated CTAs no longer say Coming soon");
 
     const licensePanel = readFileSync(
@@ -604,6 +653,13 @@ async function runCheckoutEnablementCheck(): Promise<void> {
       overlayApp.includes("window.__suhuellaPaidCheckoutEnabled = paidCheckoutEnabled === true"),
       "web shell publishes PAID_CHECKOUT_ENABLED to settings",
     );
+    const appShell = readFileSync(join(process.cwd(), "components/web/SuhuellaApp.tsx"), "utf8");
+    assert(
+      appShell.includes("window.__suhuellaPaidCheckoutEnabled = paidCheckoutEnabled === true"),
+      "settings shell publishes PAID_CHECKOUT_ENABLED",
+    );
+    const shellPage = readFileSync(join(process.cwd(), "lib/suhuella-shell.tsx"), "utf8");
+    assert(shellPage.includes("paidCheckoutEnabled={props.paidCheckoutEnabled}"), "settings page passes the checkout switch");
 
     const planHelpers = readFileSync(
       join(process.cwd(), "../packages/product/src/lib/license-plans.ts"),
@@ -611,7 +667,7 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     );
     assert(planHelpers.includes("Aún no disponible"), "Spanish unavailable CTA is present");
     assert(planHelpers.includes("Not available yet"), "English unavailable CTA is present");
-    assert(planHelpers.includes("cta: 'Contact sales'"), "Business stays Contact sales");
+    assert(planHelpers.includes("cta: 'Get Business'"), "Business CTA targets checkout");
     assert(planHelpers.includes("checkoutPath"), "checkoutPath builds /checkout/{plan}");
     assert(planHelpers.includes("/checkout/${plan}"), "checkout paths stay server-side session routes");
 

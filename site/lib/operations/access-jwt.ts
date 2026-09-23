@@ -25,15 +25,28 @@ function parseJsonPart(value: string): Record<string, unknown> | null {
   }
 }
 
-function normalizeTeamDomain(teamDomain: string): string {
-  return teamDomain
-    .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "");
+const CLOCK_SKEW_MS = 60_000;
+
+let testKeys: AccessJwk[] | null = null;
+
+/** Test-only. Production leaves this unset and loads Cloudflare Access certs. */
+export function setAccessCertsForTests(keys: AccessJwk[] | null): void {
+  testKeys = keys;
+  certCache.clear();
+}
+
+function normalizeTeamDomain(teamDomain: string): string | null {
+  const value = teamDomain.trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.cloudflareaccess\.com$/.test(value)) {
+    return null;
+  }
+  return value;
 }
 
 async function getAccessKeys(teamDomain: string): Promise<AccessJwk[]> {
+  if (testKeys) return testKeys;
   const host = normalizeTeamDomain(teamDomain);
+  if (!host) return [];
   const cached = certCache.get(host);
   if (cached && Date.now() - cached.fetchedAt < CERT_TTL_MS) {
     return cached.keys;
@@ -61,7 +74,12 @@ export async function verifyCloudflareAccessJwt(
   token: string,
   teamDomain: string,
   audience: string,
+  nowMs = Date.now(),
 ): Promise<string | null> {
+  const host = normalizeTeamDomain(teamDomain);
+  const expectedAudience = audience.trim();
+  if (!host || !expectedAudience) return null;
+
   const parts = token.split(".");
   if (parts.length !== 3) return null;
 
@@ -73,16 +91,21 @@ export async function verifyCloudflareAccessJwt(
 
   const email =
     typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
-  if (!email) return null;
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+
+  if (payload.iss !== `https://${host}`) return null;
 
   const exp = typeof payload.exp === "number" ? payload.exp : 0;
-  if (!exp || exp * 1000 < Date.now()) return null;
+  if (!exp || exp * 1000 + CLOCK_SKEW_MS < nowMs) return null;
+  const nbf = typeof payload.nbf === "number" ? payload.nbf : 0;
+  if (nbf && nbf * 1000 - CLOCK_SKEW_MS > nowMs) return null;
 
-  if (!audienceMatches(payload.aud, audience)) return null;
+  if (!audienceMatches(payload.aud, expectedAudience)) return null;
 
-  const keys = await getAccessKeys(teamDomain);
+  const keys = await getAccessKeys(host);
   const kid = typeof header.kid === "string" ? header.kid : "";
-  const jwk = keys.find((key) => key.kid === kid) ?? keys[0];
+  if (!kid) return null;
+  const jwk = keys.find((key) => key.kid === kid);
   if (!jwk) return null;
 
   const key = await crypto.subtle.importKey(

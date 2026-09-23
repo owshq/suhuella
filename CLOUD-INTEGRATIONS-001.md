@@ -1,115 +1,94 @@
 # CLOUD-INTEGRATIONS-001
 
 ```text
-STATUS = FOUNDATION · SHIPPED (gated off)
-TYPE = Cloud account OAuth + encrypted credentials + resumable sync jobs
-SCOPE = Google Drive (complete contract) · Dropbox / OneDrive / Box (same contract, disabled)
+STATUS = GOOGLE DRIVE + ONEDRIVE BROWSE · GATED OFF
+TYPE = Cloud OAuth → encrypted connection → SourceHandle → Sources browse
+SCOPE = Google Drive + OneDrive connect + browsable Source · Dropbox / Box stubs · Gmail/Outlook later (Communications)
 ```
 
-## Audit: what we want vs what is implemented
+## Separation (do not mix)
 
-### Three separate systems (must never mix)
-
-| System | Purpose | Identity | Storage |
-|---|---|---|---|
-| **Cloudflare Access** | Admin login to `ops.suhuella.com` | OTP / IdP for operators | Access JWT → `SUPERADMIN_EMAILS` |
-| **Stripe** | Payments & licenses | Checkout Session → `license_grant` | D1 license tables |
-| **Cloud OAuth** | User authorises *their* Drive/Dropbox/… | Device (or later license) + provider account | `cloud_connection` + encrypted `cloud_credential` |
-
-Cloudflare Access is **not** a cloud source login. Stripe is **not** a cloud source login. Connecting Google Drive does **not** log anyone into Operations.
-
-### Why `brand_id` appears next to cloud
-
-Not because “cloud = brand”. Because **one Worker (`suhuella`) can serve more than one public brand** (`suhuella.com`, later `dbasenet.com`).
-
-Without `brand_id` on connections + callback allowlists:
-
-- a SuHuella device could accidentally attach to a Dbasenet OAuth client / redirect URI
-- partner tenants would share the same connection rows
-
-So `brand_id` is **tenant isolation for multi-brand packaging**, same idea as BrandConfig — not Access, not Stripe.
-
-| Field | Meaning |
+| System | Purpose |
 |---|---|
-| `brand_id` | Which public product site owns the connection (`suhuella` vs `dbasenet`) |
-| `owner_kind` + `owner_id` | Which user/device owns it (`device` today) |
-| `provider` | Google Drive / Dropbox / … |
+| Cloudflare Access | Operations operators only |
+| Stripe | Payments / licenses |
+| Cloud OAuth | User authorises their cloud **file** account |
+| Communications (later) | Gmail / Outlook — separate Source group, not Cloud |
+| `brand_id` | Isolate suhuella.com / dbasenet.com connections and callbacks |
 
-If SuHuella stays single-brand forever, `brand_id` is still cheap insurance and matches the existing BrandConfig hierarchy (ADR-003).
+Public `Source` stays `{ id, displayName }`. Provider metadata lives on `SourceHandle` / adapter.
 
-### What clicking a Source does today
+## What works when `CLOUD_INTEGRATIONS_ENABLED=true`
 
-| Surface | Click | Result |
-|---|---|---|
-| Indexed local / Desktop folder | Open | Browse that folder (`onOpenSource` → source browse) |
-| Available local folder | Add / Connect | Grant access + index |
-| Coming later cloud card | — | Disabled |
-| **Cloud accounts** (new) | Connect | Starts OAuth (when `CLOUD_INTEGRATIONS_ENABLED=true`) |
-| **Cloud accounts** connected | Renew / Disconnect | Re-auth or revoke |
+1. Sources → Cloud → Connect (**Google Drive** or **OneDrive**)
+2. OAuth (state, PKCE, allowlisted callbacks)
+3. Tokens encrypted in D1 (`cloud_connection` + `cloud_credential`)
+4. Connection projects a SourceHandle + Sources Open
+5. Browse sections + folders via `GET /api/sources/:id/children` (paged, no full index)
+   - Google: My Drive / Shared with me
+   - OneDrive: My files / Shared
 
-**Not yet:** OAuth connection → `SourceHandle` → appears as an Indexed source you can open like a folder. That is the next adapter track (`createGoogleDriveHandle`). Until then, Connect only stores credentials + enqueues a sync job; it does not project files into Search/Organise.
+## What is still not done
 
-### Correct placement: Sources, not Settings
+- Indexing into Search / Organise
+- Full library sync / Queue worker
+- Dropbox / Box enablement
+- Gmail / Outlook (Communications Source group — next after cloud file providers)
 
-Workspace rule: Sources = “What can SuHuella see?”. Cloud accounts answer that. Settings stays license / AI / privacy / diagnostics.
+## Routes
 
-## Implemented
-
-- D1 migration `0006_cloud_integrations.sql` (idempotent `CREATE IF NOT EXISTS`)
-- Provider registry + brand callback allowlist
-- OAuth: state, PKCE S256, redirect allowlist, CSRF, no browser tokens
-- Google Drive: authorize, exchange, refresh, userinfo, id_token iss/aud/nonce checks, paged Drive list
-- AES-GCM credential vault (`CLOUD_TOKEN_ENCRYPTION_KEY`), encryption version field
-- API routes under `/api/integrations…`
-- Sync jobs with checkpoint, backoff, cancel, webhook receipt idempotency
-- Sources UI: `CloudAccountsSection`
-- Gate: `CLOUD_INTEGRATIONS_ENABLED` (default **false** in wrangler — same posture as paid checkout)
-
-## Not implemented yet (honest)
-
-- Live Google OAuth client in production secrets
-- JWKS signature verification for Google `id_token` (claims checked; exchange is server-side with client_secret)
-- Cloudflare Queue + `suhuella-sync` worker (D1 jobs are the foundation)
-- Real Dropbox / OneDrive / Box OAuth clients
-- `SourceHandle` adapter that turns a connection into a browsable Source
-- Indexing cloud files into the local knowledge index
-
-## Env vars (names only)
-
-| Name | Role |
+| Method | Path |
 |---|---|
-| `CLOUD_INTEGRATIONS_ENABLED` | Public switch (`true` / else off) |
-| `CLOUD_TOKEN_ENCRYPTION_KEY` | Base64 32-byte AES-GCM key |
-| `CLOUD_GOOGLE_DRIVE_CLIENT_ID` | Google OAuth client id |
-| `CLOUD_GOOGLE_DRIVE_CLIENT_SECRET` | Google OAuth client secret |
-| `CLOUD_DROPBOX_CLIENT_ID` / `_SECRET` | Future |
-| `CLOUD_ONEDRIVE_CLIENT_ID` / `_SECRET` | Future |
-| `CLOUD_BOX_CLIENT_ID` / `_SECRET` | Future |
+| GET | `/api/integrations` |
+| POST | `/api/integrations/google-drive/start` |
+| GET | `/api/integrations/google-drive/callback` |
+| POST | `/api/integrations/onedrive/start` |
+| GET | `/api/integrations/onedrive/callback` |
+| GET | `/api/integrations/:id/status` |
+| POST | `/api/integrations/:id/disconnect` |
+| POST | `/api/integrations/:id/reconnect` |
+| GET | `/api/sources/:id/children` |
 
-Do **not** put secrets in Git or wrangler `vars`.
+## Env (names only)
 
-## Callbacks
+- `CLOUD_INTEGRATIONS_ENABLED`
+- `CLOUD_TOKEN_ENCRYPTION_KEY`
+- `CLOUD_GOOGLE_DRIVE_CLIENT_ID`
+- `CLOUD_GOOGLE_DRIVE_CLIENT_SECRET`
+- `CLOUD_ONEDRIVE_CLIENT_ID`
+- `CLOUD_ONEDRIVE_CLIENT_SECRET`
 
-| Environment | Exact redirect URI |
-|---|---|
-| Production SuHuella | `https://suhuella.com/api/integrations/google_drive/callback` |
-| Local | `http://localhost:3000/api/integrations/google_drive/callback` |
-| Future Dbasenet | `https://dbasenet.com/api/integrations/google_drive/callback` |
+## Callbacks to register
 
-## Manual Google Cloud setup (when enabling)
+**Google Cloud (Web application)**
 
-1. Google Cloud Console → OAuth client (Web)
-2. Authorized origins: `https://suhuella.com`, `http://localhost:3000`
-3. Redirect URIs: the callback URLs above
-4. Worker secrets: `CLOUD_GOOGLE_DRIVE_CLIENT_ID`, `CLOUD_GOOGLE_DRIVE_CLIENT_SECRET`, `CLOUD_TOKEN_ENCRYPTION_KEY`
-5. Set `CLOUD_INTEGRATIONS_ENABLED=true` and redeploy
-6. Apply D1 migration `0006` if not already applied
+- `http://localhost:3000/api/integrations/google-drive/callback`
+- `https://suhuella.com/api/integrations/google-drive/callback`
+
+**Microsoft Azure AD app (Web)**
+
+- `http://localhost:3000/api/integrations/onedrive/callback`
+- `https://suhuella.com/api/integrations/onedrive/callback`
+
+Platforms: Accounts in any organisational directory **and** personal Microsoft accounts.
+
+Delegated API permissions: `Files.Read`, `User.Read`, `openid`, `email`, `profile`, `offline_access`.
+
+## Activate later (do not run now)
+
+```bash
+# Secrets (interactive Wrangler — after local proof):
+npx wrangler secret put CLOUD_TOKEN_ENCRYPTION_KEY --config wrangler.jsonc
+npx wrangler secret put CLOUD_GOOGLE_DRIVE_CLIENT_ID --config wrangler.jsonc
+npx wrangler secret put CLOUD_GOOGLE_DRIVE_CLIENT_SECRET --config wrangler.jsonc
+npx wrangler secret put CLOUD_ONEDRIVE_CLIENT_ID --config wrangler.jsonc
+npx wrangler secret put CLOUD_ONEDRIVE_CLIENT_SECRET --config wrangler.jsonc
+# Then set CLOUD_INTEGRATIONS_ENABLED=true in wrangler.jsonc and deploy.
+```
 
 ## Rollback
 
-1. Set `CLOUD_INTEGRATIONS_ENABLED=false` and deploy
-2. Optionally delete OAuth client secrets from Worker
-3. Do **not** drop D1 tables (preserves encrypted rows for later)
+Set `CLOUD_INTEGRATIONS_ENABLED=false` and redeploy. Do not drop D1 tables.
 
 ## Tests
 
@@ -119,4 +98,4 @@ npm run test:cloud-integrations --prefix site
 
 ## PAID_CHECKOUT_ENABLED
 
-Unchanged. Remains `false` until Gate C is explicitly activated.
+Stays `false` until Gate C. Unrelated to cloud OAuth.

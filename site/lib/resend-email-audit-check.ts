@@ -40,7 +40,7 @@ async function runResendEmailAuditCheck(): Promise<void> {
     NODE_ENV: process.env.NODE_ENV,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM: process.env.RESEND_FROM,
-    LICENSE_SIGNING_SECRET: process.env.LICENSE_SIGNING_SECRET,
+    LICENSE_EMAIL_OTP_SECRET: process.env.LICENSE_EMAIL_OTP_SECRET,
     LICENSE_STORE_PATH: process.env.LICENSE_STORE_PATH,
   };
   const storePath = `${process.cwd()}/.data/resend-email-audit-check.json`;
@@ -80,7 +80,7 @@ async function runResendEmailAuditCheck(): Promise<void> {
     assert(misaligned.ok === false && misaligned.error === "not_configured", "misaligned From fails closed");
 
     process.env.RESEND_FROM = "SuHuella <licenses@suhuella.com>";
-    process.env.LICENSE_SIGNING_SECRET = "test-signing-secret";
+    process.env.LICENSE_EMAIL_OTP_SECRET = "test-email-otp-secret";
     resetLicensePersistenceStoreForTests();
     const productionNoD1 = await requestEmailVerificationCode({
       email: "audit@example.com",
@@ -91,7 +91,7 @@ async function runResendEmailAuditCheck(): Promise<void> {
     assert((await productionLicensePersistenceReady()) === false, "production without D1 is not durable");
     delete process.env.RESEND_API_KEY;
     delete process.env.RESEND_FROM;
-    delete process.env.LICENSE_SIGNING_SECRET;
+    delete process.env.LICENSE_EMAIL_OTP_SECRET;
     resetLicensePersistenceStoreForTests();
 
     process.env.NODE_ENV = "development";
@@ -162,7 +162,7 @@ async function runResendEmailAuditCheck(): Promise<void> {
     assert(permanentCalls === 1, "permanent Resend errors are not retried");
 
     process.env.NODE_ENV = "development";
-    process.env.LICENSE_SIGNING_SECRET = "resend-email-audit-secret";
+    process.env.LICENSE_EMAIL_OTP_SECRET = "resend-email-audit-secret";
     process.env.LICENSE_STORE_PATH = storePath;
     delete process.env.RESEND_API_KEY;
     delete process.env.RESEND_FROM;
@@ -237,8 +237,8 @@ async function runResendEmailAuditCheck(): Promise<void> {
     else process.env.RESEND_API_KEY = previous.RESEND_API_KEY;
     if (previous.RESEND_FROM === undefined) delete process.env.RESEND_FROM;
     else process.env.RESEND_FROM = previous.RESEND_FROM;
-    if (previous.LICENSE_SIGNING_SECRET === undefined) delete process.env.LICENSE_SIGNING_SECRET;
-    else process.env.LICENSE_SIGNING_SECRET = previous.LICENSE_SIGNING_SECRET;
+    if (previous.LICENSE_EMAIL_OTP_SECRET === undefined) delete process.env.LICENSE_EMAIL_OTP_SECRET;
+    else process.env.LICENSE_EMAIL_OTP_SECRET = previous.LICENSE_EMAIL_OTP_SECRET;
     if (previous.LICENSE_STORE_PATH === undefined) delete process.env.LICENSE_STORE_PATH;
     else process.env.LICENSE_STORE_PATH = previous.LICENSE_STORE_PATH;
   }

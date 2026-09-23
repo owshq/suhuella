@@ -1,6 +1,13 @@
-import { movedActivityItems } from './activity-copy'
-import { undoExpiresInDays } from './activity-recovery'
-import type { ActivityRun } from '../types'
+import {
+  activityDayLabel,
+  activityFilterForRun,
+  isPlanActivityRun,
+  movedActivityItems,
+  startOfLocalDay,
+  type ActivityFilter,
+} from './activity-copy.ts'
+import { undoExpiresInDays } from './activity-recovery.ts'
+import type { ActivityRun } from '../types.ts'
 
 export type ActivityRunGroup =
   | { kind: 'organisation'; run: ActivityRun; undos: ActivityRun[] }
@@ -24,24 +31,90 @@ function runSort(left: ActivityRun, right: ActivityRun): number {
   )
 }
 
+export type ActivityDayGroup = {
+  key: string
+  day: string
+  groups: ActivityRunGroup[]
+}
+
+export function groupActivityRunsByDay(
+  groups: ActivityRunGroup[],
+  now = Date.now(),
+): ActivityDayGroup[] {
+  const bucket = new Map<string, { label: string; start: number; groups: ActivityRunGroup[] }>()
+
+  for (const group of groups) {
+    const completed = Date.parse(group.run.completedAt)
+    const start = Number.isFinite(completed) ? startOfLocalDay(completed) : 0
+    const key = Number.isFinite(completed) ? String(start) : 'unknown'
+    const entry = bucket.get(key) ?? {
+      label: activityDayLabel(group.run.completedAt, now),
+      start,
+      groups: [],
+    }
+    entry.groups.push(group)
+    bucket.set(key, entry)
+  }
+
+  return [...bucket.values()]
+    .sort((left, right) => right.start - left.start)
+    .map(({ label, start, groups: dayGroups }) => ({
+      key: String(start),
+      day: label,
+      groups: dayGroups,
+    }))
+}
+
+export function groupMatchesActivityFilter(group: ActivityRunGroup, filter: ActivityFilter): boolean {
+  if (filter === 'all') return true
+  if (filter === 'undo') {
+    return group.kind === 'undo' || (group.kind === 'organisation' && group.undos.length > 0)
+  }
+  if (filter === 'sources') return activityFilterForRun(group.run) === 'sources'
+  if (filter === 'save_as') return activityFilterForRun(group.run) === 'save_as'
+  return (
+    group.kind === 'organisation' &&
+    isPlanActivityRun(group.run) &&
+    group.run.trigger !== 'undo'
+  )
+}
+
+export function activityFiltersPresent(groups: ActivityRunGroup[]): ActivityFilter[] {
+  const order: ActivityFilter[] = ['plans', 'undo']
+  return order.filter((filter) => groups.some((group) => groupMatchesActivityFilter(group, filter)))
+}
+
+export function generalActivityFiltersPresent(groups: ActivityRunGroup[]): ActivityFilter[] {
+  const order: ActivityFilter[] = ['sources', 'save_as']
+  return order.filter((filter) => groups.some((group) => groupMatchesActivityFilter(group, filter)))
+}
+
 export function groupActivityRuns(runs: ActivityRun[]): ActivityRunGroup[] {
+  const unique = new Map<string, ActivityRun>()
+  for (const run of runs) {
+    const existing = unique.get(run.runId)
+    if (!existing || Date.parse(run.completedAt) >= Date.parse(existing.completedAt)) {
+      unique.set(run.runId, run)
+    }
+  }
+  const list = [...unique.values()]
   const undoBySource = new Map<string, ActivityRun[]>()
 
-  for (const run of runs) {
+  for (const run of list) {
     if (run.trigger === 'undo' && run.reversesRunId) {
-      const list = undoBySource.get(run.reversesRunId) ?? []
-      list.push(run)
-      undoBySource.set(run.reversesRunId, list)
+      const linked = undoBySource.get(run.reversesRunId) ?? []
+      linked.push(run)
+      undoBySource.set(run.reversesRunId, linked)
     }
   }
 
   const consumedUndoIds = new Set<string>()
   const groups: ActivityRunGroup[] = []
 
-  for (const run of [...runs].sort(runSort)) {
+  for (const run of [...list].sort(runSort)) {
     if (run.trigger === 'undo') {
       if (consumedUndoIds.has(run.runId)) continue
-      if (!run.reversesRunId || !runs.some((item) => item.runId === run.reversesRunId)) {
+      if (!run.reversesRunId || !list.some((item) => item.runId === run.reversesRunId)) {
         groups.push({ kind: 'undo', run })
       }
       continue
@@ -58,7 +131,7 @@ export function groupActivityRuns(runs: ActivityRun[]): ActivityRunGroup[] {
 
 export function lastOrganisationAction(runs: ActivityRun[]): LastOrganisationAction | null {
   const latest = [...runs]
-    .filter((run) => run.trigger !== 'undo' && run.summary.moved > 0)
+    .filter((run) => run.trigger !== 'undo' && run.trigger !== 'source_event' && run.summary.moved > 0)
     .sort(runSort)[0]
   if (!latest) return null
 

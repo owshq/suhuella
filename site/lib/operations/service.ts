@@ -1,6 +1,16 @@
-import { getBusinessPricingConfig } from "@/lib/business-config";
-import { businessService, grantFromBusinessSeat } from "@/lib/business-service";
+import { getBusinessPricingConfig, monthlyAmountCents } from "@/lib/business-config";
+import {
+  businessDeviceLimitForAccount,
+  businessService,
+  grantFromBusinessSeat,
+} from "@/lib/business-service";
 import { defaultBusinessStore } from "@/lib/business-store";
+import { OCCUPIED_SEAT_STATUSES } from "@/lib/business-types";
+import { redactAuditValue } from "./audit-redact";
+import {
+  canPerformOperationsAction,
+  operationsActionDeniedMessage,
+} from "./roles";
 import type { LicenseEdition, LicenseGrant } from "@/lib/license-context";
 import {
   assertAdminCanMutateGift,
@@ -39,13 +49,34 @@ import {
 import { normalizeServiceHealth } from "../service-health";
 import { getServiceHealthStore, writeServiceHealth } from "../service-health-store";
 import { getOperationsStore } from "./store";
+import {
+  createOnboardingInvite,
+  createPartner,
+  listPartners,
+  reactivatePartner,
+  revokePartner,
+  suspendPartner,
+  updatePartnerBranding,
+} from "../partners/service.ts";
+import { approvePartnerApplication } from "../partners/approve-application.ts";
+import {
+  getPartnerApplicationStore,
+  listPartnerApplications,
+} from "../partners/application-store.ts";
+import {
+  refreshPartnerCustomDomain,
+  registerPartnerCustomDomain,
+  revokePartnerCustomDomain,
+} from "../partners/custom-domains.ts";
 import type {
   Activation,
   AuditEntry,
+  OpsPartnerRow,
   Customer,
   DiagnosticExport,
   License,
   OperationsAction,
+  OperationsActionResult,
   OperationsActor,
   OperationsDocument,
   OperationsSnapshot,
@@ -192,15 +223,34 @@ async function buildSnapshot(
     const owner = businessSeats.find(
       (seat) => seat.organisationId === account.organisationId && seat.role === "owner",
     );
+    const assignedSeatCount = businessSeats.filter(
+      (seat) =>
+        seat.organisationId === account.organisationId &&
+        OCCUPIED_SEAT_STATUSES.includes(seat.status),
+    ).length;
+    const isPaid = inferIsPaid(
+      account.plan === "enterprise" ? "enterprise" : "business",
+      account.status !== "trial",
+    );
     return {
       id: account.organisationId,
       name: account.name,
       billingEmail: owner?.email ?? account.billingCustomerId,
       seatCount: account.seatLimit,
+      assignedSeatCount,
+      availableSeatCount: Math.max(0, account.seatLimit - assignedSeatCount),
+      currency: account.currency || getBusinessPricingConfig().currency,
       plan: account.plan,
       status: account.status === "suspended" ? "suspended" : "active",
       adminCustomerId: owner ? customerIdForEmail(owner.email, grants) : account.billingCustomerId,
-      isPaid: inferIsPaid(account.plan === "enterprise" ? "enterprise" : "business", account.status !== "trial"),
+      isPaid,
+      stripeSubscriptionStatus: account.stripeStatus
+        ?? (account.status === "suspended" ? "Inactive" : isPaid ? "Active" : "None"),
+      currentPeriodEnd:
+        account.currentPeriodEnd ??
+        (owner ? grants.find((grant) => grant.licenseId === owner.licenseId)?.currentPeriodEnd ?? null : null),
+      monthlyAmountCents: account.recurringAmountCents ?? monthlyAmountCents(account.seatLimit),
+      deviceLimitPerSeat: businessDeviceLimitForAccount(account),
       createdAt: account.createdAt,
     };
   });
@@ -258,12 +308,63 @@ async function buildSnapshot(
   const healthStore = await getServiceHealthStore();
   const serviceHealth = await healthStore.read();
 
+  let partnerApplications: OperationsSnapshot["partnerApplications"] = [];
+  try {
+    const applications = await listPartnerApplications();
+    partnerApplications = applications.map((item) => ({
+      applicationId: item.applicationId,
+      normalizedEmail: item.normalizedEmail,
+      displayName: item.displayName,
+      status: item.status,
+      partnerId: item.partnerId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      reviewedAt: item.reviewedAt,
+      reviewedBy: item.reviewedBy,
+      rejectionReason: item.rejectionReason,
+    }));
+  } catch {
+    partnerApplications = [];
+  }
+
+  let partners: OpsPartnerRow[] = [];
+  try {
+    const summaries = await listPartners({ kind: "platform", email: actor.email });
+    partners = summaries.map((item) => ({
+      partnerId: item.partner.partnerId,
+      slug: item.partner.slug,
+      displayName: item.partner.displayName,
+      status: item.partner.status,
+      brandId: item.brand.brandId,
+      ownerEmail: item.partner.ownerEmail,
+      entitlementOrigin: item.entitlement?.origin ?? null,
+      entitlementStatus: item.entitlement?.status ?? null,
+      domainCount: item.domains.length,
+      memberCount: item.members.length,
+      createdAt: item.partner.createdAt,
+      brandDisplayName: item.brand.displayName,
+      logoUrl: item.brand.logoUrl,
+      accent: item.brand.accent,
+      domains: item.domains.map((domain) => ({
+        domainId: domain.domainId,
+        hostname: domain.hostname,
+        status: domain.status,
+        dnsTarget: domain.dnsTarget,
+        validationErrors: domain.validationErrors,
+      })),
+    }));
+  } catch {
+    partners = [];
+  }
+
   return {
     persistence,
     actor,
     customers,
     licenses,
     organisations,
+    partners,
+    partnerApplications,
     seats,
     activations,
     diagnostics: document.diagnostics,
@@ -297,9 +398,9 @@ function appendAudit(
     timestamp: nowIso(),
     reason,
     requestId: createRequestId(),
-    before,
-    after,
-    meta,
+    before: redactAuditValue(before),
+    after: redactAuditValue(after),
+    meta: redactAuditValue(meta),
   };
   document.audit.unshift(entry);
 }
@@ -321,9 +422,16 @@ async function applyAction(
   document: OperationsDocument,
   actor: OperationsActor,
   input: OperationsAction,
-): Promise<void> {
+): Promise<string | undefined> {
+  if (!canPerformOperationsAction(actor.role, input.action)) {
+    throw new OperationsError(
+      operationsActionDeniedMessage(actor.role, input.action),
+      403,
+    );
+  }
   const reason = requireReason(input.reason);
   const superadmin = { kind: "superadmin" as const };
+  let notice: string | undefined;
 
   switch (input.action) {
     case "create_license": {
@@ -346,6 +454,18 @@ async function applyAction(
         createdAt,
         createdBy: actor.email,
       };
+      if (input.issuedByOperator) {
+        const { getPartnerStore } = await import("../partners/store.ts");
+        const partners = await getPartnerStore();
+        const doc = await partners.read();
+        const partner = doc.partners.find((item) => item.partnerId === input.issuedByOperator);
+        const brand = doc.brands.find((item) => item.partnerId === input.issuedByOperator);
+        if (!partner || !brand) {
+          throw new OperationsError("issuedByOperator must be an existing partner.", 400);
+        }
+        grant.issuedByOperator = partner.partnerId;
+        grant.acceptedBrands = [brand.brandId];
+      }
       const stored = await upsertStoredGrant(grant);
       appendAudit(
         document,
@@ -574,7 +694,43 @@ async function applyAction(
         input.action === "add_seats"
           ? account.seatLimit + input.count
           : account.seatLimit - input.count;
-      unwrap(businessService.setSeatCount(superadmin, account.organisationId, next));
+      const changed = await businessService.changeSeatQuantity(
+        superadmin,
+        account.organisationId,
+        next,
+        {
+          source: "ops",
+          reason,
+          actorRole: actor.role,
+          idempotencyKey: `ops:${input.action}:${account.organisationId}:${account.seatLimit}:${next}:${input.count}`,
+        },
+      );
+      if (!changed.ok) {
+        appendAudit(
+          document,
+          actor,
+          input.action,
+          "organisation",
+          account.organisationId,
+          reason,
+          {
+            count: input.count,
+            previousQuantity: account.seatLimit,
+            requestedQuantity: next,
+            confirmedQuantity: null,
+            stripeSubscriptionId: account.stripeSubscriptionId,
+            result: changed.error === "seat_in_use" || changed.error === "min_seats" ? "rejected" : "failed",
+            error: changed.error,
+            source: "ops",
+          },
+        );
+        throw new OperationsError(
+          changed.error === "seat_in_use"
+            ? `Unassign seats before reducing your subscription to ${next}.`
+            : changed.error,
+          changed.error === "stripe_unavailable" || changed.error === "stripe_timeout" ? 503 : 400,
+        );
+      }
       appendAudit(
         document,
         actor,
@@ -582,7 +738,15 @@ async function applyAction(
         "organisation",
         account.organisationId,
         reason,
-        { count: input.count, seatCount: next },
+        {
+          count: input.count,
+          previousQuantity: account.seatLimit,
+          requestedQuantity: next,
+          confirmedQuantity: changed.value.seatLimit,
+          stripeSubscriptionId: changed.value.stripeSubscriptionId,
+          result: "success",
+          source: "ops",
+        },
       );
       return;
     }
@@ -700,6 +864,37 @@ async function applyAction(
         null,
         { status: account.status },
         { status: next.status },
+      );
+      return;
+    }
+
+    case "set_organisation_device_limit": {
+      const account = businessService.findAccount(input.organisationId);
+      if (!account) throw new OperationsError("Organisation not found.", 404);
+      const previous = businessDeviceLimitForAccount(account);
+      const changed = await businessService.setOrganisationDeviceLimit(
+        superadmin,
+        input.organisationId,
+        input.deviceLimitPerSeat,
+      );
+      if (!changed.ok) {
+        throw new OperationsError(
+          changed.error === "invalid_request"
+            ? "Device limit must be an integer between 1 and 10."
+            : "Could not update organisation device limit.",
+          changed.error === "forbidden" ? 403 : 400,
+        );
+      }
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "organisation",
+        input.organisationId,
+        reason,
+        { deviceLimitPerSeat: input.deviceLimitPerSeat },
+        { deviceLimitPerSeat: previous },
+        { deviceLimitPerSeat: changed.value.account.deviceLimitPerSeat ?? previous },
       );
       return;
     }
@@ -837,7 +1032,254 @@ async function applyAction(
       });
       return;
     }
+
+    case "create_partner": {
+      if (input.primaryDomain?.trim()) {
+        throw new OperationsError(
+          "Do not set primary domain — the partner chooses hostname and DNS in /partners/portal.",
+        );
+      }
+      const result = await createPartner(
+        { kind: "platform", email: actor.email },
+        {
+          slug: input.slug,
+          displayName: input.displayName,
+          ownerEmail: input.ownerEmail,
+          origin: input.origin,
+          reason,
+          validUntil: input.validUntil ?? null,
+        },
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner",
+        result.summary.partner.partnerId,
+        reason,
+        null,
+        {
+          slug: result.summary.partner.slug,
+          brandId: result.summary.brand.brandId,
+          origin: input.origin,
+          ownerEmail: result.summary.partner.ownerEmail,
+          inviteId: result.onboarding.inviteId,
+          inviteExpiresAt: result.onboarding.expiresAt,
+          validUntil: result.summary.entitlement?.validUntil ?? null,
+        },
+      );
+      notice = `Onboarding invite for ${result.onboarding.email}: https://suhuella.com${result.onboarding.path} (expires ${result.onboarding.expiresAt}). brand_id=${result.summary.brand.brandId}. Entitlement origin=${input.origin}${result.summary.entitlement?.validUntil ? ` valid_until=${result.summary.entitlement.validUntil}` : " (no expiry)"}. Partner configures brand + hostname during onboarding. Existing Business gift licenses are unrelated — do not convert them.`;
+      break;
+    }
+
+    case "create_partner_invite": {
+      const invite = await createOnboardingInvite(
+        { kind: "platform", email: actor.email },
+        {
+          partnerId: input.partnerId,
+          email: input.email,
+          role: input.role ?? "partner_admin",
+          reason,
+        },
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner",
+        input.partnerId,
+        reason,
+        null,
+        {
+          inviteId: invite.inviteId,
+          email: invite.email,
+          expiresAt: invite.expiresAt,
+          role: input.role ?? "partner_admin",
+        },
+      );
+      notice = `Onboarding invite for ${invite.email} as ${input.role ?? "partner_admin"}: https://suhuella.com${invite.path} (expires ${invite.expiresAt}). After accept, partner_admin sets brand + hostname; partner_member is read-only.`;
+      break;
+    }
+
+    case "suspend_partner": {
+      const before = (await listPartners({ kind: "platform", email: actor.email })).find(
+        (item) => item.partner.partnerId === input.partnerId,
+      );
+      const after = await suspendPartner(
+        { kind: "platform", email: actor.email },
+        input.partnerId,
+        reason,
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner",
+        input.partnerId,
+        reason,
+        before ? { status: before.partner.status } : null,
+        { status: after.partner.status },
+      );
+      return;
+    }
+
+    case "revoke_partner": {
+      const before = (await listPartners({ kind: "platform", email: actor.email })).find(
+        (item) => item.partner.partnerId === input.partnerId,
+      );
+      const after = await revokePartner(
+        { kind: "platform", email: actor.email },
+        input.partnerId,
+        reason,
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner",
+        input.partnerId,
+        reason,
+        before ? { status: before.partner.status } : null,
+        { status: after.partner.status },
+      );
+      return;
+    }
+
+    case "reactivate_partner": {
+      const before = (await listPartners({ kind: "platform", email: actor.email })).find(
+        (item) => item.partner.partnerId === input.partnerId,
+      );
+      const after = await reactivatePartner(
+        { kind: "platform", email: actor.email },
+        input.partnerId,
+        reason,
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner",
+        input.partnerId,
+        reason,
+        before ? { status: before.partner.status } : null,
+        { status: after.partner.status },
+      );
+      return;
+    }
+
+    case "register_partner_domain":
+    case "refresh_partner_domain":
+      throw new OperationsError(
+        "Partner self-service only — brand, hostname, and DNS are configured in /partners/portal.",
+      );
+
+    case "revoke_partner_domain": {
+      const domain = await revokePartnerCustomDomain(
+        { kind: "platform", email: actor.email },
+        { partnerId: input.partnerId, domainId: input.domainId },
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner_domain",
+        input.domainId,
+        reason,
+        null,
+        { status: domain.status, hostname: domain.hostname },
+      );
+      return;
+    }
+
+    case "update_partner_branding":
+      throw new OperationsError(
+        "Partner self-service only — branding is configured in /partners/portal.",
+      );
+
+    case "set_partner_application_status": {
+      const appStore = await getPartnerApplicationStore();
+      const updated = await appStore.setStatus({
+        applicationId: input.applicationId,
+        status: input.status,
+        reviewedBy: actor.email,
+      });
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner_application",
+        updated.applicationId,
+        reason,
+        null,
+        { status: updated.status, email: updated.normalizedEmail },
+      );
+      notice = `Application ${updated.normalizedEmail} is now ${updated.status}. Registering interest does not grant entitlements.`;
+      break;
+    }
+
+    case "reject_partner_application": {
+      const appStore = await getPartnerApplicationStore();
+      const updated = await appStore.setStatus({
+        applicationId: input.applicationId,
+        status: "rejected",
+        reviewedBy: actor.email,
+        rejectionReason: input.rejectionReason,
+      });
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner_application",
+        updated.applicationId,
+        reason,
+        null,
+        {
+          status: updated.status,
+          email: updated.normalizedEmail,
+          rejectionReason: updated.rejectionReason,
+        },
+      );
+      notice = `Application ${updated.normalizedEmail} rejected. Reopening rejected applications requires an explicit policy — not automatic.`;
+      break;
+    }
+
+    case "approve_partner_application": {
+      const approved = await approvePartnerApplication(
+        { kind: "platform", email: actor.email },
+        {
+          applicationId: input.applicationId,
+          slug: input.slug,
+          displayName: input.displayName,
+          origin: input.origin,
+          reason,
+        },
+      );
+      appendAudit(
+        document,
+        actor,
+        input.action,
+        "partner_application",
+        approved.applicationId,
+        reason,
+        null,
+        {
+          partnerId: approved.partnerId,
+          idempotent: approved.idempotent,
+          origin: input.origin,
+        },
+      );
+      if (approved.idempotent) {
+        notice = `Application already approved (partner ${approved.partnerId}). No duplicate partner created.`;
+      } else if (approved.invitePath) {
+        notice = `Application approved. Partner ${approved.partnerId}. Manual onboarding invite delivery: https://suhuella.com${approved.invitePath}${approved.inviteExpiresAt ? ` (expires ${approved.inviteExpiresAt})` : ""}. Copy this link from Operations — email is not sent automatically.`;
+      } else {
+        notice = `Application approved and linked to existing partner ${approved.partnerId}. An open invite already exists for this email — reuse that link.`;
+      }
+      break;
+    }
   }
+
+  return notice;
 }
 
 export async function readOperationsSnapshot(
@@ -851,12 +1293,15 @@ export async function readOperationsSnapshot(
 export async function performOperationsAction(
   actor: OperationsActor,
   input: OperationsAction,
-): Promise<OperationsSnapshot> {
+): Promise<OperationsActionResult> {
   const store = await getOperationsStore();
   const document = await store.read();
-  await applyAction(document, actor, input);
+  const notice = await applyAction(document, actor, input);
   await store.write(document);
-  return readOperationsSnapshot(actor);
+  return {
+    snapshot: await readOperationsSnapshot(actor),
+    ...(notice ? { notice } : {}),
+  };
 }
 
 export function operationsPricing() {

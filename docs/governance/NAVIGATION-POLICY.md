@@ -12,8 +12,10 @@ Screen order and names are fixed until **UX evidence** says otherwise ([Product 
 ## Canonical order
 
 ```text
-Landing → Home → Sources → Search → Organise → Activity → Settings
+Landing → Home → Sources → Search → Plan Mode → Activity → Settings
 ```
+
+The fifth screen name is **Plan Mode** ([ADR-004](../architecture/decisions/ADR-004-plan-mode-screen.md)). Route `/plan-mode`. Internal section id `organise` stays for routing and IPC. `/organise` redirects permanently to `/plan-mode`.
 
 Each screen answers **one question** (see workspace rule `one-question-per-screen`).
 
@@ -22,7 +24,7 @@ Each screen answers **one question** (see workspace rule `one-question-per-scree
 | Home | What does SuHuella know? |
 | Sources | What can SuHuella see? |
 | Search | What can I find? |
-| Organise | What should happen? |
+| Plan Mode | What should happen? |
 | Activity | What happened? |
 | Settings | How is SuHuella configured? |
 

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../../packages/product/src/styles/feature-promo.css";
+@import "../../packages/product/src/styles/source-connect-busy.css";
 @source "../../packages/product/src/**/*.{ts,tsx}";
 
 @theme inline {
@@ -13,7 +14,9 @@
   --app-bg: #ffffff;
   --app-fg: #1d1d1f;
   --sidebar-bg: #e8e8ed;
+  --sidebar-glass: rgba(246, 246, 248, 0.72);
   --sidebar-line: rgba(0, 0, 0, 0.08);
+  --content-edge: rgba(0, 0, 0, 0.08);
   --brand-accent: #0084ff;
   --brand-accent-hover: #0079eb;
   --brand-accent-muted: rgba(0, 132, 255, 0.1);
@@ -39,7 +42,9 @@
     --app-bg: #2c2c2e;
     --app-fg: #f5f5f7;
     --sidebar-bg: #1c1c1e;
-    --sidebar-line: rgba(255, 255, 255, 0.06);
+    --sidebar-glass: rgba(28, 28, 30, 0.72);
+    --sidebar-line: rgba(255, 255, 255, 0.08);
+    --content-edge: rgba(255, 255, 255, 0.1);
     --nav-active-bg: var(--brand-accent);
     --nav-active-fg: var(--brand-on-accent);
     --landing-bg: #000000;
@@ -111,11 +116,221 @@
   }
 }
 
+.native-vibrancy {
+  --sidebar-glass: rgba(246, 246, 248, 0.42);
+}
+
+@media (prefers-color-scheme: dark) {
+  .native-vibrancy {
+    --sidebar-glass: rgba(22, 22, 24, 0.46);
+  }
+}
+
+.app-sidebar {
+  background-color: transparent;
+}
+
 .landing-surface {
   color-scheme: light only;
   min-height: 100vh;
   background-color: var(--brand-surface, #a7d8f9);
   color: #111827;
+}
+
+/* Partner marketing — system light + dark ( /partners, /partners/portal ) */
+.landing-surface[data-theme-adaptive] {
+  color-scheme: light dark;
+  background-color: var(--partner-page-bg, var(--brand-surface, #a7d8f9));
+  color: var(--partner-page-fg, #0f172a);
+  --partner-page-bg: var(--brand-surface, #a7d8f9);
+  --partner-page-fg: #0f172a;
+  --partner-card-bg: rgb(255 255 255 / 0.97);
+  --partner-card-border: rgb(15 23 42 / 0.09);
+  --partner-card-shadow: 0 28px 60px -24px rgb(15 23 42 / 0.18);
+  --partner-muted: #64748b;
+  --partner-body: #334155;
+  --partner-heading: #020617;
+  --partner-price-bg: linear-gradient(
+    165deg,
+    rgb(248 250 252 / 0.98) 0%,
+    rgb(255 255 255 / 1) 55%,
+    rgb(241 245 249 / 0.95) 100%
+  );
+  --partner-price-border: rgb(15 23 42 / 0.11);
+  --partner-price-glow: 0 0 0 1px rgb(99 91 255 / 0.08), 0 20px 40px -20px rgb(99 91 255 / 0.22);
+  --partner-panel-bg: rgb(248 250 252 / 0.88);
+  --partner-panel-border: rgb(15 23 42 / 0.08);
+  --partner-input-bg: #ffffff;
+  --partner-input-border: rgb(15 23 42 / 0.14);
+  --partner-input-fg: #0f172a;
+  --partner-message-bg: rgb(248 250 252 / 0.96);
+  --partner-message-border: rgb(15 23 42 / 0.08);
+  --partner-success-bg: rgb(236 253 245 / 0.95);
+  --partner-success-border: rgb(16 185 129 / 0.35);
+  --partner-success-fg: #064e3b;
+  --partner-accent-btn: #635bff;
+  --partner-accent-btn-hover: #5851ea;
+  --partner-secondary-bg: #ffffff;
+  --partner-secondary-border: rgb(15 23 42 / 0.14);
+  --partner-secondary-fg: #0f172a;
+  --partner-neutral-btn: #0f172a;
+  --partner-neutral-btn-hover: #1e293b;
+  --partner-neutral-btn-fg: #ffffff;
+  --partner-link: #475569;
+  --partner-link-hover: #0f172a;
+  --partner-step-badge-bg: rgb(15 23 42 / 0.06);
+  --partner-step-badge-fg: #0f172a;
+}
+
+@media (prefers-color-scheme: dark) {
+  .landing-surface[data-theme-adaptive] {
+    --partner-page-bg: #09090b;
+    --partner-page-fg: #f8fafc;
+    --partner-card-bg: rgb(24 24 27 / 0.94);
+    --partner-card-border: rgb(255 255 255 / 0.1);
+    --partner-card-shadow: 0 28px 60px -24px rgb(0 0 0 / 0.65);
+    --partner-muted: #94a3b8;
+    --partner-body: #cbd5e1;
+    --partner-heading: #f8fafc;
+    --partner-price-bg: linear-gradient(
+      165deg,
+      rgb(39 39 42 / 0.98) 0%,
+      rgb(24 24 27 / 1) 55%,
+      rgb(9 9 11 / 0.96) 100%
+    );
+    --partner-price-border: rgb(255 255 255 / 0.14);
+    --partner-price-glow: 0 0 0 1px rgb(99 91 255 / 0.2), 0 24px 48px -20px rgb(99 91 255 / 0.35);
+    --partner-panel-bg: rgb(39 39 42 / 0.72);
+    --partner-panel-border: rgb(255 255 255 / 0.08);
+    --partner-input-bg: rgb(9 9 11 / 0.85);
+    --partner-input-border: rgb(255 255 255 / 0.14);
+    --partner-input-fg: #f8fafc;
+    --partner-message-bg: rgb(39 39 42 / 0.92);
+    --partner-message-border: rgb(255 255 255 / 0.1);
+    --partner-success-bg: rgb(6 78 59 / 0.38);
+    --partner-success-border: rgb(52 211 153 / 0.35);
+    --partner-success-fg: #d1fae5;
+    --partner-secondary-bg: rgb(39 39 42 / 0.92);
+    --partner-secondary-border: rgb(255 255 255 / 0.12);
+    --partner-secondary-fg: #f8fafc;
+    --partner-neutral-btn: #f8fafc;
+    --partner-neutral-btn-hover: #e2e8f0;
+    --partner-neutral-btn-fg: #09090b;
+    --partner-link: #cbd5e1;
+    --partner-link-hover: #ffffff;
+    --partner-step-badge-bg: rgb(255 255 255 / 0.08);
+    --partner-step-badge-fg: #f8fafc;
+  }
+
+  .landing-surface[data-theme-adaptive] .partner-mesh-bg > * {
+    opacity: 0.16;
+  }
+}
+
+.landing-surface[data-theme-adaptive] .partner-card {
+  border: 1px solid var(--partner-card-border);
+  background-color: var(--partner-card-bg);
+  box-shadow: var(--partner-card-shadow);
+  color: var(--partner-body);
+}
+
+.landing-surface[data-theme-adaptive] .partner-eyebrow {
+  color: var(--partner-muted);
+}
+
+.landing-surface[data-theme-adaptive] .partner-heading {
+  color: var(--partner-heading);
+}
+
+.landing-surface[data-theme-adaptive] .partner-muted {
+  color: var(--partner-muted);
+}
+
+.landing-surface[data-theme-adaptive] .partner-body {
+  color: var(--partner-body);
+}
+
+.landing-surface[data-theme-adaptive] .partner-price-panel {
+  border: 1px solid var(--partner-price-border);
+  background: var(--partner-price-bg);
+  box-shadow: var(--partner-price-glow);
+}
+
+.landing-surface[data-theme-adaptive] .partner-step-card {
+  border: 1px solid var(--partner-panel-border);
+  background-color: var(--partner-panel-bg);
+  color: var(--partner-body);
+}
+
+.landing-surface[data-theme-adaptive] .partner-step-badge {
+  background-color: var(--partner-step-badge-bg);
+  color: var(--partner-step-badge-fg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-verify-panel {
+  border: 1px solid var(--partner-panel-border);
+  background-color: var(--partner-panel-bg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-price-panel .partner-verify-inline {
+  border: 1px solid color-mix(in srgb, var(--partner-panel-border) 80%, transparent);
+  background-color: color-mix(in srgb, var(--partner-panel-bg) 60%, transparent);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.landing-surface[data-theme-adaptive] .partner-input {
+  border: 1px solid var(--partner-input-border);
+  background-color: var(--partner-input-bg);
+  color: var(--partner-input-fg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-input::placeholder {
+  color: var(--partner-muted);
+}
+
+.landing-surface[data-theme-adaptive] .partner-message {
+  border: 1px solid var(--partner-message-border);
+  background-color: var(--partner-message-bg);
+  color: var(--partner-body);
+}
+
+.landing-surface[data-theme-adaptive] .partner-message-success {
+  border: 1px solid var(--partner-success-border);
+  background-color: var(--partner-success-bg);
+  color: var(--partner-success-fg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-nav-link {
+  color: var(--partner-link);
+}
+
+.landing-surface[data-theme-adaptive] .partner-nav-link:hover {
+  color: var(--partner-link-hover);
+}
+
+.landing-surface[data-theme-adaptive] .partner-btn-primary {
+  background-color: var(--partner-accent-btn);
+  color: #ffffff;
+}
+
+.landing-surface[data-theme-adaptive] .partner-btn-primary:hover:not(:disabled) {
+  background-color: var(--partner-accent-btn-hover);
+}
+
+.landing-surface[data-theme-adaptive] .partner-btn-secondary {
+  border: 1px solid var(--partner-secondary-border);
+  background-color: var(--partner-secondary-bg);
+  color: var(--partner-secondary-fg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-btn-neutral {
+  background-color: var(--partner-neutral-btn);
+  color: var(--partner-neutral-btn-fg);
+}
+
+.landing-surface[data-theme-adaptive] .partner-btn-neutral:hover:not(:disabled) {
+  background-color: var(--partner-neutral-btn-hover);
 }
 
 [data-route-overlay] {
@@ -209,6 +424,21 @@ body {
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--brand-accent, #0084ff);
+  outline-offset: 2px;
 }
 
 .page-enter {

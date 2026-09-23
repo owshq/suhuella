@@ -1,10 +1,12 @@
 # OPERATIONS-PRODUCTION-ACTIVATION-001
 
 ```text
-STATUS = OPEN
+STATUS = READY · operator activation
 TYPE = Production activation
 SCOPE = Operations only
 ```
+
+Code gates are in place. This track closes **PASS** only after the operator sets the three Worker secrets and the production checks below succeed. Checkout stays off (`PAID_CHECKOUT_ENABLED=false`).
 
 Activate Operations production access using the **existing** Cloudflare Access application **`ops.suhuella.com`**.
 
@@ -25,24 +27,76 @@ After activation, superadmins reach Operations through Cloudflare Access only. N
 ## URL model (frozen)
 
 ```text
-Primary (use this)
-https://ops.suhuella.com
+suhuella.com
+    Public product website · download · license API · release API
 
-Internal (dev / implementation only)
-/_ops  →  /ops  (Next.js rewrite — not a public URL)
+ops.suhuella.com
+    Internal Operations Console (Cloudflare Access · superadmin)
+    /  → console
 
-Legacy
-https://suhuella.com/admin  →  301  →  https://ops.suhuella.com
-https://suhuella.com/_ops   →  301  →  https://ops.suhuella.com  (production)
+Path aliases exist for today's sections. Operator IA is not frozen —
+validate against real support work (person / license first) before treating
+/devices or /usage as top-level nav.
 ```
-
-Do **not** share or bookmark `/_ops` or `suhuella.com/_ops` for normal use.
-
-Local dev only:
 
 ```text
-http://localhost:3000/_ops
+https://suhuella.com/admin   →  301  →  https://ops.suhuella.com
+https://suhuella.com/_ops    →  301  →  https://ops.suhuella.com
+https://suhuella.com/ops     →  301  →  https://ops.suhuella.com
+https://ops.suhuella.com/_ops → 301  →  https://ops.suhuella.com/
 ```
+
+Do **not** share or bookmark `/_ops`. Local dev only:
+
+```text
+http://localhost:3000/ops
+```
+
+---
+
+## Secret formats
+
+Invalid values are treated as missing. Production then returns **503** with no checklist.
+
+| Secret | Exact format | Example |
+| --- | --- | --- |
+| `SUPERADMIN_EMAILS` | Comma-separated emails. Trimmed and lowercased. No display names. | `admin@suhuella.com` or `admin@suhuella.com,ops@suhuella.com` |
+| `CF_ACCESS_TEAM_DOMAIN` | Hostname only. No `https://`, path, port, or slash. | `suhuella.cloudflareaccess.com` |
+| `CF_ACCESS_AUD` | Application Audience (AUD) tag, copied exactly. Case-sensitive. 16–256 characters: letters, digits, `.` `_` `~` `-`. No spaces. | value from the Access application Overview |
+
+JWT checks, after those secrets parse:
+
+- Header `Cf-Access-Jwt-Assertion`, algorithm `RS256`
+- `iss` must be `https://<CF_ACCESS_TEAM_DOMAIN>`
+- `aud` must equal `CF_ACCESS_AUD` (string or array containing it)
+- `exp` / `nbf` enforced, 60s clock skew
+- `kid` must match a key from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`
+- `email` must be in `SUPERADMIN_EMAILS`
+
+The same check applies on `ops.suhuella.com`, `*.workers.dev`, and any other hostname that reaches Worker **`suhuella`**. A spoofed `Cf-Access-Authenticated-User-Email` header is not enough.
+
+---
+
+## Routes
+
+Worker **`suhuella`**. `workers_dev` is on. Do not send customers to `*.workers.dev`.
+
+| Surface | Route |
+| --- | --- |
+| Console | `https://ops.suhuella.com/` → `/ops` |
+| Customers | `https://ops.suhuella.com/customers` |
+| Business | `https://ops.suhuella.com/business` |
+| Licenses | `https://ops.suhuella.com/licenses` |
+| Billing | `https://ops.suhuella.com/billing` |
+| Activity | `https://ops.suhuella.com/activity` |
+| Snapshot | `GET /api/operations/state` |
+| Session | `GET /api/operations/session` |
+| Mutations | `POST /api/operations/actions` |
+| Business admin API | `GET` / `POST /api/admin/business` |
+
+`https://suhuella.com/admin`, `/ops`, and `/_ops` **301** to `https://ops.suhuella.com`.
+
+Ops may create `gift`, `promo`, `manual`, `internal`, and `test` licenses. `origin=stripe` is rejected. Audit records drop secret, token, and JWT fields.
 
 ---
 
@@ -184,6 +238,7 @@ Automated:
 
 ```bash
 npm run test:operations-auth --prefix site
+npm run test:operations-access --prefix site
 npm run test:admin --prefix site
 ```
 
@@ -193,8 +248,40 @@ npm run test:admin --prefix site
 | Missing one secret | Localhost dev | 503 + diagnostic |
 | All secrets, no JWT | Production | 401 or Access login |
 | JWT, not allowlisted | Production | 403 |
-| JWT, allowlisted | Production | Operations UI |
+| Forged JWT or wrong audience | Production | 401 |
+| JWT, allowlisted | Production, including `*.workers.dev` | Operations UI / API |
 | `/admin` | Production | 301 → `ops.suhuella.com` |
+| `POST /api/operations/actions` with `origin: stripe` | Production | 400, no paid grant |
+
+---
+
+## Post-deploy
+
+```bash
+curl -sI https://ops.suhuella.com/ | head -n 20
+curl -sI https://suhuella.com/admin | head -n 15
+curl -s -o /dev/null -w "%{http_code}\n" https://ops.suhuella.com/api/operations/state
+```
+
+Expected before a browser login: Access challenge or **401** on the API, **301** from `/admin`. A **200** JSON snapshot without an Access session is a failure.
+
+Then log in with an allowlisted email and confirm the identity panel says Cloudflare Access · Production.
+
+Leave `PAID_CHECKOUT_ENABLED` as `false`.
+
+---
+
+## Rollback
+
+Secrets stay on the Worker across deploys. To undo the code:
+
+```bash
+cd site
+npx wrangler deployments list
+npx wrangler rollback
+```
+
+Emergency lock without a deploy: delete `CF_ACCESS_AUD` (or clear `SUPERADMIN_EMAILS`). Ops then returns **503** on every hostname, including `*.workers.dev`. Restore the secret to reopen. Do not turn checkout on as part of this rollback.
 
 ---
 
@@ -203,7 +290,7 @@ npm run test:admin --prefix site
 Close **PASS** when:
 
 - [ ] `SUPERADMIN_EMAILS`, `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` set on Worker **`suhuella`**
-- [ ] `https://ops.suhuella.com` Access login works
+- [ ] `https://ops.suhuella.com/` Access login → Operations console (not the product app)
 - [ ] Non-superadmin → **403**; superadmin → Operations UI
 - [ ] Incomplete config on production → generic **503** (no infra leak)
 - [ ] `/admin` → **301** → `https://ops.suhuella.com`

@@ -39,12 +39,15 @@ const folderMeta = [
   { id: "f5", name: "Legal / Contracts" },
   { id: "f6", name: "Archive" },
   { id: "f7", name: "Personal / Receipts" },
+  { id: "f8", name: "Tax / Returns" },
+  { id: "f9", name: "HR / Onboarding" },
+  { id: "f10", name: "Suppliers / Acme" },
 ];
 
 const matchByDoc: Record<number, Record<string, number>> = {
-  1: { f1: 98, f2: 71, f3: 68, f4: 62, f5: 55, f6: 58, f7: 44 },
-  2: { f1: 74, f2: 96, f3: 69, f4: 58, f5: 52, f6: 61, f7: 47 },
-  3: { f1: 97, f2: 79, f3: 72, f4: 65, f5: 51, f6: 63, f7: 49 },
+  1: { f1: 98, f2: 71, f3: 68, f4: 62, f5: 55, f6: 58, f7: 44, f8: 41, f9: 38, f10: 35 },
+  2: { f1: 74, f2: 96, f3: 69, f4: 58, f5: 52, f6: 61, f7: 47, f8: 43, f9: 40, f10: 36 },
+  3: { f1: 97, f2: 79, f3: 72, f4: 65, f5: 51, f6: 63, f7: 49, f8: 45, f9: 42, f10: 37 },
 };
 
 const defaultMatches: Record<string, number> = {
@@ -55,6 +58,9 @@ const defaultMatches: Record<string, number> = {
   f5: 59,
   f6: 52,
   f7: 46,
+  f8: 42,
+  f9: 39,
+  f10: 36,
 };
 
 const PHASE_MS: Record<Phase, number> = {
@@ -243,7 +249,10 @@ export function AppMockup() {
   }, [scrollOffset]);
 
   return (
-    <div className="relative mx-auto flex w-full max-w-3xl items-center justify-center pt-6 pb-2 md:pt-8 md:pb-3">
+    <div
+      aria-hidden
+      className="pointer-events-none relative mx-auto flex w-full max-w-3xl select-none items-center justify-center pt-6 pb-2 md:pt-8 md:pb-3"
+    >
       <motion.div
         className="absolute top-1/2 left-1/2 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--brand-accent)] md:h-[400px] md:w-[400px] lg:h-[440px] lg:w-[440px]"
         animate={{ scale: [1, 1.04, 1] }}
@@ -303,7 +312,7 @@ export function AppMockup() {
           </div>
         </div>
 
-        {/* Folder suggestions — always populated + scrollable */}
+        {/* Folder suggestions — auto-scroll is decorative; never captures pointer/wheel */}
         <div className="relative mt-8 w-[210px] rounded-[2rem] border border-white/10 bg-[#141414]/90 shadow-2xl backdrop-blur-xl md:mt-10 md:w-[260px]">
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 rounded-t-[2rem] bg-gradient-to-b from-[#141414] to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 rounded-b-[2rem] bg-gradient-to-t from-[#141414] to-transparent" />
@@ -311,7 +320,7 @@ export function AppMockup() {
           <div className="relative min-h-[260px] md:min-h-[300px]">
             <div
               ref={scrollRef}
-              className="scrollbar-none max-h-[260px] space-y-2 overflow-y-auto p-4 md:max-h-[300px] md:space-y-2.5 md:p-5"
+              className="pointer-events-none scrollbar-none max-h-[260px] space-y-2 overflow-y-auto p-4 md:max-h-[300px] md:space-y-2.5 md:p-5"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {suggestions.map((folder, index) => {

@@ -1,26 +1,51 @@
 import { FileText } from 'lucide-react'
-import type { OrganisationDestinationOption, OrganisationPlanItem } from '../types'
+import type { ConfidenceLabel, OrganisationDestinationOption, OrganisationPlanItem } from '../types'
 import {
   ORGANISE_METHOD_LINE,
   ORGANISE_PRIMARY_CTA,
+  ORGANISE_OPEN_SOURCES,
+  ORGANISE_TRUST_LINE,
   ORGANISE_UNDO_WINDOW,
   planConfirmCounts,
   planConfirmSummary,
   planDestinationLine,
   planItemWhy,
   planRenameLine,
+  planSuggestionLine,
 } from '../lib/organise-copy'
-import { destinationPathLabel, isConfirmablePlanItem } from '../lib/plan-editor-copy'
 import {
+  PLAN_EXECUTION_BACKGROUND_HINT,
+  PLAN_EXECUTION_BACKGROUND_LABEL,
+  PLAN_EXECUTION_WATCH_HINT,
+  PLAN_EXECUTION_WATCH_LABEL,
+  type PlanExecutionMode,
+} from '../lib/plan-execution-copy'
+import { destinationPathLabel, isConfirmablePlanItem } from '../lib/plan-editor-copy'
+import { planCandidateInlineAction } from '../lib/plan-source-candidate'
+import { planSourceInlineAction } from '../lib/plan-source'
+import { PLAN_SAVE_LABEL } from '../lib/plan-scope'
+import {
+  planCloserLookCount,
+  planConfidenceClass,
+  planConfidenceCounts,
+  planConfidenceLines,
+  planDecisionLead,
   planPresentationCounts,
   planPresentationLabel,
   planPresentationState,
   planPrimaryAction,
+  planRecommendationConfidence,
   planSummaryLead,
   planSummaryLines,
   REANALYSE_WARNING,
+  sortPlanItemsForReview,
   type PlanPresentationState,
 } from '../lib/plan-presentation'
+
+function RecommendationConfidence({ label }: { label: ConfidenceLabel | null }) {
+  if (!label) return null
+  return <span className={`text-[11px] font-medium ${planConfidenceClass(label)}`}>{label}</span>
+}
 
 function stateDetail(item: OrganisationPlanItem, state: PlanPresentationState): string {
   const raw = item.skipReason || item.warnings.at(-1) || item.explanation || ''
@@ -29,6 +54,12 @@ function stateDetail(item: OrganisationPlanItem, state: PlanPresentationState): 
     return 'No useful change proposed'
   }
   if (state === 'blocked') {
+    if (item.status === 'source_unavailable') {
+      return item.sourceName ? `${item.sourceName} is not available` : 'Source is not available'
+    }
+    if (item.status === 'source_needs_access') {
+      return item.sourceName ? `${item.sourceName} is not connected yet` : 'Source is not connected yet'
+    }
     if (/unavailable|permission|no longer available/i.test(raw)) return 'Destination unavailable'
     if (/already exists|name taken/i.test(raw)) return 'This change cannot run yet'
     return raw || 'This change cannot run yet'
@@ -52,6 +83,7 @@ function PlanCard({
   onRenameDraftChange,
   onApplyRenameEdit,
   onCancelRenameEdit,
+  onReconnectSource,
   viewMode,
 }: {
   item: OrganisationPlanItem
@@ -68,9 +100,11 @@ function PlanCard({
   onRenameDraftChange: (value: string) => void
   onApplyRenameEdit: (item: OrganisationPlanItem) => void
   onCancelRenameEdit: () => void
+  onReconnectSource?: (item: OrganisationPlanItem) => void
   viewMode?: 'list' | 'grid'
 }) {
   const state = planPresentationState(item)
+  const sourceAction = planSourceInlineAction(item) ?? planCandidateInlineAction(item)
   const accepted = state === 'accepted'
   const suggested = state === 'suggested'
   const noChange = state === 'no_change'
@@ -82,8 +116,10 @@ function PlanCard({
   const destination = planDestinationLine(item)
   const rename = planRenameLine(item)
   const why = stateDetail(item, state)
+  const suggestion = planSuggestionLine(item)
   const destinationVerb = item.action === 'archive' ? 'Archive to' : 'Move to'
   const canDecide = suggested || accepted || needsReview
+  const confidence = planRecommendationConfidence(item)
   const statusClass =
     accepted || applied
       ? 'text-emerald-600'
@@ -97,11 +133,11 @@ function PlanCard({
     return (
       <article
         id={firstSuggested ? 'plan-first-suggested' : undefined}
-        className={`flex w-full items-center border-b border-[var(--overlay-row)] px-4 py-1.5 text-[13px] hover:bg-[var(--overlay-row)] ${
+        className={`flex w-full items-start border-b border-[var(--overlay-row)] px-4 py-2 text-[13px] hover:bg-[var(--overlay-row)] ${
           accepted ? 'bg-[var(--overlay-row)]' : ''
         } ${skipped || noChange ? 'opacity-60' : ''}`}
       >
-        <div className="flex w-[30%] items-center gap-2 truncate pr-2">
+        <div className="flex w-[30%] items-center gap-2 truncate pt-0.5 pr-2">
           <FileText className="h-4 w-4 shrink-0 text-[var(--app-fg)] opacity-70" />
           <span className="truncate text-[13px] text-[var(--app-fg)]" title={item.fileName}>
             {item.fileName}
@@ -132,28 +168,31 @@ function PlanCard({
               </div>
             </div>
           ) : suggested || accepted ? (
-            <span className="truncate text-[13px] text-[var(--app-fg)] opacity-80" title={rename || item.fileName}>{rename || item.fileName}</span>
+            <span className="truncate text-[13px] text-[var(--app-fg)] opacity-80" title={suggestion}>
+              {suggestion}
+            </span>
           ) : (
             <span className="truncate text-[13px] text-[var(--app-fg)] opacity-60" title={why}>{why}</span>
           )}
         </div>
 
-        <div className="relative flex w-[25%] min-w-0 flex-col gap-1 pr-2">
+        <div className="relative flex w-[25%] min-w-0 flex-col gap-0.5 pr-2">
           {suggested || accepted || needsReview ? (
             <button
               type="button"
               onClick={() => onChangeDestination(item)}
               disabled={applied || failed || skipped}
-              className="flex w-full items-center gap-1.5 truncate rounded px-1 -ml-1 text-left text-[13px] transition hover:bg-[var(--overlay-row)]"
+              className="flex w-full min-w-0 flex-col items-start rounded px-1 -ml-1 text-left transition hover:bg-[var(--overlay-row)]"
             >
-              <span className="truncate text-[13px] text-[var(--app-fg)] opacity-80">
+              <span className="w-full truncate text-[13px] text-[var(--app-fg)] opacity-80">
                 {destination ? destination : 'Choose...'}
               </span>
+              <RecommendationConfidence label={confidence} />
             </button>
           ) : null}
 
           {changing && (
-            <div className="absolute left-0 top-full z-10 mt-1 w-64 rounded-xl border border-[var(--sidebar-line)] bg-[var(--overlay-bg)] p-1 shadow-lg backdrop-blur-3xl">
+            <div className="absolute left-0 top-full z-10 mt-1 w-72 rounded-xl border border-[var(--sidebar-line)] bg-[var(--overlay-bg)] p-1 shadow-lg backdrop-blur-3xl">
               <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--app-fg)] opacity-50">
                 {item.alternatives?.length ? 'Recommended' : 'Available folders'}
               </p>
@@ -163,11 +202,12 @@ function PlanCard({
                     <button
                       type="button"
                       onClick={() => onChoose(item, opt)}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition hover:bg-[var(--overlay-row)]"
+                      className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-[var(--overlay-row)]"
                     >
-                      <span className="truncate text-[12px] font-medium text-[var(--app-fg)]">
+                      <span className="min-w-0 truncate text-[12px] font-medium text-[var(--app-fg)]">
                         {destinationPathLabel(opt.folder)}
                       </span>
+                      <RecommendationConfidence label={opt.confidenceLabel} />
                     </button>
                   </li>
                 ))}
@@ -176,8 +216,18 @@ function PlanCard({
           )}
         </div>
 
-        <div className="flex w-[15%] shrink-0 items-center justify-between gap-2">
+        <div className="flex w-[15%] shrink-0 flex-col items-end justify-center gap-1">
           <span className={`truncate text-[12px] ${statusClass}`}>{planPresentationLabel(state)}</span>
+          {sourceAction && onReconnectSource ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onReconnectSource(item)}
+              className="max-w-full truncate rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {sourceAction}
+            </button>
+          ) : null}
           {canDecide ? (
             <div className="flex gap-1">
               {isConfirmablePlanItem(item) ? (
@@ -234,6 +284,7 @@ function PlanCard({
               {item.fileName}
             </h3>
             <p className={`mt-1 text-[13px] font-semibold ${statusClass}`}>{planPresentationLabel(state)}</p>
+            {confidence ? <p className="mt-0.5"><RecommendationConfidence label={confidence} /></p> : null}
           </div>
         </div>
       </div>
@@ -303,14 +354,30 @@ function PlanCard({
               onClick={() => onChoose(item, option)}
               className="w-full rounded-lg px-3 py-2 text-left hover:bg-white"
             >
-              <span className="block truncate text-[13px] font-semibold text-slate-900">
-                {destinationPathLabel(option.folder)}
+              <span className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-[13px] font-semibold text-slate-900">
+                  {destinationPathLabel(option.folder)}
+                </span>
+                <RecommendationConfidence label={option.confidenceLabel} />
               </span>
               {option.reasons[0] ? (
                 <span className="mt-0.5 block truncate text-[12px] text-slate-500">{option.reasons[0]}</span>
               ) : null}
             </button>
           ))}
+        </div>
+      ) : null}
+
+      {sourceAction && onReconnectSource ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onReconnectSource(item)}
+            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {sourceAction}
+          </button>
         </div>
       ) : null}
 
@@ -365,8 +432,7 @@ export function PlanEditor({
   renameDraft,
   pendingConfirm,
   reanalysePending,
-  onAddFiles,
-  onAddFolder,
+  onOpenSources,
   onReanalyse,
   onConfirmReanalyse,
   onCancelReanalyse,
@@ -382,7 +448,11 @@ export function PlanEditor({
   onConfirmPending,
   onCancelPending,
   onReviewSuggestions,
+  onReconnectSource,
+  onSave,
   viewMode,
+  executionMode,
+  onExecutionModeChange,
 }: {
   items: OrganisationPlanItem[]
   originLabel: string | null
@@ -392,8 +462,7 @@ export function PlanEditor({
   renameDraft: string
   pendingConfirm: { kind: 'bulk' } | { kind: 'item'; currentPath: string } | null
   reanalysePending: boolean
-  onAddFiles?: () => void
-  onAddFolder?: () => void
+  onOpenSources?: () => void
   onReanalyse: () => void
   onConfirmReanalyse: () => void
   onCancelReanalyse: () => void
@@ -409,14 +478,22 @@ export function PlanEditor({
   onConfirmPending: () => void
   onCancelPending: () => void
   onReviewSuggestions: () => void
+  onReconnectSource?: (item: OrganisationPlanItem) => void
+  onSave?: () => void
   viewMode?: 'list' | 'grid'
+  executionMode: PlanExecutionMode
+  onExecutionModeChange: (mode: PlanExecutionMode) => void
 }) {
-  const presentation = planPresentationCounts(items)
-  const confirmCounts = planConfirmCounts(items)
+  const reviewItems = sortPlanItemsForReview(items)
+  const presentation = planPresentationCounts(reviewItems)
+  const confirmCounts = planConfirmCounts(reviewItems)
   const summary = planConfirmSummary(confirmCounts)
   const lines = planSummaryLines(presentation)
+  const confidenceLines = planConfidenceLines(planConfidenceCounts(reviewItems))
+  const decisionLead = planDecisionLead(reviewItems)
+  const closerLook = planCloserLookCount(reviewItems)
   const primary = planPrimaryAction(presentation)
-  const firstSuggestedPath = items.find((item) => planPresentationState(item) === 'suggested')?.currentPath
+  const firstSuggestedPath = reviewItems.find((item) => planPresentationState(item) === 'suggested')?.currentPath
 
   return (
     <div className="space-y-6">
@@ -431,27 +508,28 @@ export function PlanEditor({
               <span key={line}>{line}</span>
             ))}
           </p>
+          {confidenceLines.length > 0 ? (
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13px] font-medium text-[var(--app-fg)] opacity-70">
+              {confidenceLines.map((line) => (
+                <span key={line}>{line}</span>
+              ))}
+            </p>
+          ) : null}
+          {decisionLead ? (
+            <p className="mt-1 text-[13px] font-medium text-amber-800">{decisionLead}</p>
+          ) : null}
+          <p className="mt-1 text-[13px] font-medium text-[var(--app-fg)] opacity-70">{ORGANISE_TRUST_LINE}</p>
           <p className="mt-1 text-[12px] text-[var(--app-fg)] opacity-50">{ORGANISE_METHOD_LINE}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {onAddFiles ? (
+          {onOpenSources ? (
             <button
               type="button"
-              onClick={onAddFiles}
+              onClick={onOpenSources}
               disabled={busy}
               className="rounded-full bg-[var(--overlay-row)] px-3 py-1.5 text-[13px] font-semibold text-[var(--app-fg)] hover:opacity-80 disabled:opacity-50 transition"
             >
-              Select documents
-            </button>
-          ) : null}
-          {onAddFolder ? (
-            <button
-              type="button"
-              onClick={onAddFolder}
-              disabled={busy}
-              className="rounded-full bg-[var(--overlay-row)] px-3 py-1.5 text-[13px] font-semibold text-[var(--app-fg)] hover:opacity-80 disabled:opacity-50 transition"
-            >
-              Select folder
+              {ORGANISE_OPEN_SOURCES}
             </button>
           ) : null}
           <button
@@ -493,13 +571,13 @@ export function PlanEditor({
         {viewMode === 'list' && items.length > 0 && (
           <div className="mb-2 mt-4 flex w-full border-b border-[var(--overlay-line)] px-4 pb-1 text-[11px] font-medium text-[var(--app-fg)] opacity-60">
             <div className="w-[30%] pr-2">Current Name</div>
-            <div className="w-[30%] pr-2">Suggested Rename</div>
+            <div className="w-[30%] pr-2">Suggestion</div>
             <div className="w-[25%] pr-2">Destination</div>
             <div className="w-[15%] text-right">Status</div>
           </div>
         )}
         <div className={viewMode === 'list' ? 'flex flex-col' : 'space-y-3'}>
-          {items.map((item) => (
+          {reviewItems.map((item) => (
             <PlanCard
               key={item.currentPath}
               item={item}
@@ -517,6 +595,7 @@ export function PlanEditor({
               onRenameDraftChange={onRenameDraftChange}
               onApplyRenameEdit={onApplyRenameEdit}
               onCancelRenameEdit={onCancelRenameEdit}
+              onReconnectSource={onReconnectSource}
             />
           ))}
         </div>
@@ -530,9 +609,63 @@ export function PlanEditor({
                 ? `${presentation.accepted} accepted change${presentation.accepted === 1 ? '' : 's'}`
                 : `${presentation.suggested} suggestion${presentation.suggested === 1 ? '' : 's'} to review`}
             </p>
+            {presentation.accepted > 0 && presentation.suggested > 0 ? (
+              <p className="mt-1 text-[13px] font-medium text-amber-800">
+                {presentation.suggested} still to review
+                {closerLook > 0
+                  ? ` · ${closerLook} need${closerLook === 1 ? 's' : ''} a closer look`
+                  : ''}
+              </p>
+            ) : null}
             {summary ? <p className="mt-1 text-[13px] font-medium text-slate-600">{summary}</p> : null}
             <p className="mt-1 text-[13px] text-slate-500">{ORGANISE_UNDO_WINDOW}</p>
+            <fieldset className="mt-3 space-y-2" disabled={busy}>
+              <legend className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                Run mode
+              </legend>
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="plan-execution-mode"
+                  checked={executionMode === 'background'}
+                  onChange={() => onExecutionModeChange('background')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-[13px] font-semibold text-slate-800">
+                    {PLAN_EXECUTION_BACKGROUND_LABEL}
+                  </span>
+                  <span className="block text-[12px] text-slate-500">{PLAN_EXECUTION_BACKGROUND_HINT}</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="plan-execution-mode"
+                  checked={executionMode === 'watch'}
+                  onChange={() => onExecutionModeChange('watch')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-[13px] font-semibold text-slate-800">
+                    {PLAN_EXECUTION_WATCH_LABEL}
+                  </span>
+                  <span className="block text-[12px] text-slate-500">{PLAN_EXECUTION_WATCH_HINT}</span>
+                </span>
+              </label>
+            </fieldset>
           </div>
+          <div className="flex flex-wrap gap-2">
+          {onSave ? (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={busy || items.length === 0}
+              className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {PLAN_SAVE_LABEL}
+            </button>
+          ) : null}
           {pendingConfirm ? (
             <div className="flex gap-2">
               <button
@@ -562,6 +695,7 @@ export function PlanEditor({
               {primary.label}
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>

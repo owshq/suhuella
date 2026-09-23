@@ -37,8 +37,7 @@ export class UnknownHostStatusError extends Error {
 function strictHostVocabulary(): boolean {
   if (typeof process !== "undefined" && process.env.NODE_ENV === "development") return true;
   try {
-    const meta = import.meta as ImportMeta & { env?: { DEV?: boolean } };
-    return Boolean(meta.env?.DEV);
+    return Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
   } catch {
     return false;
   }

@@ -1,24 +1,18 @@
 import { brand } from '@suhuella/brand'
-import { ArrowLeft, ArrowRight, Clock3, FolderKanban, HardDrive, Home, PanelLeft, Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityPanel } from '../components/ActivityPanel'
+import { ArrowLeft, ArrowRight, Bot, Clock3, HardDrive, Home, PanelLeft, Search } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserDesktopDownloadButton } from '../components/BrowserDesktopDownloadButton'
 import { HomePanel } from '../components/HomePanel'
 import { AppBrandingProvider } from '../components/AppBrandingContext'
 import { IdentityCard } from '../components/IdentityCard'
-import { SuhuellaWordmark } from '../components/SuhuellaWordmark'
 import {
   SourceAppearanceMenu,
   SourceIconBadge,
   useSourceAppearanceMenu,
 } from '../components/SourceIconBadge'
-import { SettingsPanel } from '../components/PreferencesPanel'
-import { SearchResultsPanel } from '../components/SearchPanel'
-import { SourceBrowsePanel } from '../components/SourceBrowsePanel'
-import { SourcesPanel } from '../components/SourcesPanel'
-import { OrganisePanel } from '../components/OrganisePanel'
 import { ServiceHealthBanner } from '../components/ServiceHealthBanner'
 import { capabilitiesFor, capabilitiesOf, folderAccessCopy } from '../host/capabilities'
+import { homeOrganiseScope } from '../lib/home-organise'
 import { getSuhuellaApi } from '../lib/api'
 import {
   sectionFromLocation,
@@ -34,17 +28,25 @@ import {
 } from '../lib/source-appearance'
 import { isBrowsePathUnder, normalizeBrowsePath, resolveBrowseRoot } from '../lib/source-browse'
 import type { SourceAppearanceOverride, SourceIconId } from '../types'
-import { BrowserFolderConnectDialog } from '../components/BrowserFolderConnectDialog'
-import { DeveloperSourcesPanel } from '../components/DeveloperSourcesPanel'
 import { DEV_DEMO_HINT } from '../host/browser/dev-host'
+import {
+  buildPendingOrganiseContext,
+  sourceIdFromBrowsePath,
+  writePendingOrganiseContext,
+} from '../lib/organise-sources-bridge'
 import { isTechnicalSourceId } from '../host/browser/connect-source'
+import { hostAccessFor } from '../lib/platform-capabilities'
+import { browserCapabilityDialogCopy, type BrowserCapabilityDialogCopy } from '../lib/browser-capability-notice'
 import {
   folderConnectErrorMessage,
   isFolderPickAbort,
-  isProtectedFolderConnectError,
+  presentFolderConnectError,
   sourceDisplayName,
+  sourceRemoveFailedCopy,
+  sourceRemovedCopy,
 } from '../lib/sources-ui'
 import { HOST_ACTION_COPY } from '../lib/host-action-copy'
+import { sourceOpenBlockedCopy } from '../lib/source-presentation'
 import { useAppLocale } from '../lib/app-locale'
 import { identityLicenseLine } from '../lib/license-status'
 import {
@@ -67,6 +69,37 @@ import type {
   SearchResults,
   SuggestedLocation,
 } from '../types'
+
+const ActivityPanel = lazy(() =>
+  import('../components/ActivityPanel').then((mod) => ({ default: mod.ActivityPanel })),
+)
+const SettingsPanel = lazy(() =>
+  import('../components/PreferencesPanel').then((mod) => ({ default: mod.SettingsPanel })),
+)
+const SearchResultsPanel = lazy(() =>
+  import('../components/SearchPanel').then((mod) => ({ default: mod.SearchResultsPanel })),
+)
+const SourceBrowsePanel = lazy(() =>
+  import('../components/SourceBrowsePanel').then((mod) => ({ default: mod.SourceBrowsePanel })),
+)
+const SourcesPanel = lazy(() =>
+  import('../components/SourcesPanel').then((mod) => ({ default: mod.SourcesPanel })),
+)
+const OrganisePanel = lazy(() =>
+  import('../components/OrganisePanel').then((mod) => ({ default: mod.OrganisePanel })),
+)
+const BrowserFolderConnectDialog = lazy(() =>
+  import('../components/BrowserFolderConnectDialog').then((mod) => ({
+    default: mod.BrowserFolderConnectDialog,
+  })),
+)
+const DeveloperSourcesPanel = lazy(() =>
+  import('../components/DeveloperSourcesPanel').then((mod) => ({ default: mod.DeveloperSourcesPanel })),
+)
+
+function PanelFallback() {
+  return <div className="min-h-[12rem] w-full bg-[var(--app-bg)]" />
+}
 
 function detectPlatform(): AppInfo['platform'] {
   if (typeof navigator === 'undefined') return 'darwin'
@@ -161,13 +194,19 @@ function writeOpenedSource(value: OpenedSourceView | null) {
 
 function openedSourceStillPresent(locations: IndexedLocationSummary[], opened: OpenedSourceView): boolean {
   const paths = [opened.path, opened.browsePath].filter((value): value is string => Boolean(value))
+  // Cloud OAuth connections live outside the local index location list.
+  if (paths.some((path) => path.trim().startsWith('cloud:'))) return true
   return locations.some((location) =>
     paths.some((path) => isBrowsePathUnder(location.path, path)),
   )
 }
 
 const SIDEBAR_TOOLBAR_BUTTON =
-  'no-drag flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--app-fg)] opacity-50 transition hover:bg-[var(--overlay-row)] hover:opacity-100 disabled:pointer-events-none disabled:opacity-20'
+  'no-drag flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--app-fg)] opacity-70 transition hover:bg-[var(--overlay-row)] hover:opacity-100 disabled:pointer-events-none disabled:opacity-25'
+
+/** Matches Electron trafficLightPosition and the sidebar toolbar height. */
+const TITLEBAR_HEIGHT = 'h-[52px]'
+const MAC_TOOLBAR_PAD = 'pl-[82px]'
 
 function RecentFolderRow({
   folderPath,
@@ -247,12 +286,12 @@ function RecentFolderRow({
 }
 
 export function SettingsWindow() {
-  const { t: chrome } = useAppLocale()
+  const { locale, t: chrome } = useAppLocale()
   const [section, setSection] = useState<AppSection>(initialAppSection)
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [health, setHealth] = useState<KnowledgeIndexHealth | null>(null)
   const [locations, setLocations] = useState<IndexedLocationSummary[]>([])
-  const [foldersSummary, setFoldersSummary] = useState<FoldersKnowledgeSummary | null>(null)
+  const [, setFoldersSummary] = useState<FoldersKnowledgeSummary | null>(null)
   const [scan, setScan] = useState<IndexScanProgress>({
     status: 'idle',
     foldersScanned: 0,
@@ -269,6 +308,7 @@ export function SettingsWindow() {
   const [activityError, setActivityError] = useState<string | null>(null)
   const [undoBusy, setUndoBusy] = useState(false)
   const [activityUndoRunId, setActivityUndoRunId] = useState<string | null>(null)
+  const [activityScope, setActivityScope] = useState<'plans' | 'general'>('general')
   const [license, setLicense] = useState<LicenseStatusView | null>(null)
   const [pendingWorkflowId, setPendingWorkflowId] = useState<string | null>(null)
   const [suggested, setSuggested] = useState<SuggestedLocation[]>([])
@@ -282,7 +322,8 @@ export function SettingsWindow() {
   const [downloadOffer, setDownloadOffer] = useState<DesktopDownloadOffer | null>(null)
   const [serviceHealth, setServiceHealth] = useState<PublicServiceHealth>(NORMAL_SERVICE_HEALTH)
   const [sourcesNotice, setSourcesNotice] = useState<string | null>(null)
-  const [blockedFolderDialogOpen, setBlockedFolderDialogOpen] = useState(false)
+  const [sourcesNoticeKind, setSourcesNoticeKind] = useState<'error' | 'status'>('error')
+  const [capabilityNotice, setCapabilityNotice] = useState<BrowserCapabilityDialogCopy | null>(null)
   const [openedSource, setOpenedSourceState] = useState<OpenedSourceView | null>(readOpenedSource)
   const [indexHydrated, setIndexHydrated] = useState(false)
 
@@ -336,7 +377,6 @@ export function SettingsWindow() {
     const status = await api.getIndexStatus()
     applyIndexSnapshot(status)
     setIndexHydrated(true)
-    setSourcesNotice(null)
     setHealth(await api.getKnowledgeIndexHealth())
     try {
       setSuggested(await api.getSuggestedLocations())
@@ -426,7 +466,7 @@ export function SettingsWindow() {
     if (!pending && !emptyIndex) return
     autoScanStarted.current = true
     void getSuhuellaApi()
-      .startIndexScan()
+      .startIndexScan('pending')
       .then(async (next) => {
         setSettings(next)
         await refreshIndexStatus()
@@ -580,6 +620,7 @@ export function SettingsWindow() {
         goToSection('locations')
       } else if (key === '4') {
         event.preventDefault()
+        setActivityScope('general')
         goToSection('activity')
       } else if (key === 'f' || key === 'k') {
         event.preventDefault()
@@ -608,6 +649,7 @@ export function SettingsWindow() {
 
   async function pickFolder(hint?: string) {
     setSourcesNotice(null)
+    setSourcesNoticeKind('error')
     setBusy(true)
     try {
       console.info('[suhuella-connect] click', { hint: hint ?? null })
@@ -616,15 +658,20 @@ export function SettingsWindow() {
       setSettings({ ...next })
       await refreshIndexStatus()
       void waitForSourceIndexing()
-      setBlockedFolderDialogOpen(false)
+      setCapabilityNotice(null)
     } catch (error) {
-      if (isProtectedFolderConnectError(error) || isFolderPickAbort(error)) {
-        setBlockedFolderDialogOpen(true)
+      if (isFolderPickAbort(error)) return
+      const presentation = presentFolderConnectError(error, appInfo.host ?? 'electron', locale)
+      if (presentation.kind === 'desktop_dialog') {
+        setCapabilityNotice(presentation.notice)
         return
       }
-      const message = folderConnectErrorMessage(error)
-      if (message) setSourcesNotice(message)
-      setBlockedFolderDialogOpen(false)
+      if (presentation.kind === 'inline') setSourcesNotice(presentation.message)
+      else {
+        const message = folderConnectErrorMessage(error)
+        if (message) setSourcesNotice(message)
+      }
+      setCapabilityNotice(null)
     } finally {
       setBusy(false)
     }
@@ -655,7 +702,7 @@ export function SettingsWindow() {
     setBusy(true)
     try {
       await getSuhuellaApi().setIndexedLocations(next)
-      setSettings(await getSuhuellaApi().startIndexScan())
+      setSettings(await getSuhuellaApi().startIndexScan('pending'))
       await refreshIndexStatus()
       goToSection('locations')
     } finally {
@@ -669,6 +716,7 @@ export function SettingsWindow() {
       return
     }
     setSourcesNotice(null)
+    setSourcesNoticeKind('error')
     setBusy(true)
     try {
       const current = settings?.indexedLocations ?? []
@@ -677,7 +725,7 @@ export function SettingsWindow() {
       }
       await refreshIndexStatus()
       setBusy(false)
-      setSettings(await getSuhuellaApi().startIndexScan())
+      setSettings(await getSuhuellaApi().startIndexScan('pending'))
       await refreshIndexStatus()
     } catch (error) {
       const message = folderConnectErrorMessage(error)
@@ -690,13 +738,25 @@ export function SettingsWindow() {
   async function removeLocation(location: string) {
     indexWaitGeneration.current += 1
     dismissedSourcePaths.current.add(location)
+    const name = sourceDisplayName(
+      locations.find((item) => item.path === location)?.name,
+      location,
+    )
     setLocations((current) => current.filter((item) => item.path !== location))
     if (openedSource?.path === location) setOpenedSource(null)
+    setSourcesNotice(null)
+    setBusy(true)
     try {
       setSettings(await getSuhuellaApi().removeIndexedLocation(location))
       applyIndexSnapshot(await getSuhuellaApi().getIndexStatus())
+      setSourcesNoticeKind('status')
+      setSourcesNotice(sourceRemovedCopy(name, hostAccessFor(appInfo.host)))
     } catch {
       await refreshIndexStatus()
+      setSourcesNoticeKind('error')
+      setSourcesNotice(sourceRemoveFailedCopy(name))
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -712,6 +772,7 @@ export function SettingsWindow() {
 
   async function restoreLocation(path: string) {
     setSourcesNotice(null)
+    setSourcesNoticeKind('error')
     setBusy(true)
     try {
       setSettings(await getSuhuellaApi().restoreSourceAccess(path))
@@ -740,30 +801,13 @@ export function SettingsWindow() {
     setSettings(await getSuhuellaApi().setSourceAppearance(path, update))
   }
 
-  const folderCount = health?.folderCount ?? settings?.indexedFolderCount ?? 0
   const caps = capabilitiesOf(appInfo)
   const saveAsActive = caps.saveAs
   const unsupportedCopy = folderAccessCopy(caps)
-  const homeLicense = useMemo(() => {
-    if (!license) return null
-    const learningOk = folderCount > 0
-    return {
-      ...license,
-      health: license.health.map((item) => {
-        if (item.id === 'learning') {
-          return { ...item, status: learningOk ? ('ok' as const) : ('attention' as const) }
-        }
-        if (item.id === 'save_as') {
-          return { ...item, status: saveAsActive ? ('ok' as const) : ('unknown' as const) }
-        }
-        return item
-      }),
-    }
-  }, [license, folderCount, saveAsActive])
   const navItems = [
     { id: 'search' as const, label: chrome.search, icon: Search },
     { id: 'home' as const, label: chrome.home, icon: Home },
-    { id: 'organise' as const, label: chrome.organise, icon: FolderKanban },
+    { id: 'organise' as const, label: chrome.organise, icon: Bot },
     { id: 'locations' as const, label: chrome.sources, icon: HardDrive },
     { id: 'activity' as const, label: chrome.activity, icon: Clock3 },
   ]
@@ -814,6 +858,10 @@ export function SettingsWindow() {
 
   async function openSearchHit(hit: SearchHit) {
     if (!hit.path) return
+    if (hit.sourceAvailable === false) {
+      setHostNotice(sourceOpenBlockedCopy(hit.sourceName ?? hit.subtitle))
+      return
+    }
     try {
       const result = await getSuhuellaApi().openSearchPath(hit.path)
       if (result.ok) {
@@ -843,6 +891,7 @@ export function SettingsWindow() {
   function showRecommendation(hit: SearchHit) {
     if (!hit.activityRunId) return
     setFocusActivityRunId(hit.activityRunId)
+    setActivityScope('plans')
     goToSection('activity')
   }
 
@@ -858,24 +907,57 @@ export function SettingsWindow() {
   }
 
   function folderLabel(folderPath: string): string {
-    const location = locations.find((item) => item.path === folderPath)
+    const location =
+      locations.find((item) => item.path === folderPath) ??
+      locations.find((item) => isBrowsePathUnder(item.path, folderPath))
     return sourceDisplayName(location?.name, folderPath, isTechnicalSourceId)
   }
 
-  function recentFolderLabel(folderPath: string): string {
-    return sourceDisplayName(undefined, folderPath, isTechnicalSourceId)
-  }
-
   function openFolderBrowse(folderPath: string, title?: string) {
+    if (folderPath.trim().startsWith('cloud:')) {
+      const rest = folderPath.trim().slice('cloud:'.length)
+      const slash = rest.indexOf('/')
+      const connectionId = slash === -1 ? rest : rest.slice(0, slash)
+      const root = `cloud:${connectionId}`
+      setOpenedSource({
+        path: root,
+        title: title ?? 'Google Drive',
+        browsePath: slash === -1 ? undefined : folderPath.trim(),
+      })
+      goToSection('locations')
+      return
+    }
     const browseRoot = resolveBrowseRoot(folderPath, locations)
     const browsePath = normalizeBrowsePath(folderPath)
     const normalizedRoot = normalizeBrowsePath(browseRoot)
     setOpenedSource({
       path: normalizedRoot,
-      title: title ?? folderLabel(folderPath),
+      title: title ?? folderLabel(normalizedRoot),
       browsePath: browsePath !== normalizedRoot ? browsePath : undefined,
     })
     goToSection('locations')
+  }
+
+  function startOrganiseFromSourceBrowse(context: Parameters<typeof writePendingOrganiseContext>[0]) {
+    writePendingOrganiseContext(context)
+    setOpenedSource(null)
+    goToSection('organise')
+  }
+
+  function startOrganiseFromHome() {
+    const scope = homeOrganiseScope(locations)
+    if (scope) {
+      writePendingOrganiseContext(
+        buildPendingOrganiseContext({
+          sourceId: sourceIdFromBrowsePath(scope.path),
+          sourceTitle: scope.name,
+          folderScope: scope.path,
+          fileIds: [],
+          fileNames: [],
+        }),
+      )
+    }
+    goToSection('organise')
   }
 
   const deviceName = displayComputerName({
@@ -911,24 +993,27 @@ export function SettingsWindow() {
   return (
     <AppBrandingProvider organisationLogo={license?.organisationLogo}>
     <div
-      className={`flex h-full min-h-0 w-full flex-1 overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] selection:bg-blue-200/40 ${
-        isBrowser ? 'rounded-[var(--window-radius)]' : ''
-      }`}
+      className={`flex h-full min-h-0 w-full flex-1 overflow-hidden text-[var(--app-fg)] selection:bg-blue-200/40 ${
+        isMacDesktop ? 'native-vibrancy bg-transparent' : 'bg-[var(--chrome-bg)]'
+      } ${isBrowser ? 'rounded-[var(--window-radius)]' : ''}`}
     >
       <aside
-        className={`relative z-10 flex h-full min-h-0 shrink-0 flex-col overflow-visible bg-[var(--sidebar-bg)] pb-3 pt-12 transition-[width,padding] duration-200 ${
+        className={`app-sidebar relative z-10 flex h-full min-h-0 shrink-0 flex-col overflow-visible bg-transparent pb-3 pt-[52px] transition-[width,padding] duration-200 ${
           sidebarCollapsed ? 'w-[52px] px-1' : 'w-[220px] px-2'
-        } ${isBrowser ? 'rounded-l-[var(--window-radius)]' : ''}`}
+        }`}
       >
         <div
-          className={`drag-region absolute top-0 flex h-11 items-center gap-0.5 ${
+          className={`drag-region absolute top-0 flex ${TITLEBAR_HEIGHT} items-center gap-2 ${
             sidebarCollapsed
-              ? 'inset-x-0 justify-center'
+              ? isMacDesktop
+                ? 'inset-x-0 justify-end pr-1.5'
+                : 'inset-x-0 justify-center'
               : isMacDesktop
-                ? 'inset-x-0 pl-[72px] pr-1.5'
+                ? `inset-x-0 ${MAC_TOOLBAR_PAD} pr-2`
                 : 'inset-x-0 px-2'
           }`}
         >
+          {sidebarCollapsed && isMacDesktop ? null : (
           <button
             type="button"
             className={SIDEBAR_TOOLBAR_BUTTON}
@@ -938,6 +1023,7 @@ export function SettingsWindow() {
           >
             <PanelLeft className="h-4 w-4" strokeWidth={1.75} />
           </button>
+          )}
           {!sidebarCollapsed ? (
             <>
               <button
@@ -961,21 +1047,18 @@ export function SettingsWindow() {
             </>
           ) : null}
         </div>
-        <div
-          className={`no-drag ${
-            sidebarCollapsed ? 'flex justify-center pb-2' : 'px-2 pb-3'
-          }`}
-        >
-          {sidebarCollapsed ? (
-            <SuhuellaWordmark variant="compact" glyphSize={24} />
-          ) : (
-            <SuhuellaWordmark
-              glyphSize={24}
-              textClassName="text-[15px] font-semibold tracking-[-0.02em] text-[var(--app-fg)]"
-            />
-          )}
-        </div>
         <nav className={`no-drag flex flex-col ${sidebarCollapsed ? 'gap-1' : 'gap-0.5'}`}>
+          {sidebarCollapsed && isMacDesktop ? (
+            <button
+              type="button"
+              className={`${SIDEBAR_TOOLBAR_BUTTON} mx-auto`}
+              aria-label="Expand sidebar"
+              aria-pressed={true}
+              onClick={toggleSidebarCollapsed}
+            >
+              <PanelLeft className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          ) : null}
           {navItems.map((item) => {
             const Icon = item.icon
             const active = section === item.id && !(item.id === 'locations' && openedSource)
@@ -1007,6 +1090,9 @@ export function SettingsWindow() {
                   if (item.id === 'locations' && openedSource) {
                     setOpenedSource(null)
                     return
+                  }
+                  if (item.id === 'activity') {
+                    setActivityScope('general')
                   }
                   goToSection(item.id)
                 }}
@@ -1045,7 +1131,7 @@ export function SettingsWindow() {
                   <RecentFolderRow
                     key={folderPath}
                     folderPath={folderPath}
-                    name={recentFolderLabel(folderPath)}
+                    name={folderLabel(folderPath)}
                     appearance={resolveRecentSourceAppearance(folderPath, {
                       suggested,
                       indexed: locations.map((location) => ({
@@ -1058,7 +1144,7 @@ export function SettingsWindow() {
                     appearanceOverride={settings?.sourceAppearance?.[normalizeSourceKey(folderPath)]}
                     platform={appInfo.platform}
                     onAppearanceChange={updateSourceAppearance}
-                    onNavigate={() => openFolderBrowse(folderPath, recentFolderLabel(folderPath))}
+                    onNavigate={() => openFolderBrowse(folderPath, folderLabel(folderPath))}
                   />
                 ))}
               </ul>
@@ -1087,7 +1173,8 @@ export function SettingsWindow() {
         </div>
       </aside>
 
-      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--app-bg)]">
+      <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2">
+        <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[12px] bg-[var(--app-bg)] shadow-[0_0_0_1px_var(--content-edge)]">
         <main
           className={`no-drag flex min-h-0 w-full flex-1 flex-col px-10 pt-10 pb-12 transition-all ${
             openedSource ? 'overflow-hidden' : 'overflow-y-auto'
@@ -1124,12 +1211,14 @@ export function SettingsWindow() {
       ) : null}
           {searchActive ? (
             <div className="page-enter">
+            <Suspense fallback={<PanelFallback />}>
             <SearchResultsPanel
               query={searchQuery}
               results={searchResults}
               loading={searchLoading}
               filter={searchFilter}
               platform={appInfo.platform}
+              host={appInfo.host}
               nativeReveal={caps.reveal}
               sourceCount={locations.length}
               indexedDocumentCount={settings?.indexedFileCount ?? health?.fileCount ?? 0}
@@ -1140,6 +1229,7 @@ export function SettingsWindow() {
               onShowWorkflow={showWorkflow}
               onShowActivity={showActivity}
             />
+            </Suspense>
             </div>
           ) : null}
           {!searchActive && section === 'home' && (
@@ -1148,55 +1238,78 @@ export function SettingsWindow() {
               appInfo={appInfo}
               scan={scan}
               locations={locations}
-              foldersSummary={foldersSummary}
               fileCount={settings?.indexedFileCount ?? health?.fileCount ?? 0}
-              onAddSource={locations.length === 0 ? () => goToSection('locations') : undefined}
+              onAddSource={locations.length === 0 ? () => requestConnectFolder() : undefined}
+              onConnectSourceHint={
+                locations.length === 0 ? (hint) => requestConnectFolder(hint) : undefined
+              }
+              onOrganise={locations.length > 0 ? startOrganiseFromHome : undefined}
+              firstHomeHint={Boolean(settings && !settings.welcomeNotificationShown && locations.length > 0)}
+              onDismissFirstHomeHint={() => {
+                void getSuhuellaApi()
+                  .dismissWelcomeHint()
+                  .then((next) => setSettings(next))
+              }}
             />
             </div>
           )}
 
           {!searchActive && section === 'organise' && (
             <div className="page-enter">
+            <Suspense fallback={<PanelFallback />}>
             <OrganisePanel
               host={appInfo.host ?? 'electron'}
               canOrganise={caps.organise}
               folderAccess={caps.filesystem}
               locations={locations}
               onConnectFolder={() => requestConnectFolder()}
+              onOpenSources={() => goToSection('locations')}
               onCompleted={() => {
                 void refreshActivity()
               }}
               nextRunNumber={nextRunNumber}
               initialWorkflowId={pendingWorkflowId}
               onInitialWorkflowConsumed={() => setPendingWorkflowId(null)}
+              onOpenActivity={() => {
+                setActivityScope('plans')
+                goToSection('activity')
+              }}
+              onOpenSettings={() => goToSection('settings', 'ai')}
               onViewActivity={(runId) => {
                 setFocusActivityRunId(runId)
+                setActivityScope('plans')
                 goToSection('activity')
               }}
               onUndo={undoActivity}
+              downloadOffer={appInfo.host === 'browser' ? downloadOffer : null}
             />
+            </Suspense>
             </div>
           )}
 
           {!searchActive && section === 'locations' && openedSource ? (
             <div className="page-enter flex min-h-0 flex-1 flex-col">
+              <Suspense fallback={<PanelFallback />}>
               <SourceBrowsePanel
                 key={openedSource.path}
                 rootPath={openedSource.path}
-                title={openedSource.title}
+                title={openedSource.title || folderLabel(openedSource.path)}
                 initialPath={openedSource.browsePath}
                 onClose={() => setOpenedSource(null)}
                 onOpenFile={(path) => void openSearchHit({ path } as SearchHit)}
+                onOrganise={openedSource.path.startsWith('cloud:') ? undefined : startOrganiseFromSourceBrowse}
                 onBrowsePathChange={(browsePath) => {
                   if (openedSource.browsePath === browsePath) return
                   setOpenedSource({ ...openedSource, browsePath })
                 }}
               />
+              </Suspense>
             </div>
           ) : null}
 
           {!searchActive && section === 'locations' && !openedSource && (
             <div className="page-enter space-y-6">
+            <Suspense fallback={<PanelFallback />}>
             <SourcesPanel
               settings={settings}
               scan={scan}
@@ -1207,6 +1320,7 @@ export function SettingsWindow() {
               capabilities={caps}
               busy={busy}
               notice={sourcesNotice}
+              noticeKind={sourcesNoticeKind}
               downloadOffer={appInfo.host === 'browser' ? downloadOffer : null}
               developerSources={
                 <DeveloperSourcesPanel
@@ -1225,17 +1339,24 @@ export function SettingsWindow() {
               onCancelScan={() => void cancelScan()}
               onSourceAppearanceChange={(path, update) => void updateSourceAppearance(path, update)}
               onOpenSource={(path, title) => openFolderBrowse(path, title)}
+              onLimitedSystemFolder={
+                appInfo.host === 'browser'
+                  ? () => setCapabilityNotice(browserCapabilityDialogCopy('protected_folder', locale))
+                  : undefined
+              }
             />
+            </Suspense>
             </div>
           )}
 
           {!searchActive && section === 'settings' && (
             <div className="page-enter">
+            <Suspense fallback={<PanelFallback />}>
             <SettingsPanel
               appInfo={appInfo}
               settings={settings}
+              onSettingsChange={setSettings}
               saveAsActive={saveAsActive}
-              license={homeLicense}
               metrics={deviceMetrics}
               metricsLoading={metricsLoading}
               onLaunchAtLoginChange={(enabled) => void toggleLaunchAtLogin(enabled)}
@@ -1248,40 +1369,49 @@ export function SettingsWindow() {
               }}
               onRefreshMetrics={refreshDeviceMetrics}
             />
+            </Suspense>
             </div>
           )}
 
           {!searchActive && section === 'activity' && (
             <div className="page-enter">
+            <Suspense fallback={<PanelFallback />}>
             <ActivityPanel
               runs={activity}
+              scope={activityScope}
               loading={activityLoading}
               error={activityError}
               busy={undoBusy}
-              initialUndoRunId={activityUndoRunId}
+              initialUndoRunId={activityScope === 'plans' ? activityUndoRunId : null}
               onInitialUndoConsumed={() => setActivityUndoRunId(null)}
               focusRunId={focusActivityRunId}
               onFocusConsumed={() => setFocusActivityRunId(null)}
               onOrganise={() => goToSection('organise')}
+              onBack={activityScope === 'plans' ? () => goToSection('organise') : undefined}
               onRetry={() => {
                 void refreshActivity()
               }}
               onUndo={undoActivity}
             />
+            </Suspense>
             </div>
           )}
 
         </main>
+        </div>
       </div>
-      {blockedFolderDialogOpen ? (
+      {appInfo.host === 'browser' && capabilityNotice ? (
+        <Suspense fallback={null}>
         <BrowserFolderConnectDialog
           busy={busy}
           downloadOffer={downloadOffer}
+          notice={capabilityNotice}
           onPick={() => void pickFolder()}
           onClose={() => {
-            if (!busy) setBlockedFolderDialogOpen(false)
+            if (!busy) setCapabilityNotice(null)
           }}
         />
+        </Suspense>
       ) : null}
     </div>
     </AppBrandingProvider>

@@ -68,7 +68,7 @@ export const suhuellaBrand = {
   },
   download: {
     macArtifactName: "${productName}-${version}.${ext}",
-    windowsArtifactName: "${productName}-Setup-${version}.${ext}",
+    windowsArtifactName: "${productName}-${version}.${ext}",
   },
   release: brandReleaseFromManifest(suhuellaRelease),
 } satisfies BrandConfig;

@@ -8,6 +8,7 @@ import {
   brandPublicDir,
   resolveBrandId,
 } from "../../brands/select.mjs";
+import { isDeveloperIdIdentity, resolveMacCodesignIdentity } from "./mac-signing.mjs";
 
 export const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -48,6 +49,11 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
   const identity = brandIdentity(brandId);
   const out = brandBuildDir(brandId);
   const pack = path.join(out, "pack");
+  const macIdentity = resolveMacCodesignIdentity();
+  const developerId = isDeveloperIdIdentity(macIdentity);
+  const entitlements = path.join("build", "entitlements.mac.plist");
+  // electron-builder ad-hoc signing uses --timestamp per helper and hangs.
+  // afterPack signs the finished .app (adhoc or Developer ID) without timestamp.
   const config = {
     appId: identity.desktopAppId,
     productName: identity.desktopProductName,
@@ -56,7 +62,7 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
     directories: {
       output: path.join(".build", brandId, "release"),
     },
-    forceCodeSigning: false,
+    forceCodeSigning: developerId,
     publish: null,
     files: [
       "package.json",
@@ -73,22 +79,29 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
         schemes: [identity.desktopProtocol],
       },
     ],
+    afterPack: path.join("scripts", "sign-mac-app.cjs"),
+    afterSign: path.join("scripts", "notarize.cjs"),
     mac: {
       category: "public.app-category.productivity",
       icon: path.join(".build", brandId, "pack/icon.icns"),
       identity: null,
+      hardenedRuntime: true,
+      gatekeeperAssess: false,
+      entitlements,
+      entitlementsInherit: entitlements,
       extendInfo: {
+        CFBundleIdentifier: identity.desktopAppId,
         CFBundleDisplayName: identity.desktopProductName,
         CFBundleName: identity.desktopProductName,
       },
-      target: ["dmg"],
+      target: ["dir"],
     },
     dmg: {
       artifactName: "${productName}-${version}.${ext}",
     },
     win: {
       icon: path.join(".build", brandId, "pack/icon.ico"),
-      artifactName: "${productName}-Setup-${version}.${ext}",
+      artifactName: "${productName}-${version}.${ext}",
       target: ["nsis"],
       extraResources: [
         {
@@ -105,7 +118,7 @@ export async function writeElectronBuilderConfig(brandId = selectedBrandId()) {
       installerHeaderIcon: path.join(".build", brandId, "pack/icon.ico"),
       shortcutName: identity.desktopProductName,
       uninstallDisplayName: identity.desktopProductName,
-      artifactName: "${productName}-Setup-${version}.${ext}",
+      artifactName: "${productName}-${version}.${ext}",
     },
   };
 

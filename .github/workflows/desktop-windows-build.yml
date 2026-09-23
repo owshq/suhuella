@@ -34,6 +34,10 @@ jobs:
         run: |
           npm install --prefix brands
           npm install --prefix desktop --ignore-scripts
+          npm install --prefix site --ignore-scripts
+
+      - name: Health (build coherence)
+        run: npm run health:ci
 
       - name: Prepare brand entry
         run: node brands/project-site.mjs
@@ -80,8 +84,20 @@ jobs:
           path: ${{ steps.installer.outputs.path }}
           retention-days: 14
 
+      - name: Write SHA256 sidecar
+        id: sha
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "${{ steps.installer.outputs.path }}" -Algorithm SHA256).Hash.ToLower()
+          $sidecar = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.win_name }}.sha256"
+          Set-Content -Path $sidecar -Value "$hash  ${{ steps.release.outputs.win_name }}"
+          "path=$sidecar" >> $env:GITHUB_OUTPUT
+          "digest=$hash" >> $env:GITHUB_OUTPUT
+
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber
+        run: |
+          gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber
+          gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.sha.outputs.path }}" --clobber

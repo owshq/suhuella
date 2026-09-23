@@ -1,6 +1,6 @@
 import { resolveEffectiveBranding } from '@suhuella/product/lib/effective-branding.ts'
 import { checkoutPath, licensePlanCards, unavailablePlanMessage } from '@suhuella/product/lib/license-checkout.ts'
-import { licenseErrorMessage, toLicenseStatusView } from '@suhuella/product/lib/license-status.ts'
+import { licenseErrorMessage, organisationMoneyLabel, organisationSeatLabel, toLicenseStatusView } from '@suhuella/product/lib/license-status.ts'
 import type { LicenseContext } from '@suhuella/product/types.ts'
 
 function context(partial: Partial<LicenseContext>): LicenseContext {
@@ -12,7 +12,7 @@ function context(partial: Partial<LicenseContext>): LicenseContext {
     status: 'active',
     capabilities: [],
     enabledKnowledgeSources: ['local_folder'],
-    deviceLimit: 3,
+    deviceLimit: 1,
     activatedDevices: 1,
     validUntil: null,
     lastCheckedAt: '2026-09-18T00:00:00.000Z',
@@ -63,11 +63,20 @@ assert(business.detail === 'Managed by Acme', 'business detail')
 assert(business.organisationName === 'Acme', 'business organisation')
 assert(business.roleLabel === 'Member', 'business role')
 assert(business.canEditBranding === false, 'member cannot edit branding')
+assert(business.canManageOrganisation === false, 'member cannot manage the organisation')
 assert(business.identityTitle.startsWith('Acme · Business'), 'business identity org first')
 const businessOwner = toLicenseStatusView(
   context({ edition: 'business', organisationName: 'Acme', memberRole: 'owner', organisationLogo: 'data:image/png;base64,xx' }),
 )
 assert(businessOwner.canEditBranding === true, 'owner can edit branding')
+assert(businessOwner.canManageOrganisation === true, 'owner can manage the organisation in License')
+const businessAdmin = toLicenseStatusView(
+  context({ edition: 'business', organisationName: 'Acme', memberRole: 'admin' }),
+)
+assert(businessAdmin.canManageOrganisation === true, 'admin can manage the organisation in License')
+assert(businessAdmin.canEditBranding === false, 'admin cannot edit branding')
+assert(organisationSeatLabel('available') === 'Available', 'available seat label')
+assert(organisationMoneyLabel(5000, 'eur') === '€50' || organisationMoneyLabel(5000, 'eur').includes('50'), 'server total is formatted, not priced in Desktop')
 assert(businessOwner.organisationLogo === 'data:image/png;base64,xx', 'owner sees configured logo')
 assert(!JSON.stringify(business).includes('cust_hidden'), 'no customer id')
 assert(!JSON.stringify(business).includes('hidden'), 'no token')
@@ -97,8 +106,13 @@ const cards = licensePlanCards('free')
 assert(cards[0]?.current === true, 'free is current')
 assert(cards.some((card) => card.cta === 'Buy once'), 'lifetime buy once')
 assert(cards.some((card) => card.cta === 'Subscribe'), 'monthly subscribe')
-assert(cards.some((card) => card.cta === 'Contact sales'), 'business contact sales')
-assert(cards.some((card) => card.summary.includes('3 devices')), 'personal device limit')
+assert(cards.some((card) => card.cta === 'Get Business'), 'business checkout CTA')
+assert(cards.some((card) => card.summary.includes('active device')), 'personal device limit')
+assert(
+  cards.find((card) => card.id === 'lifetime')?.summary !== cards.find((card) => card.id === 'monthly')?.summary,
+  'lifetime and monthly summaries differ',
+)
+assert(!cards.some((card) => /current version|latest version/i.test(card.summary)), 'no version restriction copy on cards')
 assert(!cards.some((card) => card.cta === 'Upgrade'), 'no generic upgrade')
 assert(!cards.some((card) => String(card.id) === 'partner_annual' || card.title.toLowerCase().includes('partner')), 'partner license is not an end-customer plan card')
 assert(checkoutPath('lifetime') === '/checkout/lifetime', 'lifetime CTA resolves lifetime checkout')
@@ -116,7 +130,7 @@ assert(!unavailablePlanMessage('monthly').toLowerCase().includes('lifetime'), 'm
 assert(licenseErrorMessage('no_license') === 'No active license was found for this email.', 'no license copy')
 assert(licenseErrorMessage('unknown_email') === 'No active license was found for this email.', 'unknown email copy')
 assert(
-  licenseErrorMessage('device_limit').includes('3 devices'),
+  licenseErrorMessage('device_limit').includes('active device'),
   'device limit copy',
 )
 assert(

@@ -1,4 +1,12 @@
 import type { IndexedLocationSummary } from "../../types";
+import {
+  isPlaceholderFolderName,
+  isTechnicalSourceId,
+  resolveSourceDisplayName,
+  sourceNameNeedsRecovery,
+  usableSourceFolderName,
+  UNKNOWN_SOURCE_NAME,
+} from "../../lib/source-display-name.ts";
 import type { WebKnowledgeSource } from "./types";
 
 export type ConnectTraceStep =
@@ -20,14 +28,20 @@ export function connectTrace(step: ConnectTraceStep, extra?: Record<string, unkn
   console.info(`[suhuella-connect] ${step}`, extra ?? {});
 }
 
-export function isTechnicalSourceId(value: string): boolean {
-  return /^src_[a-z0-9]+_[a-z0-9]+$/i.test(value.trim());
-}
+export {
+  isPlaceholderFolderName,
+  isTechnicalSourceId,
+  resolveSourceDisplayName,
+  sourceNameNeedsRecovery,
+  UNKNOWN_SOURCE_NAME,
+  usableSourceFolderName,
+};
 
-export function humanFolderName(handleName: string | undefined, fallback = "Folder"): string {
-  const name = handleName?.trim();
-  if (!name || isTechnicalSourceId(name)) return fallback;
-  return name;
+/** @deprecated Prefer resolveSourceDisplayName */
+export function humanFolderName(
+  ...candidates: Array<string | undefined | null>
+): string {
+  return resolveSourceDisplayName(...candidates);
 }
 
 export function pendingBrowserSource(input: {

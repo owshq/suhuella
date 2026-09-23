@@ -1,5 +1,6 @@
 import { brand } from '@suhuella/brand'
-import { PERSONAL_DEVICE_LIMIT } from './license-plans.ts'
+import { editionCapabilities } from './generation-capabilities.ts'
+import { personalDeviceLimitLabel } from './license-plans.ts'
 import type {
   LicenseApiError,
   LicenseContext,
@@ -17,7 +18,7 @@ export function licenseErrorMessage(error: LicenseApiError): string {
     return 'No active license was found for this email.'
   }
   if (error === 'device_limit') {
-    return `This Personal license allows ${PERSONAL_DEVICE_LIMIT} devices. Deactivate another computer, then activate this one.`
+    return `This Personal license allows ${personalDeviceLimitLabel()}. Deactivate another computer, then activate this one.`
   }
   if (error === 'payment_incomplete') return 'Payment was not completed.'
   if (error === 'revoked') return 'This complimentary license is no longer active.'
@@ -192,7 +193,7 @@ function buildHealth(options: {
     },
     {
       id: 'learning',
-      label: 'Learning',
+      label: 'Sources',
       status: options.learningOk ? 'ok' : 'attention',
     },
     {
@@ -279,6 +280,11 @@ export function toLicenseStatusView(
       kind === 'business' && context.status === 'active' ? context.organisationLogo ?? null : null,
     canEditBranding:
       kind === 'business' && context.memberRole === 'owner' && !needsAttention && context.status === 'active',
+    canManageOrganisation:
+      kind === 'business' &&
+      (context.memberRole === 'owner' || context.memberRole === 'admin') &&
+      !needsAttention &&
+      context.status === 'active',
     deviceCount: paid ? context.activatedDevices : null,
     deviceLimit: paid ? context.deviceLimit : null,
     devices,
@@ -296,9 +302,38 @@ export function toLicenseStatusView(
       learningOk: options.learningOk ?? true,
       licenceOk: !needsAttention,
     }),
+    effectiveCapabilities:
+      Array.isArray(context.capabilities) && context.capabilities.length > 0
+        ? context.capabilities
+        : [...editionCapabilities(context.edition)],
   }
 }
 
 export function offlineNote(): string {
   return OFFLINE_NOTE
+}
+
+export function licenseDayLabel(iso: string, now = Date.now()): string {
+  return formatRelativeDay(iso, now)
+}
+
+export function organisationSeatLabel(status: string): string {
+  if (status === 'active') return 'Active'
+  if (status === 'available') return 'Available'
+  if (status === 'invited') return 'Invited'
+  if (status === 'revoked') return 'Revoked'
+  if (status === 'expired') return 'Expired'
+  return status
+}
+
+export function organisationMoneyLabel(cents: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency.trim().toUpperCase() || 'EUR',
+      maximumFractionDigits: 0,
+    }).format(cents / 100)
+  } catch {
+    return `€${Math.round(cents / 100)}`
+  }
 }

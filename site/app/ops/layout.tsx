@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: { absolute: "Operations — SuHuella" },
-  description: "SuHuella operations console",
+  description: "SuHuella operations control center",
   robots: { index: false, follow: false, nocache: true },
 };
 

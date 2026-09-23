@@ -16,7 +16,22 @@ function normalizeDownloadEntry(entry, legacyUrl = "") {
           ? urlRaw.trim()
           : "";
     const available = entry.available === true || Boolean(url);
-    return { available, url: url || null };
+    const sha256 =
+      typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/i.test(entry.sha256.trim())
+        ? entry.sha256.trim().toLowerCase()
+        : undefined;
+    const filename = trimString(entry.filename) || undefined;
+    const size =
+      typeof entry.size === "number" && Number.isFinite(entry.size) && entry.size > 0
+        ? Math.trunc(entry.size)
+        : undefined;
+    return {
+      available,
+      url: url || null,
+      ...(sha256 ? { sha256 } : {}),
+      ...(filename ? { filename } : {}),
+      ...(size ? { size } : {}),
+    };
   }
   const legacy = trimString(legacyUrl);
   return { available: Boolean(legacy), url: legacy || null };

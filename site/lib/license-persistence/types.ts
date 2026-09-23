@@ -1,9 +1,22 @@
 import type { LicenseActivation, LicenseGrant } from "../license-context.ts";
+import type {
+  CheckoutGenerationBinding,
+  CheckoutReconciliationPending,
+  CommercialGenerationPriceBinding,
+  CommercialGenerationRecord,
+  LicenseAcquisitionRecord,
+} from "../commercial-generations/types.ts";
+import type { LifetimeUpgradeIntent } from "../lifetime-upgrade/types.ts";
 
 export type EmailVerificationPurpose =
   | "LICENSE_ACTIVATION"
   | "LICENSE_RECOVERY"
-  | "BUSINESS_OWNER_VERIFICATION";
+  | "BUSINESS_OWNER_VERIFICATION"
+  | "BUSINESS_CHECKOUT"
+  | "LIFETIME_UPGRADE"
+  | "PARTNER_ONBOARDING"
+  | "PARTNER_APPLICATION"
+  | "PARTNER_PORTAL";
 
 export type EmailVerificationChallenge = {
   id: string;
@@ -43,6 +56,12 @@ export type RateLimitEvent = {
   eventAt: string;
 };
 
+/** Receipt that a Stripe event was handled. Not a license and not a payment. */
+export type StripeEventReceipt = {
+  id: string;
+  processedAt: string;
+};
+
 export type LicensePersistenceDocument = {
   version: 1;
   activations: LicenseActivation[];
@@ -51,6 +70,14 @@ export type LicensePersistenceDocument = {
   activationAttempts: ActivationAttempt[];
   rateLimitEvents: RateLimitEvent[];
   grants: LicenseGrant[];
+  stripeEvents: StripeEventReceipt[];
+  commercialGenerations?: CommercialGenerationRecord[];
+  commercialGenerationPrices?: CommercialGenerationPriceBinding[];
+  checkoutGenerationBindings?: CheckoutGenerationBinding[];
+  licenseAcquisitions?: LicenseAcquisitionRecord[];
+  checkoutReconciliationPending?: CheckoutReconciliationPending[];
+  licenseVersionModelActivatedAt?: string | null;
+  lifetimeUpgradeIntents?: LifetimeUpgradeIntent[];
 };
 
 export type LicensePersistenceKind = "file" | "d1" | "memory" | "unavailable";
@@ -79,5 +106,11 @@ export function emptyLicensePersistenceDocument(): LicensePersistenceDocument {
     activationAttempts: [],
     rateLimitEvents: [],
     grants: [],
+    stripeEvents: [],
+    commercialGenerations: [],
+    commercialGenerationPrices: [],
+    checkoutGenerationBindings: [],
+    licenseAcquisitions: [],
+    lifetimeUpgradeIntents: [],
   };
 }

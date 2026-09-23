@@ -1,9 +1,14 @@
 import { brand } from "@suhuella/brand";
-import { deriveDisplayVersion } from "../../packages/product/src/lib/display-version.ts";
+import {
+  customerInstallerFilename,
+  deriveDisplayVersion,
+} from "../../packages/product/src/lib/display-version.ts";
 import type { Locale } from "@/lib/i18n/types";
 
 /** Internal release version. Customer labels use formatAppVersion. */
 export const APP_VERSION = brand.release.version;
+
+export { customerInstallerFilename };
 
 export function formatAppVersion(version = APP_VERSION): string {
   const display = deriveDisplayVersion(version);

@@ -1,5 +1,13 @@
 import { productCopy } from '../lib/product-copy'
+import { hostAccessFor, type HostAccessCapabilities } from '../lib/platform-capabilities'
 import type { AppHost, AppInfo, PlatformCapabilities } from '../types'
+
+export {
+  homeOrganiseActionLabel,
+  homeOrganiseOpportunity,
+  homeOrganiseScope,
+} from '../lib/home-organise'
+export type { HomeOrganiseLocation, HomeOrganiseOpportunity } from '../lib/home-organise'
 
 export type HostKind = AppHost
 
@@ -58,23 +66,25 @@ export function capabilitiesOf(
 }
 
 export function homeHeadline(_info?: Pick<AppInfo, 'capabilities' | 'host' | 'platform' | 'folderAccess'> | null): string {
-  return productCopy('What SuHuella knows')
+  return productCopy('Documents SuHuella has seen')
 }
 
 export function homeKnowledgeLine(args: {
   sourceCount: number
   scanning?: boolean
-  learningFrom?: string | null
+  indexingFrom?: string | null
   saveAs?: boolean
   tray?: boolean
   host?: AppHost | null
+  access?: HostAccessCapabilities
 }): string {
-  if (args.sourceCount === 0) {
-    return args.host === 'browser' ? 'Connect a source to begin' : 'Add a source to begin'
-  }
   if (args.scanning) {
-    if (args.learningFrom) return productCopy(`Learning from ${args.learningFrom}…`)
-    return productCopy('Updating what SuHuella knows')
+    if (args.indexingFrom) return productCopy(`Updating ${args.indexingFrom}…`)
+    return productCopy('Updating documents SuHuella has seen')
+  }
+  if (args.sourceCount === 0) {
+    const connectGrant = args.access?.connectGrant ?? hostAccessFor(args.host).connectGrant
+    return connectGrant ? 'Connect a source to begin' : 'Add a source to begin'
   }
   return ''
 }

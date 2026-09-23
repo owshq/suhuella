@@ -1,13 +1,35 @@
 # PRIVATE-BETA-001
 
 ```text
-STATUS = CLOSED · SKIPPED
-TYPE = Commercial validation
-SCOPE = SuHuella Web + Desktop
-CLOSED = 2026-09-19
-REASON = Desirability proven when paying customers arrive — not a pre-launch gate
+STATUS = BLOCKED
+TYPE = External commercial validation
+SCOPE = SuHuella Web + Desktop (macOS + Windows user-launchable)
+REASON = Missing commercial code-signing — blocks promotion to 0.1.0-rc1 and this beta, not pre-RC development or artifact publication
 CHECKOUT = OFF
+LINUX = not opened
+DECISION = DECISION-PRIVATE-BETA-001
+SEMANTICS = docs/governance/PRE-RC-RELEASE-SEMANTICS.md
 ```
+
+```text
+Not a product blocker.
+Not a release engineering blocker.
+Does not block 0.1.0-pre-rc builds, uploads, downloads, or internal QA.
+
+External prerequisite — Apple Developer + Authenticode before 0.1.0-rc1.
+
+Primary metric: Can a first-time user obtain a useful result without assistance?
+
+First useful session: understand product · connect folder · indexing · search · organise · daily use.
+
+Private Beta reopens when:
+  0.1.0-rc1 is promoted
+  commercial-signing.json status = enabled
+  validate-release PASS
+  Gate 6 Trusted Install PASS (Mac + Windows if advertised)
+```
+
+See [docs/governance/DECISION-PRIVATE-BETA-001.md](docs/governance/DECISION-PRIVATE-BETA-001.md).
 
 **Not** bug hunting alone. **Question:** after several days, would people choose to keep using SuHuella?
 
@@ -17,19 +39,47 @@ CHECKOUT = OFF
 
 ## Sequence
 
+Signing gates **this** beta. It does not gate pre-RC publication. See [Pre-RC release semantics](docs/governance/PRE-RC-RELEASE-SEMANTICS.md).
+
 ```text
-PRODUCT-FREEZE-001  (OPEN)
+0.1.0-pre-rc                     active now
         ↓
-PRE-BETA-SANITY-001  (30–45 min · deploy gates PASS)
+Mac + Windows artifacts          published for technical testing
         ↓
-PRIVATE-BETA-001
+/api/release + website downloads
         ↓
-    20–30 users · 7+ days each phase
+product / technical gates
         ↓
-    0.1.0-rc1
+commercial signing gates
         ↓
-    Public launch
+0.1.0-rc1
+        ↓
+PRIVATE-BETA-001                 20–30 external users
+        ↓
+Public launch
 ```
+
+Do not invite external beta users until `0.1.0-rc1` exists (trusted install on every advertised desktop platform). Keep building and publishing `0.1.0-pre-rc` until then.
+
+### Desktop scope (decided 2026-09-20)
+
+```text
+Private Beta = Mac + Windows user-launchable
+```
+
+Both platforms use the same release validation contract. Neither is a lower bar.
+
+| Platform | Gate 6 Trusted Install (when enabled) | Current status |
+| --- | --- | --- |
+| macOS | Chrome download · install · open (no `xattr`) | **DEFERRED** — requires Developer ID + notarization |
+| Windows | Browser download · install · open | **DEFERRED** — requires Authenticode |
+| Linux | — | **NOT OPENED** |
+
+Gate 6 global: **DEFERRED** while `commercial-signing.json` status is `deferred`. Historical unsigned install failures are evidence — not the current operational status.
+
+**While signing is deferred:** pre-RC Mac and Windows downloads may exist and must be labelled as technical pre-releases, not as a trusted external beta. Do not describe an unsigned build as a normal Private Beta install.
+
+macOS-only is acceptable for **internal technical testing** only — not Private Beta when the site advertises Mac + Windows.
 
 ---
 
@@ -111,7 +161,7 @@ Observed behaviour
 Repeated friction (≥2 users)
 Critical issues fixed
 Roadmap changes (if any)
-Decision: READY FOR RC1 | EXTEND PRIVATE BETA
+Decision: CONTINUE PUBLIC LAUNCH | EXTEND PRIVATE BETA
 ```
 
 ---
@@ -119,7 +169,7 @@ Decision: READY FOR RC1 | EXTEND PRIVATE BETA
 ## Close statuses
 
 ```text
-PRIVATE-BETA-001 — CLOSED · READY FOR RC1
+PRIVATE-BETA-001 — CLOSED · READY FOR PUBLIC LAUNCH
 ```
 
 or
@@ -133,7 +183,7 @@ PRIVATE-BETA-001 — CLOSED · EXTEND
 ## Out of scope
 
 - checkout / Stripe live selling
-- Desktop distribution in Web RC
+- presenting `0.1.0-pre-rc` as Private Beta or as `rc1`
 - partner mode · multibrand
 - new connectors / OAuth
 - PRODUCTION-READINESS-001 substitution (separate technical gate)
@@ -142,6 +192,6 @@ PRIVATE-BETA-001 — CLOSED · EXTEND
 
 ## Next after PASS
 
-Tag **0.1.0-rc1** when Web beta exit criteria met · then public launch planning.
+External beta runs on **0.1.0-rc1**, after trusted-install gates. It does not promote a pre-RC build, and passing beta is not what creates `rc1`.
 
-Detail in README §9.2. This track is the **Web RC** gate; Desktop remains parallel and frozen.
+This track is the external-distribution gate. Pre-RC downloads stay on the release pipeline.

@@ -12,11 +12,27 @@ import {
   setDeviceName,
   type ApiDevice,
 } from './license-store.ts'
-import type { LicenseActionResult, LicenseApiError, LicenseContext } from '@suhuella/product/types.ts'
+import type {
+  BusinessOrganisationAction,
+  BusinessOrganisationResult,
+  LicenseActionResult,
+  LicenseApiError,
+  LicenseContext,
+} from '@suhuella/product/types.ts'
 import { fetchPublicServiceHealth, type PublicServiceHealth } from '@suhuella/product/lib/service-health.ts'
 
 type ApiSuccess = { ok: true; license: LicenseContext; devices?: ApiDevice[] }
-type ApiFailure = { ok: false; error: LicenseApiError }
+type ApiFailure = { ok: false; error: LicenseApiError; devices?: ApiDevice[] }
+
+function publicDevicesFromApi(devices: ApiDevice[] | undefined) {
+  return (devices ?? []).map((device, index) => ({
+    index,
+    name: device.name,
+    platform: device.platform,
+    lastSeenLabel: device.lastSeen,
+    current: device.current,
+  }))
+}
 
 async function postLicense(
   pathName: string,
@@ -115,7 +131,7 @@ export async function activateFromCheckout(
     appVersion: app.getVersion(),
   })
   if (!result.ok) {
-    return { ...result, license: licenseView() }
+    return { ...result, license: licenseView(), devices: publicDevicesFromApi(result.devices) }
   }
   return {
     ok: true,
@@ -155,6 +171,47 @@ export async function updateBusinessBranding(dataUrl: string | null): Promise<Li
   }
 }
 
+async function postOrganisation(
+  body: Record<string, string | number>,
+): Promise<BusinessOrganisationResult> {
+  const current = loadLicenseContext()
+  if (current.edition !== 'business' && current.edition !== 'enterprise') {
+    return { ok: false, error: 'forbidden' }
+  }
+  try {
+    const response = await fetch(`${licenseApiBaseUrl()}/api/license/organisation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: getDeviceId(),
+        licenseToken: current.licenseToken,
+        ...body,
+      }),
+    })
+    const data = (await response.json()) as BusinessOrganisationResult
+    if (!data || typeof data !== 'object') return { ok: false, error: 'server_error' }
+    return data
+  } catch {
+    return { ok: false, error: 'offline' }
+  }
+}
+
+export async function getBusinessOrganisation(): Promise<BusinessOrganisationResult> {
+  return postOrganisation({})
+}
+
+export async function manageBusinessOrganisation(
+  action: BusinessOrganisationAction,
+  payload: { email?: string; seatId?: string; seatCount?: number } = {},
+): Promise<BusinessOrganisationResult> {
+  return postOrganisation({
+    action,
+    email: payload.email ?? '',
+    seatId: payload.seatId ?? '',
+    ...(payload.seatCount != null ? { seatCount: payload.seatCount } : {}),
+  })
+}
+
 export async function activateLicense(emailProofId: string): Promise<LicenseActionResult> {
   const result = await postLicense('/api/license/activate', {
     emailProofId,
@@ -164,7 +221,7 @@ export async function activateLicense(emailProofId: string): Promise<LicenseActi
     appVersion: app.getVersion(),
   })
   if (!result.ok) {
-    return { ...result, license: licenseView() }
+    return { ...result, license: licenseView(), devices: publicDevicesFromApi(result.devices) }
   }
   return {
     ok: true,
@@ -209,7 +266,7 @@ export async function checkLicense(silent = false): Promise<LicenseActionResult>
     if (silent) {
       return { ok: true, license: licenseView(current) }
     }
-    return { ...result, license: licenseView(current) }
+    return { ...result, license: licenseView(current), devices: publicDevicesFromApi(result.devices) }
   }
 
   return {
@@ -231,7 +288,7 @@ export async function deactivateLicense(): Promise<LicenseActionResult> {
     licenseToken: current.licenseToken,
   })
   if (!result.ok && result.error !== 'not_activated' && result.error !== 'offline') {
-    return { ...result, license: licenseView(current) }
+    return { ...result, license: licenseView(current), devices: publicDevicesFromApi(result.devices) }
   }
   return { ok: true, license: licenseView(clearLicenseContext()) }
 }
@@ -251,7 +308,7 @@ export async function deactivateRemoteDevice(deviceIndex: number): Promise<Licen
     targetDeviceId,
   })
   if (!result.ok) {
-    return { ...result, license: licenseView(current) }
+    return { ...result, license: licenseView(current), devices: publicDevicesFromApi(result.devices) }
   }
   const refreshed = await checkLicense(true)
   return refreshed

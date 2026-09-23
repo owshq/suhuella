@@ -1,0 +1,24 @@
+# Build output — Git ignores these but Cursor may still index them
+.build/
+dist/
+dist-electron/
+out/
+release/
+
+# Test and coverage artifacts
+coverage/
+playwright-report/
+test-results/
+trace/
+videos/
+screenshots/
+
+# Dependencies and caches
+node_modules/
+.next/
+.open-next/
+.wrangler/
+
+# Local / temp
+tmp/
+site/.data/

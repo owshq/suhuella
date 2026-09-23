@@ -87,7 +87,7 @@ Production · https://suhuella.com · Playwright benchmark + browser verificatio
 ✓ About                     PASS — 0.1.0-pre-rc · product mark
 ✓ Branding correct          PASS — bracket mark sidebar + identity card
 ✓ Error offline             PASS — no crash; license Send code shows offline copy
-✓ Error sin permisos        PASS — AbortError picker · 0 sources recoverable
+✓ Error sin permisos        NOT this row — AbortError is picker cancel, not a denied permission
 ✓ Error carpeta vacía         PASS — empty-folder connects · honest 0 documents
 ~ Error carpeta eliminada     N/A — browser host; unavailable invariant in unit tests
 ```
@@ -103,6 +103,8 @@ Blockers (🔴 only): none
 
 Ready for PRIVATE-BETA-001:  yes
 ```
+
+**Correction (2026-09-23):** the old “Error sin permisos” row used an `AbortError` from cancelling the folder picker. Cancel closes that flow with no dialog and no download popup. A denied permission is a separate case and may offer retry. That historical row is not evidence for the permission-denied dialog.
 
 **Note (non-blocker):** sidebar still shows "Download for Mac" while `/download` correctly marks Desktop unavailable. Track separately only if beta users report confusion.
 

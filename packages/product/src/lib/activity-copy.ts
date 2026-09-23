@@ -2,21 +2,177 @@ import type {
   ActivityItem,
   ActivityItemStatus,
   ActivityRun,
+  ActivityRunSummary,
   ActivityTrigger,
   OrganisationPlanItem,
 } from '../types.ts'
 import { workflowIntentSummary } from './workflow-copy.ts'
+import { type SourceStatus } from './source-lifecycle.ts'
+import {
+  sourceRemovedActivityTitle,
+  sourceTransitionTitle,
+} from './source-presentation.ts'
 
 const TRIGGER_LABELS: Record<ActivityTrigger, string> = {
-  organise_documents: 'Organise documents',
+  organise_documents: 'Plan documents',
   move_this_file: 'Move this file',
   workflow: 'Workflow',
   autopilot: 'Autopilot',
   undo: 'Undo',
+  source_event: 'Source',
+  save_as: 'Save As',
+}
+
+const PLAN_ACTIVITY_TRIGGERS: ActivityTrigger[] = [
+  'organise_documents',
+  'workflow',
+  'undo',
+  'autopilot',
+]
+
+/** Plan Mode Activity — confirmed Plans and their undo runs. */
+export function isPlanActivityRun(run: ActivityRun): boolean {
+  return PLAN_ACTIVITY_TRIGGERS.includes(run.trigger)
+}
+
+/** Sidebar Activity — Save As, source lifecycle, and other device events. */
+export function isGeneralActivityRun(run: ActivityRun): boolean {
+  return !isPlanActivityRun(run)
 }
 
 export function activityTriggerLabel(trigger: ActivityTrigger): string {
   return TRIGGER_LABELS[trigger]
+}
+
+export type ActivityFilter = 'all' | 'plans' | 'undo' | 'sources' | 'save_as'
+
+/** Visual kinds derived from the Activity model — not invented actions. */
+export type ActivityIconKind =
+  | 'move'
+  | 'rename'
+  | 'create_folder'
+  | 'archive'
+  | 'plan'
+  | 'workflow'
+  | 'undo'
+  | 'source_connected'
+  | 'source_removed'
+  | 'source_restored'
+  | 'source_unavailable'
+  | 'source'
+
+export function activityFilterForRun(run: ActivityRun): Exclude<ActivityFilter, 'all'> {
+  if (run.trigger === 'undo') return 'undo'
+  if (run.trigger === 'source_event') return 'sources'
+  if (run.trigger === 'save_as' || run.trigger === 'move_this_file') return 'save_as'
+  return 'plans'
+}
+
+export function activityItemIconKind(item: Pick<ActivityItem, 'action'>): ActivityIconKind {
+  if (item.action === 'rename') return 'rename'
+  if (item.action === 'create_folder' || item.action === 'create_structure') return 'create_folder'
+  if (item.action === 'archive') return 'archive'
+  if (item.action === 'move') return 'move'
+  return 'plan'
+}
+
+function dominantItemIconKind(run: ActivityRun): ActivityIconKind {
+  const applied = run.items.filter((item) => item.status === 'moved')
+  const pool = applied.length > 0 ? applied : run.items
+  if (pool.length === 0) return 'plan'
+  const kinds = pool.map((item) => activityItemIconKind(item))
+  if (kinds.every((kind) => kind === 'rename')) return 'rename'
+  if (kinds.some((kind) => kind === 'create_folder')) return 'create_folder'
+  if (kinds.some((kind) => kind === 'archive')) return 'archive'
+  if (kinds.some((kind) => kind === 'move')) return 'move'
+  if (kinds.every((kind) => kind === kinds[0])) return kinds[0] ?? 'plan'
+  return 'plan'
+}
+
+function sourceEventIconKind(event: NonNullable<ActivityRun['sourceEvent']>): ActivityIconKind {
+  if (event.kind === 'removed' || event.transition === 'source_removed') return 'source_removed'
+  if (event.kind === 'connected' || event.transition === 'source_connected') return 'source_connected'
+  if (event.kind === 'restored' || event.transition === 'source_reconnected' || event.transition === 'permission_restored') {
+    return 'source_restored'
+  }
+  if (
+    event.kind === 'unavailable' ||
+    event.transition === 'source_unavailable' ||
+    event.transition === 'permission_lost' ||
+    event.transition === 'permission_required'
+  ) {
+    return 'source_unavailable'
+  }
+  return 'source'
+}
+
+export function activityRunIconKind(run: ActivityRun): ActivityIconKind {
+  if (run.trigger === 'undo') return 'undo'
+  if (run.trigger === 'save_as' || run.trigger === 'move_this_file') return 'move'
+  if (run.trigger === 'source_event') {
+    return run.sourceEvent ? sourceEventIconKind(run.sourceEvent) : 'source'
+  }
+  if (run.trigger === 'workflow' || run.trigger === 'autopilot') {
+    if (run.workflowName) return 'workflow'
+  }
+  return dominantItemIconKind(run)
+}
+
+export function activityIconLabel(kind: ActivityIconKind): string {
+  switch (kind) {
+    case 'move':
+      return 'Moved'
+    case 'rename':
+      return 'Renamed'
+    case 'create_folder':
+      return 'Created'
+    case 'archive':
+      return 'Archived'
+    case 'undo':
+      return 'Undo'
+    case 'source_connected':
+      return 'Connected'
+    case 'source_removed':
+      return 'Removed'
+    case 'source_restored':
+      return 'Restored'
+    case 'source_unavailable':
+      return 'Unavailable'
+    case 'source':
+      return 'Source'
+    case 'workflow':
+      return 'Workflow'
+    default:
+      return 'Plan'
+  }
+}
+
+export function startOfLocalDay(ms: number): number {
+  const date = new Date(ms)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+export function activityDayLabel(iso: string, now = Date.now()): string {
+  const completed = Date.parse(iso)
+  if (!Number.isFinite(completed)) return ''
+  const today = startOfLocalDay(now)
+  const day = startOfLocalDay(completed)
+  if (day === today) return 'Today'
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (day === yesterday.getTime()) return 'Yesterday'
+  return new Date(completed).toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+export function activityWhenLabel(iso: string): string {
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ''
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export function humanFolderPath(fileOrFolderPath: string, isFile = false): string {
@@ -64,6 +220,9 @@ export function activityStatusFromPlanItem(item: Pick<OrganisationPlanItem, 'sta
 }
 
 export function humanActivityReason(item: OrganisationPlanItem): string {
+  if (item.status === 'source_unavailable') {
+    return item.sourceName?.trim() ? `Waiting for ${item.sourceName.trim()}` : 'Waiting for source'
+  }
   const destination = destinationFolderFromPlanItem(item)
   if (item.status === 'applied') {
     if (item.action === 'rename') {
@@ -162,6 +321,8 @@ export function activityItemFromPlanItem(item: OrganisationPlanItem): ActivityIt
     status,
     reason: humanActivityReason(item),
     confidence: item.score,
+    ...(item.sourceId ? { sourceId: item.sourceId } : {}),
+    ...(item.sourceName ? { sourceName: item.sourceName } : {}),
     ...(item.createdFolders && item.createdFolders.length > 0
       ? { createdFolders: item.createdFolders }
       : {}),
@@ -170,11 +331,37 @@ export function activityItemFromPlanItem(item: OrganisationPlanItem): ActivityIt
 }
 
 export function activityRunTitle(run: ActivityRun): string {
+  if (run.trigger === 'save_as' || run.trigger === 'move_this_file') {
+    return run.workflowName ?? 'Document saved'
+  }
+  if (run.trigger === 'source_event') {
+    return run.sourceEvent ? sourceEventTitle(run.sourceEvent) : (run.workflowName ?? 'Source')
+  }
   if (run.trigger === 'undo') return `Undo #${run.runNumber}`
   if (run.trigger === 'workflow' || run.trigger === 'autopilot') {
     return run.workflowName ?? 'Workflow'
   }
   return `Plan #${run.runNumber}`
+}
+
+function sourceEventTitle(event: NonNullable<ActivityRun['sourceEvent']>): string {
+  if (event.kind === 'removed' || event.transition === 'source_removed') {
+    return sourceRemovedActivityTitle()
+  }
+  if (event.kind === 'connected' || event.transition === 'source_connected') {
+    return sourceTransitionTitle({ from: null, to: 'indexed', sourceName: event.sourceName })
+  }
+  if (event.kind === 'restored') {
+    return sourceTransitionTitle({ from: 'unavailable', to: 'indexed', sourceName: event.sourceName })
+  }
+  if (event.kind === 'transition' && event.toStatus) {
+    return sourceTransitionTitle({
+      from: (event.fromStatus as SourceStatus | null | undefined) ?? null,
+      to: event.toStatus as SourceStatus,
+      sourceName: event.sourceName,
+    })
+  }
+  return sourceTransitionTitle({ from: 'indexed', to: 'unavailable', sourceName: event.sourceName })
 }
 
 export function activityWorkflowSummary(run: ActivityRun): string | null {
@@ -192,7 +379,21 @@ export function activityRunStatusLabel(run: ActivityRun): string {
   return 'Completed'
 }
 
+export function activityRunSummaryLine(summary: ActivityRunSummary): string {
+  const parts: string[] = []
+  if (summary.moved > 0) parts.push(`${summary.moved} moved`)
+  if (summary.skipped > 0) parts.push(`${summary.skipped} skipped`)
+  if (summary.failed > 0) parts.push(`${summary.failed} failed`)
+  return parts.length > 0 ? parts.join(' · ') : 'Nothing changed'
+}
+
 export function activityRunOutcome(run: ActivityRun): string {
+  if (run.trigger === 'save_as' || run.trigger === 'move_this_file') {
+    return run.workflowSummary ?? run.sourceEvent?.message ?? 'Document saved'
+  }
+  if (run.trigger === 'source_event') {
+    return run.sourceEvent?.message ?? run.workflowSummary ?? 'Source updated'
+  }
   if (run.trigger === 'undo') {
     return `${run.summary.moved} restored`
   }
@@ -200,7 +401,7 @@ export function activityRunOutcome(run: ActivityRun): string {
     const count = activityRunActionCount(run)
     return `${count} action${count === 1 ? '' : 's'} · ${activityRunStatusLabel(run)}`
   }
-  return `${run.summary.moved} moved`
+  return activityRunSummaryLine(run.summary)
 }
 
 export function movedActivityItems(run: ActivityRun): ActivityItem[] {

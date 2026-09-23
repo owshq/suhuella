@@ -11,6 +11,7 @@ import type {
   SearchResults,
   Workflow,
 } from '@suhuella/product/types.ts'
+import { foldSearchText } from '@suhuella/product/lib/search-text.ts'
 
 const MAX_HITS = 40
 const MAX_QUERY = 200
@@ -55,6 +56,13 @@ export type SearchCorpus = {
 type DraftHit = SearchHit & {
   score: number
   typeFilters: Set<Exclude<SearchDocumentFilter, 'all'>>
+  foldedTitle: string
+  foldedSubtitle: string
+  foldedPath: string
+  foldedFolder: string
+  foldedFolderLabel: string
+  foldedExtension: string
+  foldedWorkflow: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -107,7 +115,8 @@ function folderLabel(folderPath: string): string {
 }
 
 function joinFile(folderPath: string, fileName: string): string {
-  return path.join(folderPath, fileName)
+  if (folderPath.endsWith('/') || folderPath.endsWith('\\')) return folderPath + fileName
+  return `${folderPath}/${fileName}`
 }
 
 function normalizeKey(value: string): string {
@@ -115,8 +124,7 @@ function normalizeKey(value: string): string {
 }
 
 function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
+  return foldSearchText(text)
     .split(/[^a-z0-9.]+/i)
     .map((token) => token.replace(/^\./, ''))
     .filter((token) => token.length > 0)
@@ -128,8 +136,9 @@ function uniqueFields(fields: SearchMatchField[]): SearchMatchField[] {
 
 function activityTitle(run: ActivityRun): string {
   if (run.trigger === 'undo') return `Undo #${run.runNumber}`
+  if (run.trigger === 'organise_documents') return `Plan #${run.runNumber}`
   if (run.workflowName) return run.workflowName
-  return `Organise #${run.runNumber}`
+  return `Plan #${run.runNumber}`
 }
 
 function recencyBoost(iso: string | null, now: number): number {
@@ -152,13 +161,49 @@ function typeFromToken(token: string): Exclude<SearchDocumentFilter, 'all'> | nu
   return null
 }
 
-function containsToken(haystack: string, token: string): 'exact' | 'prefix' | 'includes' | null {
-  const value = haystack.toLowerCase()
-  if (!token) return null
-  if (value === token) return 'exact'
-  if (value.startsWith(token)) return 'prefix'
-  if (value.includes(token)) return 'includes'
+function hasNonAscii(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 127) return true
+  }
+  return false
+}
+
+function foldField(value: string): string {
+  if (!value) return ''
+  if (!hasNonAscii(value)) return value.toLowerCase()
+  return foldSearchText(value)
+}
+
+function containsToken(foldedHaystack: string, foldedToken: string): 'exact' | 'prefix' | 'includes' | null {
+  if (!foldedToken) return null
+  if (foldedHaystack === foldedToken) return 'exact'
+  if (foldedHaystack.startsWith(foldedToken)) return 'prefix'
+  if (foldedHaystack.includes(foldedToken)) return 'includes'
   return null
+}
+
+function keepCandidate(
+  name: string,
+  pathText: string,
+  tokens: string[],
+  extension = '',
+  typeFilters?: ReadonlySet<Exclude<SearchDocumentFilter, 'all'>>,
+): boolean {
+  if (tokens.length === 0) return true
+  const lowerName = name.toLowerCase()
+  if (tokens.some((token) => lowerName.includes(token))) return true
+  if (hasNonAscii(name) && tokens.some((token) => foldSearchText(name).includes(token))) return true
+  if (extension && tokens.some((token) => token === extension || token === `.${extension}`)) return true
+  for (const token of tokens) {
+    const type = typeFromToken(token)
+    if (!type) continue
+    if (typeFilters?.has(type)) return true
+    if (extension && documentFilterOf(extension) === type) return true
+  }
+  if (tokens.every((token) => token.length < 3)) return false
+  const lowerPath = pathText.toLowerCase()
+  if (tokens.some((token) => token.length >= 3 && lowerPath.includes(token))) return true
+  return hasNonAscii(pathText) && tokens.some((token) => token.length >= 3 && foldSearchText(pathText).includes(token))
 }
 
 function tokenScore(kind: 'exact' | 'prefix' | 'includes' | null, weight: number): number {
@@ -168,25 +213,35 @@ function tokenScore(kind: 'exact' | 'prefix' | 'includes' | null, weight: number
   return 0
 }
 
-function draftHit(partial: Omit<DraftHit, 'score' | 'typeFilters' | 'matchedOn'> & {
+function draftHit(partial: Omit<DraftHit, 'score' | 'typeFilters' | 'matchedOn' | 'foldedTitle' | 'foldedSubtitle' | 'foldedPath' | 'foldedFolder' | 'foldedFolderLabel' | 'foldedExtension' | 'foldedWorkflow'> & {
   matchedOn?: SearchMatchField[]
   typeFilters?: Array<Exclude<SearchDocumentFilter, 'all'>>
 }): DraftHit {
   const documentFilter = partial.documentFilter
+  const typeFilters = new Set(partial.typeFilters ?? (documentFilter ? [documentFilter] : []))
   return {
     ...partial,
     matchedOn: uniqueFields(partial.matchedOn ?? []),
     score: 0,
-    typeFilters: new Set(partial.typeFilters ?? (documentFilter ? [documentFilter] : [])),
+    typeFilters,
+    foldedTitle: '',
+    foldedSubtitle: '',
+    foldedPath: '',
+    foldedFolder: '',
+    foldedFolderLabel: '',
+    foldedExtension: '',
+    foldedWorkflow: '',
   }
 }
 
 function mergeHit(current: DraftHit, incoming: DraftHit): DraftHit {
   const matchedOn = uniqueFields([...current.matchedOn, ...incoming.matchedOn])
   const typeFilters = new Set([...current.typeFilters, ...incoming.typeFilters])
+  const subtitle = current.subtitle.length >= incoming.subtitle.length ? current.subtitle : incoming.subtitle
+  const workflowName = current.workflowName ?? incoming.workflowName
   return {
     ...current,
-    subtitle: current.subtitle.length >= incoming.subtitle.length ? current.subtitle : incoming.subtitle,
+    subtitle,
     lastSeenAt:
       current.lastSeenAt && incoming.lastSeenAt
         ? Date.parse(current.lastSeenAt) >= Date.parse(incoming.lastSeenAt)
@@ -196,9 +251,11 @@ function mergeHit(current: DraftHit, incoming: DraftHit): DraftHit {
     matchedOn,
     typeFilters,
     workflowId: current.workflowId ?? incoming.workflowId,
-    workflowName: current.workflowName ?? incoming.workflowName,
+    workflowName,
     activityRunId: current.activityRunId ?? incoming.activityRunId,
     score: Math.max(current.score, incoming.score),
+    foldedSubtitle: subtitle === current.subtitle ? current.foldedSubtitle : foldField(subtitle),
+    foldedWorkflow: workflowName === current.workflowName ? current.foldedWorkflow : foldField(workflowName ?? ''),
   }
 }
 
@@ -212,38 +269,53 @@ function folderTypeFilters(folder: IndexedFolderEntry): Array<Exclude<SearchDocu
   return [...new Set(folder.extensions.map((extension) => documentFilterOf(extension)))]
 }
 
-function collectHits(corpus: SearchCorpus): DraftHit[] {
+function collectHits(corpus: SearchCorpus, tokens: string[]): DraftHit[] {
   const files = new Map<string, DraftHit>()
   const others: DraftHit[] = []
   const recentKeys = new Set(corpus.recents.map(normalizeKey))
 
   for (const folder of corpus.index.folders) {
     const types = folderTypeFilters(folder)
-    others.push(
-      draftHit({
-        id: `folder:${folder.absolutePath}`,
-        kind: 'folder',
-        title: folder.name || folder.folderName || baseName(folder.absolutePath),
-        subtitle: folderLabel(folder.absolutePath),
-        path: folder.absolutePath,
-        folderPath: folder.absolutePath,
-        extension: null,
-        documentFilter: types.length === 1 ? types[0] : null,
-        lastSeenAt: folder.lastModified,
-        typeFilters: types,
-      }),
-    )
+    const typeSet = new Set(types)
+    const folderTitle = folder.name || folder.folderName || baseName(folder.absolutePath)
+    const folderSubtitle = folderLabel(folder.absolutePath)
+    if (keepCandidate(folderTitle, folder.absolutePath, tokens, '', typeSet)) {
+      others.push(
+        draftHit({
+          id: `folder:${folder.absolutePath}`,
+          kind: 'folder',
+          title: folderTitle,
+          subtitle: folderSubtitle,
+          path: folder.absolutePath,
+          folderPath: folder.absolutePath,
+          extension: null,
+          documentFilter: types.length === 1 ? types[0] : null,
+          lastSeenAt: folder.lastModified,
+          typeFilters: types,
+        }),
+      )
+    }
 
     for (const fileName of folder.fileNames) {
-      const filePath = joinFile(folder.absolutePath, fileName)
       const extension = extensionOf(fileName)
+      if (tokens.length === 1) {
+        const token = tokens[0]
+        if (!fileName.toLowerCase().includes(token) && token !== extension && token !== `.${extension}` && !typeFromToken(token)) {
+          if (token.length < 3 || !folder.absolutePath.toLowerCase().includes(token)) {
+            if (!hasNonAscii(fileName) || !foldSearchText(fileName).includes(token)) continue
+          }
+        }
+      } else if (!keepCandidate(fileName, folder.absolutePath, tokens, extension)) {
+        continue
+      }
+      const filePath = joinFile(folder.absolutePath, fileName)
       putHit(
         files,
         draftHit({
           id: `file:${filePath}`,
           kind: 'file',
           title: fileName,
-          subtitle: folderLabel(folder.absolutePath),
+          subtitle: folderSubtitle,
           path: filePath,
           folderPath: folder.absolutePath,
           extension: extension || null,
@@ -257,6 +329,7 @@ function collectHits(corpus: SearchCorpus): DraftHit[] {
   for (const file of corpus.index.files) {
     const filePath = file.absolutePath || file.locator
     const extension = file.extension || extensionOf(file.name)
+    if (!keepCandidate(file.name, filePath, tokens, extension)) continue
     putHit(
       files,
       draftHit({
@@ -274,6 +347,7 @@ function collectHits(corpus: SearchCorpus): DraftHit[] {
   }
 
   for (const folderPath of corpus.recents) {
+    if (!keepCandidate(baseName(folderPath), folderPath, tokens)) continue
     others.push(
       draftHit({
         id: `recent:${folderPath}`,
@@ -291,31 +365,36 @@ function collectHits(corpus: SearchCorpus): DraftHit[] {
   }
 
   for (const workflow of corpus.workflows) {
-    others.push(
-      draftHit({
-        id: `workflow:${workflow.id}`,
-        kind: 'workflow',
-        title: workflow.name,
-        subtitle: workflow.description || workflow.category || 'Saved workflow',
-        path: null,
-        folderPath: null,
-        extension: null,
-        documentFilter: null,
-        lastSeenAt: workflow.lastRunAt ?? workflow.updatedAt,
-        workflowId: workflow.id,
-        workflowName: workflow.name,
-      }),
-    )
+    const workflowSubtitle = workflow.description || workflow.category || 'Saved workflow'
+    if (keepCandidate(workflow.name, workflowSubtitle, tokens)) {
+      others.push(
+        draftHit({
+          id: `workflow:${workflow.id}`,
+          kind: 'workflow',
+          title: workflow.name,
+          subtitle: workflowSubtitle,
+          path: null,
+          folderPath: null,
+          extension: null,
+          documentFilter: null,
+          lastSeenAt: workflow.lastRunAt ?? workflow.updatedAt,
+          workflowId: workflow.id,
+          workflowName: workflow.name,
+        }),
+      )
+    }
 
     for (const item of workflow.plan.knowledgeSet.items) {
       if (item.kind !== 'file') continue
       const extension = extensionOf(item.path)
+      const itemName = baseName(item.path)
+      if (!keepCandidate(itemName, `${item.path} ${workflow.name}`, tokens, extension)) continue
       putHit(
         files,
         draftHit({
           id: `file:${item.path}`,
           kind: 'file',
-          title: baseName(item.path),
+          title: itemName,
           subtitle: folderLabel(path.dirname(item.path)),
           path: item.path,
           folderPath: path.dirname(item.path),
@@ -331,26 +410,31 @@ function collectHits(corpus: SearchCorpus): DraftHit[] {
   }
 
   for (const run of corpus.activity) {
-    others.push(
-      draftHit({
-        id: `activity:${run.runId}`,
-        kind: 'activity',
-        title: activityTitle(run),
-        subtitle: run.workflowSummary || `${run.summary.moved} moved`,
-        path: null,
-        folderPath: null,
-        extension: null,
-        documentFilter: null,
-        lastSeenAt: run.completedAt,
-        workflowId: run.workflowId,
-        workflowName: run.workflowName,
-        activityRunId: run.runId,
-      }),
-    )
+    const runTitle = activityTitle(run)
+    const runSubtitle = run.workflowSummary || `${run.summary.moved} moved`
+    if (keepCandidate(runTitle, `${runSubtitle} ${run.workflowName ?? ''}`, tokens)) {
+      others.push(
+        draftHit({
+          id: `activity:${run.runId}`,
+          kind: 'activity',
+          title: runTitle,
+          subtitle: runSubtitle,
+          path: null,
+          folderPath: null,
+          extension: null,
+          documentFilter: null,
+          lastSeenAt: run.completedAt,
+          workflowId: run.workflowId,
+          workflowName: run.workflowName,
+          activityRunId: run.runId,
+        }),
+      )
+    }
 
     for (const item of run.items) {
       const filePath = item.targetPath || item.sourcePath
       const extension = extensionOf(item.fileName)
+      if (!keepCandidate(item.fileName, `${filePath} ${item.reason ?? ''} ${runTitle}`, tokens, extension)) continue
       putHit(
         files,
         draftHit({
@@ -374,7 +458,7 @@ function collectHits(corpus: SearchCorpus): DraftHit[] {
           id: `recommendation:${run.runId}:${item.sourcePath}`,
           kind: 'recommendation',
           title: item.fileName,
-          subtitle: item.reason || activityTitle(run),
+          subtitle: item.reason || runTitle,
           path: filePath,
           folderPath: path.dirname(filePath),
           extension: extension || null,
@@ -407,28 +491,33 @@ function scoreHit(
   typeFromQuery: Exclude<SearchDocumentFilter, 'all'> | null,
   now: number,
 ): DraftHit {
+  if (!hit.foldedTitle) {
+    hit.foldedTitle = foldField(hit.title)
+    hit.foldedSubtitle = foldField(hit.subtitle)
+    hit.foldedPath = foldField(hit.path ?? '')
+    hit.foldedFolder = foldField(hit.folderPath ?? '')
+    hit.foldedFolderLabel = foldField(folderLabel(hit.folderPath || hit.path || ''))
+    hit.foldedExtension = foldField(hit.extension ?? '')
+    hit.foldedWorkflow = foldField(hit.workflowName ?? '')
+  }
   const matchedOn = [...hit.matchedOn]
   let score = 0
   let matchedTokens = 0
 
-  const title = hit.title
-  const subtitle = hit.subtitle
-  const filePath = hit.path ?? ''
-  const folder = hit.folderPath ?? ''
-  const extension = hit.extension ?? ''
+  const extension = hit.foldedExtension || (hit.extension ?? '')
 
   for (const token of tokens) {
     const before = score
-    const nameMatch = containsToken(title, token)
+    const nameMatch = containsToken(hit.foldedTitle, token)
     if (nameMatch) {
       score += tokenScore(nameMatch, hit.kind === 'file' || hit.kind === 'recommendation' ? 24 : 18)
       matchedOn.push(hit.kind === 'folder' || hit.kind === 'recent' ? 'folder' : 'filename')
     }
 
     const folderMatch =
-      containsToken(folderLabel(folder || filePath), token) ||
-      containsToken(folder, token) ||
-      containsToken(filePath, token)
+      containsToken(hit.foldedFolderLabel, token) ||
+      containsToken(hit.foldedFolder, token) ||
+      containsToken(hit.foldedPath, token)
     if (folderMatch && !nameMatch) {
       score += tokenScore(folderMatch, 14)
       matchedOn.push('folder')
@@ -445,15 +534,15 @@ function scoreHit(
       matchedOn.push('document_type')
     }
 
-    if (hit.workflowName && containsToken(hit.workflowName, token)) {
+    if (hit.workflowName && containsToken(hit.foldedWorkflow, token)) {
       score += 16
       matchedOn.push('workflow')
     }
-    if (hit.kind === 'workflow' && containsToken(subtitle, token)) {
+    if (hit.kind === 'workflow' && containsToken(hit.foldedSubtitle, token)) {
       score += 10
       matchedOn.push('workflow')
     }
-    if ((hit.kind === 'recommendation' || hit.kind === 'activity') && containsToken(subtitle, token)) {
+    if ((hit.kind === 'recommendation' || hit.kind === 'activity') && containsToken(hit.foldedSubtitle, token)) {
       score += 12
       matchedOn.push('recommendation')
     }
@@ -552,7 +641,7 @@ export function searchKnowledge(query: SearchQuery, corpus: SearchCorpus): Searc
   }
 
   const now = Date.now()
-  const scored = collectHits(corpus)
+  const scored = collectHits(corpus, leftover)
     .filter((hit) => passesFilter(hit, normalized.filter))
     .map((hit) => scoreHit(hit, leftover, wantsRecent, wantsWorkflow, wantsHistory, typeFromQuery, now))
 
@@ -608,8 +697,8 @@ function sampleCorpus(): SearchCorpus {
           parentTokens: ['documents'],
           depth: 2,
           extensions: ['pdf', 'docx'],
-          fileCount: 2,
-          fileNames: ['Invoice_ACME.pdf', 'receipt.docx'],
+          fileCount: 4,
+          fileNames: ['Invoice_ACME.pdf', 'receipt.docx', 'Factura_José_García.pdf', 'Joshua.pdf'],
           lastModified: now,
         },
         {
@@ -745,4 +834,24 @@ export function runSearchChecks(): void {
 
   const missing = searchKnowledge({ text: 'totally-unknown-file', filter: 'all' }, corpus)
   assert(missing.hits.length === 0, 'search only uses metadata already available')
+
+  const unaccented = searchKnowledge({ text: 'jose garcia', filter: 'all' }, corpus)
+  assert(
+    unaccented.hits.some((hit) => hit.title === 'Factura_José_García.pdf' && hit.matchedOn.includes('filename')),
+    'search finds an accented filename from an unaccented query',
+  )
+  assert(
+    !unaccented.hits.some((hit) => hit.title === 'Joshua.pdf'),
+    'folded query does not match a different name',
+  )
+
+  const accentedQuery = searchKnowledge({ text: 'josé', filter: 'all' }, corpus)
+  assert(
+    accentedQuery.hits.some((hit) => hit.title === 'Factura_José_García.pdf'),
+    'search still finds a document when the query keeps the accent',
+  )
+  assert(
+    !accentedQuery.hits.some((hit) => hit.title === 'Joshua.pdf'),
+    'accented query is not split into a short prefix',
+  )
 }

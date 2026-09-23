@@ -24,7 +24,7 @@ Every change belongs to **exactly one** class. Each class follows a different ap
 ## Rules
 
 1. **Pick one class before coding.** If it fits two, choose the **higher-risk** class (Architecture > Infrastructure > Feature > UX > Bug).
-2. **Architecture changes** require an ADR in [docs/architecture/decisions/](../architecture/decisions/) and explicit approval. They are rare while [Release Architecture](../../RELEASE-ARCHITECTURE-FROZEN.md) and Architecture Freeze v1.1 remain in force.
+2. **Architecture changes** require an ADR in [docs/architecture/decisions/](../architecture/decisions/) and explicit approval. They are rare while [Release Architecture](../architecture/constitution/release-architecture.md) and Architecture Freeze v1.1 remain in force.
 3. **“Is this a bug or a feature?”** — If it worked as designed and users struggle → **UX**. If it broke vs spec → **Bug**. If it adds capability → **Feature**.
 4. **One class → one narrow change.** Do not bundle UX + Feature + Infrastructure in one PR unless each class is declared and justified.
 

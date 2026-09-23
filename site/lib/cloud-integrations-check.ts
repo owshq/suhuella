@@ -18,10 +18,14 @@ import {
   disconnectConnection,
 } from "./integrations/connections.ts";
 import {
-  buildCallbackUri,
   isAllowedCallbackUri,
   isCloudIntegrationsPubliclyEnabled,
+  parseProviderPathSlug,
+  providerPathSlug,
+  buildCallbackUri,
 } from "./integrations/providers.ts";
+import { browseCloudChildren } from "./integrations/browse.ts";
+import { googleDriveAdapter, GOOGLE_DRIVE_ROOT_ID } from "./integrations/google-drive-adapter.ts";
 import { codeChallengeS256, randomCodeVerifier } from "./integrations/oauth-pkce.ts";
 import { googleDriveProvider } from "./integrations/oauth-providers.ts";
 import {
@@ -46,11 +50,15 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     CLOUD_TOKEN_ENCRYPTION_KEY: process.env.CLOUD_TOKEN_ENCRYPTION_KEY,
     CLOUD_GOOGLE_DRIVE_CLIENT_ID: process.env.CLOUD_GOOGLE_DRIVE_CLIENT_ID,
     CLOUD_GOOGLE_DRIVE_CLIENT_SECRET: process.env.CLOUD_GOOGLE_DRIVE_CLIENT_SECRET,
+    CLOUD_ONEDRIVE_CLIENT_ID: process.env.CLOUD_ONEDRIVE_CLIENT_ID,
+    CLOUD_ONEDRIVE_CLIENT_SECRET: process.env.CLOUD_ONEDRIVE_CLIENT_SECRET,
   };
 
   process.env.CLOUD_TOKEN_ENCRYPTION_KEY = generateTestEncryptionKeyBase64();
   process.env.CLOUD_GOOGLE_DRIVE_CLIENT_ID = "test-client-id.apps.googleusercontent.com";
   process.env.CLOUD_GOOGLE_DRIVE_CLIENT_SECRET = "test-client-secret-not-real";
+  process.env.CLOUD_ONEDRIVE_CLIENT_ID = "test-onedrive-client-id";
+  process.env.CLOUD_ONEDRIVE_CLIENT_SECRET = "test-onedrive-client-secret-not-real";
   process.env.CLOUD_INTEGRATIONS_ENABLED = "true";
   resetCloudIntegrationsStoreForTests();
 
@@ -132,6 +140,77 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     if (url.includes("oauth2.googleapis.com/revoke")) {
       return new Response("{}", { status: 200 });
     }
+    if (url.includes("login.microsoftonline.com") && url.includes("/token")) {
+      tokenExchangeCount += 1;
+      lastTokenBody = typeof init?.body === "string" ? init.body : "";
+      if (lastTokenBody.includes("code_verifier=bad")) {
+        return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+      }
+      if (lastTokenBody.includes("grant_type=refresh_token")) {
+        return new Response(
+          JSON.stringify({
+            access_token: "ew0K.test_onedrive_refreshed_access",
+            expires_in: 3600,
+            token_type: "Bearer",
+            scope: "openid email profile offline_access Files.Read User.Read",
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          access_token: "ew0K.test_onedrive_access_token_value",
+          refresh_token: "M.R3_test_onedrive_refresh_token",
+          expires_in: 3600,
+          token_type: "Bearer",
+          id_token: makeIdToken({
+            aud: "test-onedrive-client-id",
+            iss: "https://login.microsoftonline.com/common/v2.0",
+            sub: "ms-oid-1",
+            email: "user@outlook.com",
+            nonce: pendingNonce,
+          }),
+          scope: "openid email profile offline_access Files.Read User.Read",
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("graph.microsoft.com/v1.0/me") && !url.includes("/drive")) {
+      return new Response(
+        JSON.stringify({
+          id: "ms-oid-1",
+          mail: "user@outlook.com",
+          displayName: "MS Test User",
+          userPrincipalName: "user@outlook.com",
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("graph.microsoft.com/v1.0/me/drive/root/children")) {
+      return new Response(
+        JSON.stringify({
+          value: [
+            { id: "od1", name: "Docs", folder: {}, size: 0 },
+            { id: "od2", name: "note.txt", file: {}, size: 12 },
+          ],
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("graph.microsoft.com/v1.0/me/drive/sharedWithMe")) {
+      return new Response(
+        JSON.stringify({
+          value: [
+            {
+              id: "share-link",
+              name: "Shared folder",
+              remoteItem: { id: "od-shared-1", name: "Shared folder", folder: {} },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }
     return new Response("not mocked", { status: 404 });
   }) as typeof fetch;
 
@@ -141,22 +220,33 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     assert(isCloudIntegrationsPubliclyEnabled({ CLOUD_INTEGRATIONS_ENABLED: "false" }) === false, "flag false");
     assert(isCloudIntegrationsPubliclyEnabled({ CLOUD_INTEGRATIONS_ENABLED: "true" }) === true, "flag true");
 
-    // redirect URI allowlist
+    // redirect URI allowlist (hyphen public slug + underscore storage id)
+    assert(providerPathSlug("google_drive") === "google-drive", "public slug uses hyphen");
+    assert(parseProviderPathSlug("google-drive") === "google_drive", "hyphen parses");
+    assert(parseProviderPathSlug("google_drive") === "google_drive", "underscore still parses");
     assert(
-      isAllowedCallbackUri("https://suhuella.com/api/integrations/google_drive/callback", "suhuella"),
-      "suhuella callback allowed",
+      isAllowedCallbackUri("https://suhuella.com/api/integrations/google-drive/callback", "suhuella"),
+      "suhuella hyphen callback allowed",
     );
     assert(
-      !isAllowedCallbackUri("https://evil.example/api/integrations/google_drive/callback", "suhuella"),
+      isAllowedCallbackUri("https://suhuella.com/api/integrations/google_drive/callback", "suhuella"),
+      "suhuella underscore callback allowed",
+    );
+    assert(
+      !isAllowedCallbackUri("https://evil.example/api/integrations/google-drive/callback", "suhuella"),
       "evil origin rejected",
     );
     assert(
-      !isAllowedCallbackUri("https://dbasenet.com/api/integrations/google_drive/callback", "suhuella"),
+      !isAllowedCallbackUri("https://dbasenet.com/api/integrations/google-drive/callback", "suhuella"),
       "cross-brand callback rejected for suhuella brand",
     );
     assert(
-      isAllowedCallbackUri("https://dbasenet.com/api/integrations/google_drive/callback", "dbasenet"),
+      isAllowedCallbackUri("https://dbasenet.com/api/integrations/google-drive/callback", "dbasenet"),
       "dbasenet callback allowed for dbasenet brand",
+    );
+    assert(
+      buildCallbackUri("https://suhuella.com", "google_drive").endsWith("/api/integrations/google-drive/callback"),
+      "callback URI uses hyphen slug",
     );
 
     process.env.CLOUD_INTEGRATIONS_ENABLED = "false";
@@ -372,6 +462,69 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     const row = await store.getConnection(connId);
     await store.updateConnection({ ...row!, status: "active", lastErrorCode: null, lastErrorMessage: null });
 
+    // browse pagination (one page only)
+    const browseRoot = await browseCloudChildren({
+      connectionId: connId,
+      ownerKind: "device",
+      ownerId: "dev_a",
+      parentId: GOOGLE_DRIVE_ROOT_ID,
+    });
+    assert(browseRoot.ok === true, "browse roots ok");
+    if (!browseRoot.ok) return;
+    assert(browseRoot.page.items.length === 2, "first page size");
+    assert(browseRoot.handle.provider === "google_drive", "handle maps provider");
+    assert(!JSON.stringify(browseRoot).includes("ya29."), "browse payload has no access token");
+    const browsePage2 = await browseCloudChildren({
+      connectionId: connId,
+      ownerKind: "device",
+      ownerId: "dev_a",
+      parentId: GOOGLE_DRIVE_ROOT_ID,
+      cursor: browseRoot.page.nextCursor,
+    });
+    assert(browsePage2.ok === true, "browse page 2 ok");
+    if (!browsePage2.ok) return;
+    assert(browsePage2.page.items.length === 1, "second page size");
+    assert(browsePage2.page.nextCursor === null, "no more pages");
+
+    const foreignBrowse = await browseCloudChildren({
+      connectionId: connId,
+      ownerKind: "device",
+      ownerId: "dev_intruder_early",
+      parentId: GOOGLE_DRIVE_ROOT_ID,
+    });
+    assert(foreignBrowse.ok === false && foreignBrowse.error === "forbidden", "browse enforces owner");
+
+    process.env.CLOUD_INTEGRATIONS_ENABLED = "false";
+    const flagOffBrowse = await browseCloudChildren({
+      connectionId: connId,
+      ownerKind: "device",
+      ownerId: "dev_a",
+    });
+    assert(flagOffBrowse.ok === false && flagOffBrowse.error === "integrations_disabled", "flag off blocks browse");
+    process.env.CLOUD_INTEGRATIONS_ENABLED = "true";
+
+    const handleMap = googleDriveAdapter.mapToSourceHandle({
+      connectionId: connId,
+      accountExternalId: "google-sub-1",
+      accountDisplayName: "Test User",
+      accountEmail: "user@example.com",
+    });
+    assert(handleMap.rootLabel === "Google Drive", "handle root label is platform name");
+    assert(handleMap.connectionId === connId, "handle keeps connection id");
+
+    const browseSections = await browseCloudChildren({
+      connectionId: connId,
+      ownerKind: "device",
+      ownerId: "dev_a",
+    });
+    assert(browseSections.ok === true, "browse connection root ok");
+    if (browseSections.ok) {
+      assert(browseSections.page.items.length === 2, "My Drive + Shared with me");
+      assert(browseSections.page.items[0]?.name === "My Drive", "My Drive section");
+      assert(browseSections.page.items[1]?.name === "Shared with me", "Shared section");
+      assert(browseSections.handle.rootLabel === "Google Drive", "browse handle label");
+    }
+
     // resumable sync
     const jobId = await enqueueSyncJob({ connectionId: connId, brandId: "suhuella" });
     const page1 = await processSyncJobPage(jobId);
@@ -472,9 +625,73 @@ async function runCloudIntegrationsCheck(): Promise<void> {
     assert(migration.includes("encryption_version"), "migration versions encryption");
     assert(!migration.includes("DROP TABLE"), "migration does not drop tables");
 
+    const childrenRoute = readFileSync(
+      join(process.cwd(), "app/api/sources/[id]/children/route.ts"),
+      "utf8",
+    );
+    assert(childrenRoute.includes("token_not_accepted"), "children rejects query tokens");
+    assert(childrenRoute.includes("integrations_disabled"), "children respects flag");
+    assert(childrenRoute.includes("browseCloudChildren"), "children uses browse service");
+
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "paid checkout stays false");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "false"'), "personal checkout stays off");
+    assert(wrangler.includes('"CLOUD_INTEGRATIONS_ENABLED": "false"'), "cloud integrations stay gated");
     assert(!wrangler.includes("CLOUD_GOOGLE_DRIVE_CLIENT_SECRET"), "no oauth secrets in wrangler");
+    assert(!wrangler.includes("CLOUD_ONEDRIVE_CLIENT_SECRET"), "no onedrive secrets in wrangler");
+
+    // OneDrive — connect + connection sections (My files / Shared)
+    const msStart = await startOAuth({
+      provider: "onedrive",
+      ownerKind: "device",
+      ownerId: "dev_ms",
+      origin: "http://localhost:3000",
+      returnPath: "/sources",
+    });
+    assert(msStart.ok === true, "onedrive start ok");
+    if (!msStart.ok) return;
+    assert(msStart.authorizeUrl.includes("login.microsoftonline.com"), "ms authorize host");
+    assert(msStart.authorizeUrl.includes("code_challenge"), "ms pkce");
+    assert(msStart.authorizeUrl.includes("Files.Read"), "ms files scope");
+    const msAuth = new URL(msStart.authorizeUrl);
+    pendingNonce = msAuth.searchParams.get("nonce") ?? "";
+    const msState = msAuth.searchParams.get("state") ?? "";
+    const msCallback = await handleOAuthCallback({
+      provider: "onedrive",
+      state: msState,
+      code: "ms-test-code",
+      error: null,
+    });
+    assert(msCallback.ok === true, "onedrive callback ok");
+    if (!msCallback.ok) return;
+    assert(msCallback.returnPath.startsWith("/sources"), "onedrive returns to sources");
+    const msConnId = msCallback.connectionId;
+    const msTokens = await loadConnectionTokens(msConnId);
+    assert(msTokens?.accessToken.includes("onedrive_access"), "onedrive token stored");
+    assert(!JSON.stringify(await listOwnerConnections({ ownerKind: "device", ownerId: "dev_ms" })).includes("ew0K."), "ms public list no token");
+
+    const msSections = await browseCloudChildren({
+      connectionId: msConnId,
+      ownerKind: "device",
+      ownerId: "dev_ms",
+    });
+    assert(msSections.ok === true, "onedrive sections ok");
+    if (msSections.ok) {
+      assert(msSections.page.items.length === 2, "My files + Shared");
+      assert(msSections.page.items[0]?.name === "My files", "My files section");
+      assert(msSections.page.items[1]?.name === "Shared", "Shared section");
+      assert(msSections.handle.rootLabel === "OneDrive", "onedrive platform label");
+    }
+    const msMyFiles = await browseCloudChildren({
+      connectionId: msConnId,
+      ownerKind: "device",
+      ownerId: "dev_ms",
+      parentId: "root",
+    });
+    assert(msMyFiles.ok === true, "onedrive my files ok");
+    if (msMyFiles.ok) {
+      assert(msMyFiles.page.items.length === 2, "onedrive root children");
+      assert(!JSON.stringify(msMyFiles).includes("ew0K."), "onedrive browse no token");
+    }
 
     console.log("CLOUD-INTEGRATIONS-001 check passed");
   } finally {

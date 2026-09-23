@@ -7,9 +7,12 @@ const routes = [
   { path: "/home", expectStatus: 200, mustInclude: ["data-suhuella-app"] },
   { path: "/search", expectStatus: 200 },
   { path: "/sources", expectStatus: 200 },
-  { path: "/organise", expectStatus: 200 },
+  { path: "/plan-mode", expectStatus: 200 },
+  { path: "/organise", expectStatus: 308, redirectTo: `${origin}/plan-mode` },
   { path: "/activity", expectStatus: 200 },
   { path: "/settings", expectStatus: 200 },
+  { path: "/partners", expectStatus: 200, mustInclude: ["Partner"] },
+  { path: "/partners/portal", expectStatus: 200 },
   { path: "/app", expectStatus: 308, redirectTo: `${origin}/home` },
 ];
 

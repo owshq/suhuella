@@ -66,6 +66,7 @@ export type Dictionary = {
   features: {
     eyebrow: string;
     title: string;
+    subtitle: string;
     items: Array<{
       title: string;
       description: string;
@@ -88,6 +89,9 @@ export type Dictionary = {
     unavailable: string;
     comingSoon: string;
     catalogTitle: string;
+    catalogLatestLabel: string;
+    catalogArchiveTitle: string;
+    catalogTableTitle: string;
     catalogSubtitle: string;
     catalogSubtitleWithMac: string;
     stateWebTitle: string;
@@ -100,12 +104,14 @@ export type Dictionary = {
     stateMacAvailable: string;
     stateMacAction: string;
     stateWindowsTitle: string;
+    stateWindowsAvailable: string;
+    stateWindowsAction: string;
     stateWindowsUnavailable: string;
     catalogUnsignedNote: string;
     activationNote: string;
     viewPlans: string;
     tableVersion: string;
-    tableChannel: string;
+    tableSize: string;
     tablePlatform: string;
     tableStatus: string;
     tableDate: string;
@@ -122,8 +128,26 @@ export type Dictionary = {
     actionDownload: string;
     actionNone: string;
   };
-  howItWorks: {
+  downloadPreparing: {
     title: string;
+    preparingStarted: string;
+    autoStarted: string;
+    retryHint: string;
+    downloadAgain: string;
+    installTitle: string;
+    steps: string[];
+    installHintMac: string;
+    installHintWindows: string;
+    otherPlatformsTitle: string;
+    platformMac: string;
+    platformWindows: string;
+    allDownloads: string;
+    openWeb: string;
+  };
+  howItWorks: {
+    eyebrow: string;
+    title: string;
+    subtitle: string;
     steps: Array<{
       number: string;
       title: string;

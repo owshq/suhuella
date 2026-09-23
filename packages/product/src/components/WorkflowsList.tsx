@@ -1,5 +1,10 @@
 import { Copy, Pencil, Trash2 } from 'lucide-react'
-import { WORKFLOW_NAME_EXAMPLES } from '../lib/workflow-copy'
+import { ORGANISE_USE_WORKFLOW } from '../lib/organise-copy'
+import {
+  WORKFLOW_NAME_EXAMPLES,
+  workflowIntentSummary,
+  workflowLastRunLabel,
+} from '../lib/workflow-copy'
 import type { Workflow } from '../types'
 import { WorkflowGlyphBadge } from './WorkflowGlyph'
 
@@ -35,7 +40,11 @@ export function WorkflowsList({
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <WorkflowGlyphBadge name={workflow.name} category={workflow.category} />
-              <p className="truncate text-[14px] font-bold text-slate-900">{workflow.name}</p>
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-bold text-slate-900">{workflow.name}</p>
+                <p className="truncate text-[12px] text-slate-500">{workflowIntentSummary(workflow)}</p>
+                <p className="truncate text-[11px] text-slate-400">{workflowLastRunLabel(workflow.lastRunAt)}</p>
+              </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {onEdit ? (
@@ -77,7 +86,7 @@ export function WorkflowsList({
                 disabled={busy}
                 className="rounded-full bg-[var(--brand-accent)] px-3 py-1.5 text-[12px] font-bold text-white hover:bg-[var(--brand-accent-hover)] disabled:opacity-50"
               >
-                Use workflow
+                {ORGANISE_USE_WORKFLOW}
               </button>
             </div>
           </li>
@@ -112,7 +121,7 @@ export function SaveWorkflowForm({
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
       <p className="mt-1 text-sm leading-relaxed text-slate-500">
-        This saves a workflow. The next run builds a new Plan you review.
+        This saves a workflow. The next Use workflow builds a new Plan you review.
       </p>
       <label className="mt-4 block">
         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Name</span>
@@ -120,7 +129,7 @@ export function SaveWorkflowForm({
           value={name}
           onChange={(event) => onNameChange(event.target.value)}
           maxLength={60}
-          placeholder="Invoices"
+          placeholder="Weekly Downloads"
           className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[var(--brand-accent)]"
         />
       </label>
@@ -133,7 +142,7 @@ export function SaveWorkflowForm({
           onChange={(event) => onDescriptionChange(event.target.value)}
           maxLength={160}
           rows={2}
-          placeholder="Organise downloaded invoices into client folders."
+          placeholder="Plan these documents again and review a new Plan."
           className="mt-1.5 w-full resize-none rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[var(--brand-accent)]"
         />
       </label>

@@ -2,7 +2,7 @@ const CACHE = "suhuella-web-shell-v6";
 const SHELL = [
   "/home",
   "/search",
-  "/organise",
+  "/plan-mode",
   "/sources",
   "/activity",
   "/settings",

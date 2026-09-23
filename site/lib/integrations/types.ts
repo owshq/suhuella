@@ -34,6 +34,8 @@ export type CloudProviderDefinition = {
   brandAllowlist: readonly string[];
   /** Feature flag: false keeps UI on Coming later and rejects start. */
   enabled: boolean;
+  /** When false, omit from Sources catalog entirely (stub retained for later). */
+  showInSourcesCatalog?: boolean;
   userinfoUrl?: string;
   revokeUrl?: string;
 };

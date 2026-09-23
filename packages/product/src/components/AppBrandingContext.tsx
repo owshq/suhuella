@@ -27,8 +27,10 @@ export function AppBrandingProvider({
   businessOverrides,
   children,
 }: AppBrandingProviderProps) {
+  const parent = useContext(AppBrandingContext)
   const value = useMemo(() => {
     const overrides: BusinessBrandOverrides = {
+      ...parent?.businessOverrides,
       ...businessOverrides,
       ...(organisationLogo != null && organisationLogo.trim()
         ? { logo: organisationLogo.trim() }
@@ -39,7 +41,7 @@ export function AppBrandingProvider({
       workspace: resolveEffectiveBrandIdentity(overrides),
       product: deriveProductBrandView(),
     }
-  }, [businessOverrides, organisationLogo])
+  }, [businessOverrides, organisationLogo, parent?.businessOverrides])
 
   return <AppBrandingContext.Provider value={value}>{children}</AppBrandingContext.Provider>
 }

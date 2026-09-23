@@ -54,6 +54,12 @@ import {
 } from './device-metrics.ts'
 import { getOsComputerName, getOsVersionLabel } from './device-identity.ts'
 import { storageLayout } from './storage-paths.ts'
+import {
+  persistSaveAsActivity,
+  persistSourceConnectedActivity,
+  persistSourceRemovedActivity,
+} from './activity.ts'
+import { probeLocalModelsDesktop } from './local-model-probe.ts'
 import { executeUndo, listActivityWithUndoState } from './undo.ts'
 import {
   executeOrganisationPlan,
@@ -74,6 +80,7 @@ import {
   setWorkflowAutopilot,
   updateWorkflow,
 } from './workflow-store.ts'
+import { deleteSavedPlan, duplicateSavedPlanRecord, listSavedPlans, saveSavedPlan } from './plan-store.ts'
 import { describeKnowledgeItem } from './descriptors.ts'
 import { enrichKnowledgeDescriptor } from './local-intelligence.ts'
 import { assertIntentKernelFrozen, resolveIntent } from './intents.ts'
@@ -86,6 +93,8 @@ import {
   requestLicenseEmailCode,
   verifyLicenseEmailCode,
   updateBusinessBranding,
+  getBusinessOrganisation,
+  manageBusinessOrganisation,
   checkLicense,
   getServiceHealth,
   deactivateLicense,
@@ -117,14 +126,22 @@ import { assistWithByok } from './byok-client.ts'
 import { clearByokConversation, listByokConversation } from './byok-conversation.ts'
 import { connectByok, disconnectByok, getByokStatus } from './byok-store.ts'
 import {
+  bindElectronPathHandle,
+  refreshElectronPathHandle,
+  syncElectronHandles,
+  unbindElectronPathHandle,
+} from './handle-registry.ts'
+import {
   addIndexedLocation,
   getSettingsFilePath,
   loadSettings,
   markFirstRunCompleted,
+  markWelcomeNotificationShown,
   recordRecentFolder,
   removeIndexedLocation,
   setIndexedLocations,
   setLaunchAtLogin,
+  setPermissionPreferences,
   setSourceAppearance,
   setSourceAppearanceColor,
   type SourceAppearanceUpdate,
@@ -160,6 +177,7 @@ let settingsWindow: BrowserWindow | null = null
 let onboardingWindow: BrowserWindow | null = null
 let suggestionWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let trayAvailable = false
 let isQuitting = false
 let currentSuggestion: SuggestionPayload | null = null
 let restoreAfterSuggestion: 'settings' | 'onboarding' | null = null
@@ -221,8 +239,15 @@ function onboardingChromeColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#0b1a28' : '#A7D8F9'
 }
 
+function settingsWindowChromeColor(): string {
+  return process.platform === 'darwin' ? '#00000000' : windowChromeColor()
+}
+
 function applyWindowChrome(): void {
-  settingsWindow?.setBackgroundColor(windowChromeColor())
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setBackgroundColor(settingsWindowChromeColor())
+    if (process.platform === 'darwin') settingsWindow.setVibrancy('under-window')
+  }
   onboardingWindow?.setBackgroundColor(onboardingChromeColor())
 }
 
@@ -236,6 +261,30 @@ function applyDockPolicy(): void {
   app.dock?.hide()
 }
 
+function shouldKeepRunningInBackground(): boolean {
+  if (process.platform === 'darwin') return true
+  // Packaged Windows must stay alive for the Save As helper even if tray creation fails.
+  if (process.platform === 'win32' && app.isPackaged) return true
+  return trayAvailable && Boolean(tray && !tray.isDestroyed())
+}
+
+function hideMainWindow(window: BrowserWindow): void {
+  // Without a tray icon, hiding leaves no recovery path on Windows — minimize instead.
+  if (process.platform === 'win32' && !trayAvailable) {
+    window.minimize()
+    return
+  }
+  window.hide()
+  applyDockPolicy()
+}
+
+function handleMainWindowClose(event: Electron.Event, window: BrowserWindow | null): void {
+  if (isQuitting || !window || window.isDestroyed()) return
+  if (!shouldKeepRunningInBackground()) return
+  event.preventDefault()
+  hideMainWindow(window)
+}
+
 function isWindowVisible(window: BrowserWindow | null): boolean {
   return Boolean(window && !window.isDestroyed() && window.isVisible())
 }
@@ -243,6 +292,8 @@ function isWindowVisible(window: BrowserWindow | null): boolean {
 function applyLaunchAtLogin(enabled: boolean): void {
   app.setLoginItemSettings({
     openAtLogin: enabled,
+    // APPLICATION-LIFECYCLE-001: login item opens the window — never start hidden by default.
+    ...(process.platform === 'darwin' ? { openAsHidden: false } : {}),
   })
 }
 
@@ -359,10 +410,11 @@ async function createSettingsWindow(
     icon: appIconImage(),
     show: false,
     autoHideMenuBar: process.platform !== 'darwin',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 16, y: 18 },
-    backgroundColor: windowChromeColor(),
-    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    // 12px lights, vertically centered in the 52px sidebar toolbar: (52 - 12) / 2.
+    trafficLightPosition: { x: 16, y: 20 },
+    backgroundColor: settingsWindowChromeColor(),
+    vibrancy: process.platform === 'darwin' ? 'under-window' : undefined,
     visualEffectState: 'active',
     backgroundMaterial: process.platform === 'darwin' ? 'mica' : undefined,
     acceptFirstMouse: true,
@@ -384,11 +436,7 @@ async function createSettingsWindow(
   settingsWindow.setTitle(brand.displayName)
 
   settingsWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      settingsWindow?.hide()
-      applyDockPolicy()
-    }
+    handleMainWindowClose(event, settingsWindow)
   })
 
   settingsWindow.on('hide', () => applyDockPolicy())
@@ -439,11 +487,7 @@ async function createOnboardingWindow(): Promise<BrowserWindow> {
   })
 
   onboardingWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault()
-      onboardingWindow?.hide()
-      applyDockPolicy()
-    }
+    handleMainWindowClose(event, onboardingWindow)
   })
 
   onboardingWindow.on('hide', () => applyDockPolicy())
@@ -880,7 +924,7 @@ function pickDirectory(parent: BrowserWindow | null, title: string) {
 
 function pickFilesMulti(parent: BrowserWindow | null) {
   const options: Electron.OpenDialogOptions = {
-    title: 'Select documents',
+    title: 'Choose files',
     properties: ['openFile', 'multiSelections'],
   }
   return parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options)
@@ -933,7 +977,7 @@ function viewMenu(): Electron.MenuItemConstructorOptions {
     label: 'View',
     submenu: [
       { label: 'Home', accelerator: 'CommandOrControl+1', click: go('home') },
-      { label: 'Organise', accelerator: 'CommandOrControl+2', click: go('organise') },
+      { label: 'Plan Mode', accelerator: 'CommandOrControl+2', click: go('organise') },
       { label: 'Sources', accelerator: 'CommandOrControl+3', click: go('locations') },
       { label: 'Activity', accelerator: 'CommandOrControl+4', click: go('activity') },
       { type: 'separator' },
@@ -1021,47 +1065,61 @@ function applyTrayActivity(progress: IndexScanProgress): void {
   }
 }
 
-function createTray(): void {
-  tray = new Tray(createTrayImage())
-  applyTrayActivity(getScanProgress())
-  onScanProgress(applyTrayActivity)
-  const menu: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: `Open ${brand.displayName}`,
-      click: () => {
-        void openSettingsOrOnboarding()
-      },
-    },
-    {
-      label: 'Settings',
-      click: () => openPreferences(),
-    },
-  ]
-  if (isDevelopmentMode()) {
-    menu.push({
-      label: 'Preview Save As',
-      accelerator: PREVIEW_SHORTCUT,
-      click: () => {
-        void showPreviewSuggestions()
-      },
-    })
+function destroyTray(): void {
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy()
   }
-  menu.push(
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        isQuitting = true
-        app.quit()
+  tray = null
+  trayAvailable = false
+}
+
+function createTray(): void {
+  try {
+    tray = new Tray(createTrayImage())
+    applyTrayActivity(getScanProgress())
+    onScanProgress(applyTrayActivity)
+    const menu: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: `Open ${brand.displayName}`,
+        click: () => {
+          void openSettingsOrOnboarding()
+        },
       },
-    },
-  )
-  tray.setContextMenu(Menu.buildFromTemplate(menu))
-  tray.on('click', () => {
-    if (process.platform === 'win32') {
-      void openSettingsOrOnboarding()
+      {
+        label: 'Settings',
+        click: () => openPreferences(),
+      },
+    ]
+    if (isDevelopmentMode()) {
+      menu.push({
+        label: 'Preview Save As',
+        accelerator: PREVIEW_SHORTCUT,
+        click: () => {
+          void showPreviewSuggestions()
+        },
+      })
     }
-  })
+    menu.push(
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        },
+      },
+    )
+    tray.setContextMenu(Menu.buildFromTemplate(menu))
+    tray.on('click', () => {
+      if (process.platform === 'win32') {
+        void openSettingsOrOnboarding()
+      }
+    })
+    trayAvailable = !tray.isDestroyed()
+  } catch (error) {
+    console.error('[suhuella] tray unavailable — close will exit on this host', error)
+    destroyTray()
+  }
 }
 
 function registerIpc(): void {
@@ -1082,7 +1140,7 @@ function registerIpc(): void {
       osVersion: getOsVersionLabel(),
       capabilities: {
         saveAs: platform === 'win32',
-        tray: true,
+        tray: trayAvailable,
         openFolder: true,
         reveal: true,
         filesystem: true,
@@ -1145,6 +1203,18 @@ function registerIpc(): void {
       return { ok: false, error: 'invalid_request', license: getLicenseView() }
     }
     return updateBusinessBranding(dataUrl)
+  })
+  ipcMain.handle('license:organisation', () => getBusinessOrganisation())
+  ipcMain.handle('license:manageOrganisation', (_event, action: unknown, payload: unknown) => {
+    if (action !== 'invite' && action !== 'remove' && action !== 'reset_devices' && action !== 'change_seats') {
+      return { ok: false, error: 'invalid_request' }
+    }
+    const body = payload && typeof payload === 'object' ? (payload as { email?: unknown; seatId?: unknown; seatCount?: unknown }) : {}
+    return manageBusinessOrganisation(action, {
+      email: typeof body.email === 'string' ? body.email : '',
+      seatId: typeof body.seatId === 'string' ? body.seatId : '',
+      seatCount: typeof body.seatCount === 'number' ? body.seatCount : undefined,
+    })
   })
   ipcMain.handle('license:check', () => checkLicense())
   ipcMain.handle('license:deactivate', () => deactivateLicense())
@@ -1238,7 +1308,39 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('index:addLocation', async (event) => {
+  function resolveAddLocationHint(hint: string): string | null {
+    const trimmed = hint.trim()
+    if (!trimmed) return null
+    if (trimmed.startsWith('suhuella:')) {
+      const token = trimmed.slice('suhuella:'.length)
+      const suggested = getSuggestedLocations()
+      const place = suggested.find(
+        (entry) => entry.id === token || entry.id.replace(/_/g, '-') === token.replace(/_/g, '-'),
+      )
+      if (!place?.path) return null
+      return resolveSafeLocalDirectory(place.path)
+    }
+    return resolveSafeLocalDirectory(trimmed)
+  }
+
+  ipcMain.handle('index:addLocation', async (event, hint?: unknown) => {
+    if (typeof hint === 'string' && hint.trim()) {
+      const resolved = resolveAddLocationHint(hint)
+      if (resolved && !isSystemSavePath(resolved)) {
+        const settings = loadSettings()
+        const alreadyIndexed = settings.indexedLocations.some(
+          (entry) => path.normalize(entry).toLowerCase() === path.normalize(resolved).toLowerCase(),
+        )
+        if (!alreadyIndexed) {
+          addIndexedLocation(resolved)
+          await bindElectronPathHandle(resolved)
+          persistSourceConnectedActivity(app.getPath('userData'), path.basename(resolved))
+        }
+        assertCanExecute('refresh_index')
+        return startIndexScan(indexAwareWindows(), { refresh: 'pending' })
+      }
+    }
+
     const result = await pickDirectory(
       BrowserWindow.fromWebContents(event.sender),
       'Add folder',
@@ -1246,32 +1348,41 @@ function registerIpc(): void {
     if (result.canceled || result.filePaths.length === 0) {
       return loadSettings()
     }
-    addIndexedLocation(result.filePaths[0])
+    const folder = result.filePaths[0]
+    addIndexedLocation(folder)
+    await bindElectronPathHandle(folder)
+    persistSourceConnectedActivity(app.getPath('userData'), path.basename(folder))
     assertCanExecute('refresh_index')
-    return startIndexScan(indexAwareWindows())
+    return startIndexScan(indexAwareWindows(), { refresh: 'pending' })
   })
 
   ipcMain.handle('index:removeLocation', async (_event, location: unknown) => {
     if (typeof location !== 'string') return loadSettings()
+    persistSourceRemovedActivity(app.getPath('userData'), path.basename(location))
     removeIndexedLocation(location)
+    await unbindElectronPathHandle(location)
     assertCanExecute('refresh_index')
-    return startIndexScan(indexAwareWindows())
+    return startIndexScan(indexAwareWindows(), { refresh: 'pending' })
   })
 
-  ipcMain.handle('index:setLocations', (_event, locations: unknown) => {
+  ipcMain.handle('index:setLocations', async (_event, locations: unknown) => {
     if (!Array.isArray(locations)) return loadSettings()
     const paths = locations.filter((item): item is string => typeof item === 'string')
-    return setIndexedLocations(paths)
+    const next = setIndexedLocations(paths)
+    await syncElectronHandles(next.indexedLocations)
+    return next
   })
 
-  ipcMain.handle('index:startScan', () => {
+  ipcMain.handle('index:startScan', (_event, refresh?: unknown) => {
     assertCanExecute('refresh_index')
-    return startIndexScan(indexAwareWindows())
+    const mode = refresh === 'pending' ? 'pending' : 'all'
+    return startIndexScan(indexAwareWindows(), { refresh: mode })
   })
 
-  ipcMain.handle('index:restoreSourceAccess', () => {
+  ipcMain.handle('index:restoreSourceAccess', async () => {
     assertCanExecute('refresh_index')
-    return startIndexScan(indexAwareWindows())
+    await Promise.all(loadSettings().indexedLocations.map((location) => refreshElectronPathHandle(location)))
+    return startIndexScan(indexAwareWindows(), { refresh: 'pending' })
   })
 
   ipcMain.handle('index:cancelScan', () => {
@@ -1307,6 +1418,17 @@ function registerIpc(): void {
     }
   })
 
+  ipcMain.handle('settings:setPermissionPreferences', (_event, prefs: unknown) => {
+    if (!prefs || typeof prefs !== 'object') return loadSettings()
+    const record = prefs as { allowFolderChanges?: unknown; trashEnabled?: unknown }
+    return setPermissionPreferences({
+      ...(typeof record.allowFolderChanges === 'boolean'
+        ? { allowFolderChanges: record.allowFolderChanges }
+        : {}),
+      ...(typeof record.trashEnabled === 'boolean' ? { trashEnabled: record.trashEnabled } : {}),
+    })
+  })
+
   ipcMain.handle('settings:setLaunchAtLogin', (_event, enabled: unknown) => {
     return persistLaunchAtLogin(Boolean(enabled))
   })
@@ -1339,6 +1461,8 @@ function registerIpc(): void {
     await showSettingsWindow(destination === 'organise' ? 'organise' : 'home')
     return settings
   })
+
+  ipcMain.handle('settings:dismissWelcomeHint', async () => markWelcomeNotificationShown())
 
   ipcMain.handle('suggestion:preview', async () => {
     await showPreviewSuggestions()
@@ -1399,6 +1523,12 @@ function registerIpc(): void {
 
     const result = await navigateNativeDialog(folder)
     if (result.ok) {
+      if (currentSuggestion?.mode === 'save-dialog' && currentSuggestion.fileName) {
+        persistSaveAsActivity(app.getPath('userData'), {
+          fileName: currentSuggestion.fileName,
+          folder: result.folder || folder,
+        })
+      }
       closeSuggestionWindow({ restore: false })
       return result
     }
@@ -1435,6 +1565,12 @@ function registerIpc(): void {
 
     const navigation = await navigateNativeDialog(folder)
     if (navigation.ok) {
+      if (currentSuggestion?.mode === 'save-dialog' && currentSuggestion.fileName) {
+        persistSaveAsActivity(app.getPath('userData'), {
+          fileName: currentSuggestion.fileName,
+          folder: navigation.folder || folder,
+        })
+      }
       closeSuggestionWindow({ restore: false })
       return loadSettings()
     }
@@ -1453,8 +1589,9 @@ function registerIpc(): void {
     }
 
     addIndexedLocation(resolved)
+    void bindElectronPathHandle(resolved)
     assertCanExecute('refresh_index')
-    void startIndexScan(indexAwareWindows())
+    void startIndexScan(indexAwareWindows(), { refresh: 'pending' })
 
     if (currentSuggestion) {
       currentSuggestion = refreshDestinationInclusion(
@@ -1516,6 +1653,7 @@ function registerIpc(): void {
 
   ipcMain.handle('activity:get', () => listActivityWithUndoState(app.getPath('userData')))
 
+  ipcMain.handle('local-model:probe', () => probeLocalModelsDesktop())
   ipcMain.handle('byok:get', () => getByokStatus(app.getPath('userData')))
   ipcMain.handle('byok:connect', (_event, request: unknown) =>
     connectByok(app.getPath('userData'), request),
@@ -1563,7 +1701,7 @@ function registerIpc(): void {
     return { ok: true as const, result: result.data }
   })
 
-  ipcMain.handle('knowledge-set:executePlan', (_event, request: unknown) => {
+  ipcMain.handle('knowledge-set:executePlan', (event, request: unknown) => {
     const userDataDir = app.getPath('userData')
     const startedAt = new Date().toISOString()
     const storedNext = nextActivityRunNumber(loadActivityRuns(userDataDir))
@@ -1574,7 +1712,29 @@ function registerIpc(): void {
     const runNumber = Number.isInteger(requested) && requested >= storedNext ? requested : storedNext
     const confirmedRequest =
       request && typeof request === 'object' ? { ...request, runNumber } : request
-    const result = executeOrganisationPlan(confirmedRequest, getIndexedFolders())
+    const executionMode =
+      request && typeof request === 'object' && 'executionMode' in request
+        ? (request as { executionMode?: unknown }).executionMode
+        : undefined
+    const settings = loadSettings()
+    if (settings.permissions.allowFolderChanges === false) {
+      return {
+        ok: false as const,
+        error: {
+          code: 'invalid_request' as const,
+          message:
+            'Folder changes are turned off in Settings → Permissions. Turn them on to Confirm Plan.',
+        },
+      }
+    }
+    const watchExecution = executionMode === 'watch'
+    const result = executeOrganisationPlan(confirmedRequest, getIndexedFolders(), {
+      onItemApplied: watchExecution
+        ? (progress) => {
+            event.sender.send('knowledge-set:planProgress', progress)
+          }
+        : undefined,
+    })
     if (!result.ok) {
       return { ok: false as const, error: result.error }
     }
@@ -1616,6 +1776,26 @@ function registerIpc(): void {
       console.error('[suhuella] failed to persist activity', error)
     }
     return { ok: true as const, result: result.data }
+  })
+
+  ipcMain.handle('plans:list', () => listSavedPlans(app.getPath('userData')))
+
+  ipcMain.handle('plans:save', (_event, draft: unknown) => {
+    const result = saveSavedPlan(app.getPath('userData'), draft)
+    if (!result.ok) return { ok: false as const, error: result.error }
+    return { ok: true as const, plan: result.data }
+  })
+
+  ipcMain.handle('plans:delete', (_event, planId: unknown) => {
+    const result = deleteSavedPlan(app.getPath('userData'), planId)
+    if (!result.ok) return { ok: false as const, error: result.error }
+    return { ok: true as const, plans: result.data }
+  })
+
+  ipcMain.handle('plans:duplicate', (_event, planId: unknown) => {
+    const result = duplicateSavedPlanRecord(app.getPath('userData'), planId)
+    if (!result.ok) return { ok: false as const, error: result.error }
+    return { ok: true as const, plan: result.data }
   })
 
   ipcMain.handle('workflows:list', () => listWorkflows(app.getPath('userData')))
@@ -1780,7 +1960,7 @@ if (!gotLock) {
       return
     }
 
-    // Open the full app on launch. Closing the window hides to the tray instead.
+    // APPLICATION-LIFECYCLE-001: Launch always shows the main window.
     void openSettingsOrOnboarding()
   })
 }
@@ -1790,10 +1970,13 @@ app.on('before-quit', () => {
   saveDialogWatcher?.stop()
   saveDialogWatcher = null
   globalShortcut.unregisterAll()
+  destroyTray()
 })
 
 app.on('window-all-closed', () => {
-  // Stay in the tray until the user quits.
+  if (!shouldKeepRunningInBackground()) {
+    app.quit()
+  }
 })
 
 app.on('activate', () => {

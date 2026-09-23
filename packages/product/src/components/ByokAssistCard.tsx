@@ -16,7 +16,7 @@ const TASK_LABEL: Partial<Record<ByokTask, string>> = {
   explain_recommendation: 'Explain',
   explain_not_recommended: 'Why not another folder?',
   suggest_plan: 'Suggest plan',
-  organise_folder: 'Organise ideas',
+  organise_folder: 'Plan ideas',
   generate_workflow_ideas: 'Workflow ideas',
   summarise_activity: 'Summarise',
   teach_preference: 'Save preference',

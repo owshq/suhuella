@@ -16,9 +16,13 @@ import {
   type License,
   type OperationsAction,
   type OperationsSnapshot,
+  type OpsPartnerRow,
   type Organisation,
   type Seat,
 } from "@/lib/operations/types";
+import { operationsRoleLabel } from "@/lib/operations/roles";
+import type { OperationsConsoleSection } from "@/lib/operations/routes";
+import { searchOperationsSnapshot } from "@/lib/operations/search";
 import type { OperationsSession } from "@/lib/operations/session";
 import type { ReleaseManifest } from "@/lib/release-manifest";
 import { useMemo, useState } from "react";
@@ -42,15 +46,11 @@ import {
 const SECTIONS = [
   ["dashboard", "Dashboard"],
   ["customers", "Customers"],
+  ["business", "Business"],
+  ["partners", "Partners"],
   ["licenses", "Licenses"],
-  ["business", "Business Accounts"],
-  ["seats", "Seats"],
-  ["activations", "Activations"],
-  ["gifts", "Gifts / Manual"],
-  ["releases", "Releases"],
-  ["diagnostics", "Diagnostics"],
-  ["support", "Support"],
-  ["audit", "Audit log"],
+  ["billing", "Billing"],
+  ["activity", "Activity"],
 ] as const;
 
 type Section = (typeof SECTIONS)[number][0];
@@ -77,6 +77,28 @@ function licensesForCustomer(
 
 function editionLabel(edition: License["edition"]): string {
   return EDITION_LABELS[edition];
+}
+
+function formatMoney(cents: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+function formatDay(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function entitlementLabel(license: License): string {
@@ -110,6 +132,12 @@ function OperationsIdentityPanel({ session }: { session: OperationsSession }) {
           <dd className="font-medium text-slate-200">{session.appVersion}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-slate-500">Role</dt>
+          <dd className="font-medium text-slate-200">
+            {operationsRoleLabel(session.actor.role)}
+          </dd>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
           <dt className="text-slate-500">Brand</dt>
           <dd className="font-medium text-slate-200">{session.brandName}</dd>
         </div>
@@ -122,16 +150,18 @@ export function OperationsConsole({
   initialSnapshot,
   initialRelease,
   initialSession,
+  initialSection = "dashboard",
 }: {
   initialSnapshot: OperationsSnapshot;
   initialRelease: ReleaseManifest | null;
   initialSession: OperationsSession;
+  initialSection?: OperationsConsoleSection;
 }) {
   const [state, setState] = useState<ConsoleState>({
     snapshot: initialSnapshot,
     release: initialRelease,
   });
-  const [section, setSection] = useState<Section>("dashboard");
+  const [section, setSection] = useState<Section>(initialSection);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     null,
   );
@@ -153,7 +183,7 @@ export function OperationsConsole({
         body: JSON.stringify(action),
       });
       const body = (await response.json()) as
-        | ConsoleState & { ok: true }
+        | ConsoleState & { ok: true; notice?: string }
         | { ok: false; message?: string };
 
       if (!response.ok || !body.ok) {
@@ -166,8 +196,11 @@ export function OperationsConsole({
 
       setState({ snapshot: body.snapshot, release: body.release });
       setPending(null);
-      setNotice("Change saved and written to the audit log.");
-    } catch (caught) {
+      setNotice(
+        body.notice?.trim()
+          ? body.notice
+          : "Change saved and written to the audit log.",
+      );    } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The action failed.");
     } finally {
       setBusy(false);
@@ -197,6 +230,11 @@ export function OperationsConsole({
     });
   }, [query, snapshot.customers]);
 
+  const searchHits = useMemo(
+    () => searchOperationsSnapshot(snapshot, query),
+    [query, snapshot],
+  );
+
   return (
     <div className="flex min-h-screen bg-[#0b0f14] text-slate-100">
       <aside className="flex w-60 shrink-0 flex-col border-r border-white/8 bg-[#0e141c] px-4 py-5">
@@ -204,7 +242,7 @@ export function OperationsConsole({
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-300">
             Operations
           </div>
-          <div className="mt-1 text-sm text-slate-400">{brand.displayName} console</div>
+          <div className="mt-1 text-sm text-slate-400">{brand.displayName} control center</div>
         </div>
         <OperationsIdentityPanel session={initialSession} />
         <nav className="mt-6 grid gap-1">
@@ -227,21 +265,20 @@ export function OperationsConsole({
           ))}
         </nav>
         <div className="mt-auto px-2 pt-6 text-xs leading-5 text-slate-500">
-          Admin console manages access and support actions. Billing provider
-          controls paid entitlement. Never the recommendation engine, knowledge
-          index, or local user files.
+          Ops administers through the same license, seat, and billing operations
+          as the product. It does not edit storage directly.
         </div>
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-6 py-4">
-          <div>
-            <h1 className="text-lg font-semibold">
-              {SECTIONS.find(([id]) => id === section)?.[1]}
-            </h1>
-            <p className="text-sm text-slate-500">{snapshot.actor.email}</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <header className="border-b border-white/8 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-semibold">
+                {SECTIONS.find(([id]) => id === section)?.[1]}
+              </h1>
+              <p className="text-sm text-slate-500">{snapshot.actor.email}</p>
+            </div>
             <Badge
               tone={
                 snapshot.persistence === "memory"
@@ -253,6 +290,36 @@ export function OperationsConsole({
             >
               {snapshot.persistence}
             </Badge>
+          </div>
+          <div className="relative mt-3">
+            <TextInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search email, company, license key, device, support ref, Stripe ID…"
+              aria-label="Global operations search"
+            />
+            {searchHits.length > 0 ? (
+              <ul className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#101821] shadow-2xl">
+                {searchHits.map((hit) => (
+                  <li key={`${hit.kind}:${hit.id}`}>
+                    <button
+                      type="button"
+                      className="flex w-full flex-col px-3 py-2 text-left hover:bg-white/5"
+                      onClick={() => {
+                        setSection(hit.section);
+                        if (hit.customerId) setSelectedCustomerId(hit.customerId);
+                        setNotice(null);
+                      }}
+                    >
+                      <span className="text-sm text-slate-100">{hit.title}</span>
+                      <span className="text-xs text-slate-500">
+                        {hit.kind} · {hit.subtitle}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </header>
 
@@ -451,6 +518,7 @@ export function OperationsConsole({
             />
           ) : null}
           {section === "business" ? (
+            <>
             <BusinessSection
               snapshot={snapshot}
               onCreate={(name, billingEmail, seatCount, plan) =>
@@ -538,9 +606,21 @@ export function OperationsConsole({
                   }),
                 )
               }
+              onSetDeviceLimit={(organisation, deviceLimitPerSeat) =>
+                ask(
+                  {
+                    title: "Set devices per seat",
+                    description: `${organisation.name}: ${deviceLimitPerSeat} active device(s) per assigned seat.`,
+                  },
+                  (reason) => ({
+                    action: "set_organisation_device_limit",
+                    reason,
+                    organisationId: organisation.id,
+                    deviceLimitPerSeat,
+                  }),
+                )
+              }
             />
-          ) : null}
-          {section === "seats" ? (
             <SeatsSection
               snapshot={snapshot}
               onToggle={(seat) =>
@@ -589,8 +669,154 @@ export function OperationsConsole({
                 )
               }
             />
+            </>
           ) : null}
-          {section === "activations" ? (
+          {section === "partners" ? (
+            <PartnersSection
+              snapshot={snapshot}
+              onCreate={(slug, displayName, ownerEmail, origin, validUntil) =>
+                ask(
+                  {
+                    title: "Create partner",
+                    description: `${displayName} (${slug}) · ${origin} · ${ownerEmail}${validUntil ? ` · until ${validUntil}` : " · no expiry"}`,
+                  },
+                  (reason) => ({
+                    action: "create_partner",
+                    reason,
+                    slug,
+                    displayName,
+                    ownerEmail,
+                    origin,
+                    validUntil: validUntil || undefined,
+                  }),
+                )
+              }
+              onInvite={(partner, email, role) =>
+                ask(
+                  {
+                    title: "Create onboarding invite",
+                    description: `${email} → ${partner.displayName} as ${role}`,
+                  },
+                  (reason) => ({
+                    action: "create_partner_invite",
+                    reason,
+                    partnerId: partner.partnerId,
+                    email,
+                    role,
+                  }),
+                )
+              }
+              onSuspend={(partner) =>
+                ask(
+                  {
+                    title: "Suspend partner",
+                    description: `${partner.displayName} (${partner.slug})`,
+                  },
+                  (reason) => ({
+                    action: "suspend_partner",
+                    reason,
+                    partnerId: partner.partnerId,
+                  }),
+                )
+              }
+              onRevoke={(partner) =>
+                ask(
+                  {
+                    title: "Revoke partner",
+                    description: `${partner.displayName} (${partner.slug})`,
+                  },
+                  (reason) => ({
+                    action: "revoke_partner",
+                    reason,
+                    partnerId: partner.partnerId,
+                  }),
+                )
+              }
+              onReactivate={(partner) =>
+                ask(
+                  {
+                    title: "Reactivate partner",
+                    description: `${partner.displayName} (${partner.slug})`,
+                  },
+                  (reason) => ({
+                    action: "reactivate_partner",
+                    reason,
+                    partnerId: partner.partnerId,
+                  }),
+                )
+              }
+              onReviewApplication={(applicationId, email) =>
+                ask(
+                  {
+                    title: "Mark application in review",
+                    description: email,
+                  },
+                  (reason) => ({
+                    action: "set_partner_application_status",
+                    reason,
+                    applicationId,
+                    status: "in_review" as const,
+                  }),
+                )
+              }
+              onRejectApplication={(applicationId, email) =>
+                ask(
+                  {
+                    title: "Reject partner application",
+                    description: email,
+                  },
+                  (reason) => ({
+                    action: "reject_partner_application",
+                    reason,
+                    applicationId,
+                    rejectionReason: reason,
+                  }),
+                )
+              }
+              onApproveApplication={(applicationId, email, displayName) => {
+                const slug = window.prompt(
+                  "Partner slug (lowercase, unique)",
+                  displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+                );
+                if (!slug?.trim()) return;
+                const origin = window.prompt(
+                  "Entitlement origin (gift, manual, internal, test — not stripe)",
+                  "manual",
+                );
+                if (!origin || !["gift", "manual", "internal", "test"].includes(origin)) return;
+                ask(
+                  {
+                    title: "Approve partner application",
+                    description: `${email} → ${slug} (${origin}). Reuses createPartner onboarding invite. Copy invite URL from the notice — email is manual.`,
+                  },
+                  (reason) => ({
+                    action: "approve_partner_application",
+                    reason,
+                    applicationId,
+                    slug: slug.trim(),
+                    origin: origin as "gift" | "manual" | "internal" | "test",
+                    displayName,
+                  }),
+                );
+              }}
+              onRevokeDomain={(partner, domainId, hostname) =>
+                ask(
+                  {
+                    title: "Revoke domain",
+                    description: hostname,
+                  },
+                  (reason) => ({
+                    action: "revoke_partner_domain",
+                    reason,
+                    partnerId: partner.partnerId,
+                    domainId,
+                  }),
+                )
+              }
+            />
+          ) : null}
+          {section === "licenses" ? (
+            <>
             <ActivationsSection
               snapshot={snapshot}
               onDeactivate={(activation) =>
@@ -626,8 +852,6 @@ export function OperationsConsole({
                 );
               }}
             />
-          ) : null}
-          {section === "gifts" ? (
             <GiftsSection
               snapshot={snapshot}
               onCreate={(email, edition, origin) =>
@@ -704,12 +928,13 @@ export function OperationsConsole({
                 );
               }}
             />
+            </>
           ) : null}
-          {section === "releases" ? <ReleasesSection release={state.release} /> : null}
-          {section === "diagnostics" ? (
+          {section === "billing" ? <BillingSection snapshot={snapshot} /> : null}
+          {section === "activity" ? (
+            <>
+            <AuditSection snapshot={snapshot} />
             <DiagnosticsSection snapshot={snapshot} />
-          ) : null}
-          {section === "support" ? (
             <SupportSection
               snapshot={snapshot}
               onLookup={(email) => {
@@ -718,6 +943,7 @@ export function OperationsConsole({
                 );
                 setSelectedCustomerId(customer?.id ?? null);
                 setQuery(email);
+                setSection("customers");
               }}
               onRecordActivation={(licenseId, deviceName, platform, appVersion) =>
                 ask(
@@ -753,8 +979,8 @@ export function OperationsConsole({
                 )
               }
             />
+            </>
           ) : null}
-          {section === "audit" ? <AuditSection snapshot={snapshot} /> : null}
         </main>
       </div>
 
@@ -786,7 +1012,6 @@ function Dashboard({
   ) => void;
 }) {
   const activeLicenses = snapshot.licenses.filter((row) => row.status === "active");
-  const activeDevices = snapshot.activations.filter((row) => row.status === "active");
   const health = snapshot.serviceHealth ?? {
     serviceState: "NORMAL" as const,
     affectedCapabilities: [],
@@ -864,7 +1089,7 @@ function Dashboard({
                   {
                     title: "Set service health to WEB_CAPACITY_LIMITED",
                     description:
-                      "Last-resort: new browser backend operations pause. Local Home, Search, and Organise stay available.",
+                      "Last-resort: new browser backend operations pause. Local Home, Search, and Plan Mode stay available.",
                   },
                   (reason) => ({
                     action: "set_service_health",
@@ -880,11 +1105,28 @@ function Dashboard({
           </div>
         </div>
       </Panel>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Stat label="Customers" value={snapshot.customers.length} />
         <Stat label="Active licenses" value={activeLicenses.length} />
-        <Stat label="Active devices" value={activeDevices.length} />
-        <Stat label="Organisations" value={snapshot.organisations.length} />
+        <Stat label="Business accounts" value={snapshot.organisations.length} />
+        <Stat
+          label="Seats"
+          value={`${snapshot.organisations.reduce((sum, row) => sum + row.assignedSeatCount, 0)} / ${snapshot.organisations.reduce((sum, row) => sum + row.seatCount, 0)}`}
+        />
+        <Stat
+          label="Expected monthly"
+          value={formatMoney(
+            snapshot.organisations.reduce((sum, row) => sum + row.monthlyAmountCents, 0),
+            snapshot.organisations[0]?.currency ?? "eur",
+          )}
+        />
+        <Stat
+          label="License / payment issues"
+          value={
+            snapshot.licenses.filter((row) => row.status !== "active").length +
+            snapshot.organisations.filter((row) => row.status !== "active").length
+          }
+        />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Licenses by edition">
@@ -970,13 +1212,6 @@ function CustomersSection({
 }) {
   return (
     <>
-      <Field label="Search">
-        <TextInput
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="email or customerId"
-        />
-      </Field>
       <DataTable
         headers={[
           "Email",
@@ -1245,6 +1480,7 @@ function BusinessSection({
   onInvite,
   onChangeAdmin,
   onReactivate,
+  onSetDeviceLimit,
 }: {
   snapshot: OperationsSnapshot;
   onCreate: (
@@ -1258,6 +1494,7 @@ function BusinessSection({
   onInvite: (organisation: Organisation, email: string) => void;
   onChangeAdmin: (organisation: Organisation, customerId: string) => void;
   onReactivate: (organisation: Organisation) => void;
+  onSetDeviceLimit: (organisation: Organisation, deviceLimitPerSeat: number) => void;
 }) {
   const [name, setName] = useState("");
   const [billingEmail, setBillingEmail] = useState("");
@@ -1336,12 +1573,29 @@ function BusinessSection({
                 </Badge>
               }
             >
-              <p className="mb-4 text-sm text-slate-400">
-                {organisation.id} · {PLAN_LABELS[organisation.plan]} ·{" "}
-                {organisation.isPaid ? "Paid" : "Trial / gifted"} ·{" "}
-                {organisation.seatCount} seats · billing {organisation.billingEmail} ·
-                admin {customerEmail(snapshot, organisation.adminCustomerId)}
-              </p>
+              <div className="mb-4 grid gap-1 text-sm text-slate-300">
+                <p className="font-medium text-slate-100">
+                  {PLAN_LABELS[organisation.plan]} · {organisation.status === "active" ? "Active" : "Suspended"}
+                </p>
+                <p>{organisation.seatCount} seats</p>
+                <p className="text-slate-400">
+                  {organisation.deviceLimitPerSeat} active device(s) per assigned seat
+                </p>
+                <p className="text-slate-400">
+                  {organisation.assignedSeatCount} assigned · {organisation.availableSeatCount} available
+                </p>
+                <p>{formatMoney(organisation.monthlyAmountCents, organisation.currency)}/month</p>
+                <p className="text-slate-400">
+                  Stripe subscription: {organisation.stripeSubscriptionStatus ?? "—"}
+                </p>
+                <p className="text-slate-400">
+                  Renewal: {formatDay(organisation.currentPeriodEnd)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {organisation.id} · billing {organisation.billingEmail} · admin{" "}
+                  {customerEmail(snapshot, organisation.adminCustomerId)}
+                </p>
+              </div>
               <div className="mb-4 flex flex-wrap gap-2">
                 <Button
                   tone="ghost"
@@ -1385,6 +1639,21 @@ function BusinessSection({
                   }}
                 >
                   Change admin
+                </Button>
+                <Button
+                  tone="ghost"
+                  onClick={() => {
+                    const limit = Number(
+                      window.prompt(
+                        "Active devices per assigned seat",
+                        String(organisation.deviceLimitPerSeat),
+                      ),
+                    );
+                    if (!Number.isInteger(limit) || limit < 1 || limit > 10) return;
+                    onSetDeviceLimit(organisation, limit);
+                  }}
+                >
+                  Set devices per seat
                 </Button>
                 {organisation.isPaid ? null : organisation.status === "suspended" ? (
                   <Button tone="ghost" onClick={() => onReactivate(organisation)}>
@@ -1813,6 +2082,310 @@ function SupportSection({
           </div>
         </form>
       </Panel>
+    </>
+  );
+}
+
+function PartnersSection({
+  snapshot,
+  onCreate,
+  onInvite,
+  onSuspend,
+  onRevoke,
+  onReactivate,
+  onRegisterDomain,
+  onRefreshDomain,
+  onRevokeDomain,
+  onUpdateBranding,
+  onReviewApplication,
+  onRejectApplication,
+  onApproveApplication,
+}: {
+  snapshot: OperationsSnapshot;
+  onReviewApplication: (applicationId: string, email: string) => void;
+  onRejectApplication: (applicationId: string, email: string) => void;
+  onApproveApplication: (applicationId: string, email: string, displayName: string) => void;
+  onCreate: (
+    slug: string,
+    displayName: string,
+    ownerEmail: string,
+    origin: "gift" | "manual" | "internal" | "test",
+    validUntil: string,
+  ) => void;
+  onInvite: (
+    partner: OpsPartnerRow,
+    email: string,
+    role: "partner_admin" | "partner_member",
+  ) => void;
+  onSuspend: (partner: OpsPartnerRow) => void;
+  onRevoke: (partner: OpsPartnerRow) => void;
+  onReactivate: (partner: OpsPartnerRow) => void;
+  onRevokeDomain: (partner: OpsPartnerRow, domainId: string, hostname: string) => void;
+}) {
+  const [slug, setSlug] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [origin, setOrigin] = useState<"gift" | "manual" | "internal" | "test">("gift");
+  const [validUntil, setValidUntil] = useState("");
+  const partners = snapshot.partners ?? [];
+  const applications = snapshot.partnerApplications ?? [];
+
+  return (
+    <>
+      <p className="text-sm text-slate-400">
+        Public applications at /partners register interest only — they do not grant entitlements.
+        Approve creates the partner (or links an existing one) and surfaces the onboarding invite
+        URL in the action notice for manual delivery. One partner type. Roles inside a partner:{" "}
+        <code className="text-slate-300">partner_admin</code> (branding, domains, invites) and{" "}
+        <code className="text-slate-300">partner_member</code> (read-only). Platform entitlement is{" "}
+        <code className="text-slate-300">partner_entitlement</code> (gift/manual/internal/test) —
+        not a <code className="text-slate-300">license_grant</code> edition. Existing Business gift
+        licenses stay as-is; do not auto-convert them. Create gift partners and send onboarding
+        invites — the partner self-service configures brand, hostname, and DNS in{" "}
+        <code className="text-slate-300">/partners/portal</code>. Ops does not register hostnames
+        or edit branding. Saving a hostname is pending until DNS validates — not immediate
+        activation. Example hostname (partner chooses):{" "}
+        <code className="text-slate-300">documents.example.com</code>. Optional{" "}
+        <code className="text-slate-300">valid_until</code> for a 12-month gift; leave blank for
+        indefinite courtesy.
+      </p>
+      <Panel title={`Applications (${applications.length})`}>
+        {applications.length === 0 ? (
+          <Empty>No public applications yet.</Empty>
+        ) : (
+          <DataTable
+            headers={["Applicant", "Status", "Partner", "Actions"]}
+            empty="No public applications yet."
+            rows={applications.map((application) => [
+              <div key={`${application.applicationId}-name`}>
+                <div className="font-medium text-slate-100">{application.displayName}</div>
+                <div className="text-xs text-slate-500">{application.normalizedEmail}</div>
+              </div>,
+              <Badge key={`${application.applicationId}-status`} tone={statusTone(application.status)}>
+                {application.status}
+              </Badge>,
+              application.partnerId ?? "—",
+              <div key={`${application.applicationId}-actions`} className="flex flex-wrap gap-2">
+                {application.status === "pending" ? (
+                  <Button
+                    type="button"
+                    tone="muted"
+                    onClick={() =>
+                      onReviewApplication(application.applicationId, application.normalizedEmail)
+                    }
+                  >
+                    In review
+                  </Button>
+                ) : null}
+                {application.status === "pending" || application.status === "in_review" ? (
+                  <>
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        onApproveApplication(
+                          application.applicationId,
+                          application.normalizedEmail,
+                          application.displayName,
+                        )
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      type="button"
+                      tone="danger"
+                      onClick={() =>
+                        onRejectApplication(application.applicationId, application.normalizedEmail)
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </>
+                ) : null}
+              </div>,
+            ])}
+          />
+        )}
+      </Panel>
+      <Panel title="Create partner">
+        <form
+          className="grid gap-3 md:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onCreate(slug, displayName, ownerEmail, origin, validUntil.trim());
+            setSlug("");
+            setDisplayName("");
+            setOwnerEmail("");
+            setValidUntil("");
+          }}
+        >
+          <Field label="Slug">
+            <TextInput value={slug} onChange={(event) => setSlug(event.target.value)} required />
+          </Field>
+          <Field label="Display name">
+            <TextInput
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Owner email">
+            <TextInput
+              value={ownerEmail}
+              onChange={(event) => setOwnerEmail(event.target.value)}
+              type="email"
+              required
+            />
+          </Field>
+          <Field label="Origin">
+            <Select
+              value={origin}
+              onChange={(event) =>
+                setOrigin(event.target.value as "gift" | "manual" | "internal" | "test")
+              }
+            >
+              <option value="gift">gift</option>
+              <option value="manual">manual</option>
+              <option value="internal">internal</option>
+              <option value="test">test</option>
+            </Select>
+          </Field>
+          <Field label="valid_until (optional ISO date)">
+            <TextInput
+              value={validUntil}
+              onChange={(event) => setValidUntil(event.target.value)}
+              placeholder="blank = indefinite · or 2027-09-22"
+            />
+          </Field>
+          <div className="flex items-end">
+            <Button type="submit">Create partner</Button>
+          </div>
+        </form>
+      </Panel>
+      <Panel title={`Partners (${partners.length})`}>
+        {partners.length === 0 ? (
+          <Empty>No partners yet.</Empty>
+        ) : (
+          <DataTable
+            headers={["Partner", "Brand", "Status", "Entitlement", "Domains", "Actions"]}
+            empty="No partners yet."
+            rows={partners.map((partner) => [
+              <div key={`${partner.partnerId}-name`}>
+                <div className="font-medium text-slate-100">{partner.displayName}</div>
+                <div className="text-xs text-slate-500">
+                  {partner.slug} · {partner.ownerEmail}
+                </div>
+              </div>,
+              partner.brandId,
+              <Badge key={`${partner.partnerId}-status`} tone={statusTone(partner.status)}>
+                {partner.status}
+              </Badge>,
+              partner.entitlementOrigin
+                ? `${partner.entitlementOrigin} · ${partner.entitlementStatus}`
+                : "—",
+              <div key={`${partner.partnerId}-domains`} className="space-y-2 text-xs">
+                {(partner.domains ?? []).map((domain) => (
+                  <div key={domain.domainId} className="space-y-1 rounded-lg border border-white/5 p-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>
+                        {domain.hostname} · {domain.status}
+                        {domain.dnsTarget ? ` · CNAME → ${domain.dnsTarget}` : ""}
+                      </span>
+                      <Button
+                        type="button"
+                        tone="danger"
+                        onClick={() => onRevokeDomain(partner, domain.domainId, domain.hostname)}
+                      >
+                        Revoke (emergency)
+                      </Button>
+                    </div>
+                    {domain.validationErrors ? (
+                      <pre className="whitespace-pre-wrap break-all text-[11px] text-slate-400">
+                        {domain.validationErrors}
+                      </pre>
+                    ) : null}
+                  </div>
+                ))}
+                {(partner.domains ?? []).length === 0 ? (
+                  <p className="text-slate-500">Partner configures hostname in /partners/portal</p>
+                ) : null}
+              </div>,
+              <div key={`${partner.partnerId}-actions`} className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const email = window.prompt("Invite email", partner.ownerEmail);
+                    if (!email) return;
+                    const roleRaw = window.prompt(
+                      "Role: partner_admin (configure) or partner_member (read-only)",
+                      "partner_admin",
+                    );
+                    if (!roleRaw) return;
+                    const role =
+                      roleRaw.trim() === "partner_member" ? "partner_member" : "partner_admin";
+                    onInvite(partner, email, role);
+                  }}
+                >
+                  Invite
+                </Button>
+                <Button type="button" onClick={() => onSuspend(partner)}>
+                  Suspend
+                </Button>
+                <Button type="button" onClick={() => onReactivate(partner)}>
+                  Reactivate
+                </Button>
+                <Button type="button" onClick={() => onRevoke(partner)}>
+                  Revoke
+                </Button>
+              </div>,
+            ])}
+          />
+        )}
+      </Panel>
+    </>
+  );
+}
+
+function BillingSection({ snapshot }: { snapshot: OperationsSnapshot }) {
+  const paid = snapshot.licenses.filter(
+    (license) => license.paymentProvider || license.paymentReference || license.isPaid,
+  );
+  const issues = snapshot.licenses.filter(
+    (license) => license.isPaid && license.status !== "active",
+  );
+
+  return (
+    <>
+      <p className="text-sm text-slate-400">
+        Stripe remains the source of paid entitlement. Ops can inspect and request
+        quantity changes through the same billing operations — it cannot edit
+        charges by hand.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Stat label="Paid licenses" value={paid.length} />
+        <Stat label="Payment issues" value={issues.length} />
+        <Stat
+          label="Business monthly"
+          value={formatMoney(
+            snapshot.organisations.reduce((sum, row) => sum + row.monthlyAmountCents, 0),
+            snapshot.organisations[0]?.currency ?? "eur",
+          )}
+        />
+      </div>
+      <DataTable
+        headers={["License", "Email", "Provider", "Reference", "Status", "Period end"]}
+        empty="No Stripe-backed licenses yet."
+        rows={paid.map((license) => [
+          license.id,
+          license.email,
+          license.paymentProvider ?? "—",
+          license.paymentReference ?? "—",
+          <Badge key={license.id} tone={statusTone(license.status)}>
+            {license.status}
+          </Badge>,
+          formatDay(license.currentPeriodEnd),
+        ])}
+      />
     </>
   );
 }

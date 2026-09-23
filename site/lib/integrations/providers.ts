@@ -34,10 +34,17 @@ const PROVIDERS: Record<CloudProviderId, CloudProviderDefinition> = {
     displayName: "OneDrive",
     authorizationUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scopes: ["offline_access", "Files.Read", "User.Read"],
+    scopes: [
+      "openid",
+      "email",
+      "profile",
+      "offline_access",
+      "Files.Read",
+      "User.Read",
+    ],
     supportsWebhooks: true,
     brandAllowlist: ["suhuella"],
-    enabled: false,
+    enabled: true,
   },
   box: {
     provider: "box",
@@ -48,6 +55,8 @@ const PROVIDERS: Record<CloudProviderId, CloudProviderDefinition> = {
     supportsWebhooks: true,
     brandAllowlist: ["suhuella"],
     enabled: false,
+    /** Not shown on Sources — keep stub for a later release. */
+    showInSourcesCatalog: false,
   },
 };
 
@@ -110,9 +119,19 @@ export function providerEnabledForBrand(provider: CloudProviderId, brandId: stri
   return brandAllowsProvider(brandId, provider);
 }
 
+/** Public path slug (google-drive). Storage id stays google_drive. */
+export function providerPathSlug(provider: CloudProviderId): string {
+  return provider.replaceAll("_", "-");
+}
+
+export function parseProviderPathSlug(slug: string): CloudProviderId | null {
+  const normalized = slug.trim().toLowerCase().replaceAll("-", "_");
+  return isCloudProviderId(normalized) ? normalized : null;
+}
+
 /** Exact callback path for a provider. Origin must still pass the allowlist. */
 export function callbackPathForProvider(provider: CloudProviderId): string {
-  return `/api/integrations/${provider}/callback`;
+  return `/api/integrations/${providerPathSlug(provider)}/callback`;
 }
 
 export function buildCallbackUri(origin: string, provider: CloudProviderId): string {
@@ -135,9 +154,9 @@ export function isAllowedCallbackUri(uri: string, brandId: string): boolean {
   if (!config) return false;
   const origin = `${parsed.protocol}//${parsed.host}`;
   if (!config.callbackOrigins.includes(origin)) return false;
-  const providerMatch = parsed.pathname.match(/^\/api\/integrations\/([a-z_]+)\/callback$/);
+  const providerMatch = parsed.pathname.match(/^\/api\/integrations\/([a-z0-9_-]+)\/callback$/);
   if (!providerMatch) return false;
-  return isCloudProviderId(providerMatch[1]);
+  return parseProviderPathSlug(providerMatch[1]!) !== null;
 }
 
 /** Env gate for public start endpoints. Missing/false keeps production closed. */

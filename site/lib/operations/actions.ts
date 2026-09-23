@@ -1,10 +1,10 @@
-import { isServiceCapability, isServiceState, type ServiceCapability } from "../service-health";
+import { isServiceCapability, isServiceState, type ServiceCapability } from "../service-health.ts";
 import {
   isAdminCreateOrigin,
   isLicenseEdition,
   isLicenseOrigin,
   isOrganisationPlan,
-} from "./catalog";
+} from "./catalog.ts";
 import type { OperationsAction } from "./types";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -62,6 +62,7 @@ export function parseOperationsAction(value: unknown): OperationsAction {
         email: asString(record, "email"),
         edition,
         origin,
+        issuedByOperator: asOptionalString(record, "issuedByOperator"),
       };
     }
     case "update_customer_email":
@@ -136,6 +137,13 @@ export function parseOperationsAction(value: unknown): OperationsAction {
         reason,
         organisationId: asString(record, "organisationId"),
       };
+    case "set_organisation_device_limit":
+      return {
+        action,
+        reason,
+        organisationId: asString(record, "organisationId"),
+        deviceLimitPerSeat: asNumber(record, "deviceLimitPerSeat"),
+      };
     case "deactivate_device":
       return {
         action,
@@ -187,6 +195,122 @@ export function parseOperationsAction(value: unknown): OperationsAction {
         serviceState,
         affectedCapabilities,
         retryAfter: retryAfter === undefined ? undefined : (retryAfter as number | null),
+      };
+    }
+    case "create_partner": {
+      const origin = asString(record, "origin");
+      if (origin === "stripe") {
+        throw new Error("Operations cannot create stripe partner entitlements.");
+      }
+      if (!["gift", "manual", "internal", "test"].includes(origin)) {
+        throw new Error("Partner origin must be gift, manual, internal, or test.");
+      }
+      return {
+        action,
+        reason,
+        slug: asString(record, "slug"),
+        displayName: asString(record, "displayName"),
+        ownerEmail: asString(record, "ownerEmail"),
+        origin: origin as "gift" | "manual" | "internal" | "test",
+        primaryDomain: asOptionalString(record, "primaryDomain"),
+        validUntil: asOptionalString(record, "validUntil"),
+      };
+    }
+    case "create_partner_invite": {
+      const roleRaw = asOptionalString(record, "role");
+      const role =
+        roleRaw === "partner_member" || roleRaw === "partner_admin" ? roleRaw : "partner_admin";
+      return {
+        action,
+        reason,
+        partnerId: asString(record, "partnerId"),
+        email: asString(record, "email"),
+        role,
+      };
+    }
+    case "suspend_partner":
+    case "revoke_partner":
+    case "reactivate_partner":
+      return {
+        action,
+        reason,
+        partnerId: asString(record, "partnerId"),
+      };
+    case "register_partner_domain":
+      return {
+        action,
+        reason,
+        partnerId: asString(record, "partnerId"),
+        hostname: asString(record, "hostname"),
+      };
+    case "refresh_partner_domain":
+    case "revoke_partner_domain":
+      return {
+        action,
+        reason,
+        partnerId: asString(record, "partnerId"),
+        domainId: asString(record, "domainId"),
+      };
+    case "update_partner_branding": {
+      if ("brandId" in record && record.brandId != null && record.brandId !== "") {
+        throw new Error("brand_id from the client is not trusted.");
+      }
+      return {
+        action,
+        reason,
+        partnerId: asString(record, "partnerId"),
+        displayName: asOptionalString(record, "displayName"),
+        logoUrl:
+          record.logoUrl === null
+            ? null
+            : typeof record.logoUrl === "string"
+              ? record.logoUrl.trim() || null
+              : undefined,
+        accent:
+          record.accent === null
+            ? null
+            : typeof record.accent === "string"
+              ? record.accent.trim() || null
+              : undefined,
+        onAccent:
+          record.onAccent === null
+            ? null
+            : typeof record.onAccent === "string"
+              ? record.onAccent.trim() || null
+              : undefined,
+      };
+    }
+    case "set_partner_application_status": {
+      const status = asString(record, "status");
+      if (status !== "pending" && status !== "in_review") {
+        throw new Error("Application status must be pending or in_review.");
+      }
+      return {
+        action,
+        reason,
+        applicationId: asString(record, "applicationId"),
+        status,
+      };
+    }
+    case "reject_partner_application":
+      return {
+        action,
+        reason,
+        applicationId: asString(record, "applicationId"),
+        rejectionReason: asString(record, "rejectionReason"),
+      };
+    case "approve_partner_application": {
+      const origin = asString(record, "origin");
+      if (!["gift", "manual", "internal", "test"].includes(origin)) {
+        throw new Error("Partner origin must be gift, manual, internal, or test.");
+      }
+      return {
+        action,
+        reason,
+        applicationId: asString(record, "applicationId"),
+        slug: asString(record, "slug"),
+        origin: origin as "gift" | "manual" | "internal" | "test",
+        displayName: asOptionalString(record, "displayName"),
       };
     }
     default:

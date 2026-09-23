@@ -1,6 +1,6 @@
+import { brand } from "@suhuella/brand";
 import {
   buildSignedLicenseContext,
-  deviceLimitForEdition,
   isValidEmail,
   lifetimeHasNoExpiry,
   normalizeEmail,
@@ -13,15 +13,23 @@ import {
 import {
   touchBusinessSeat,
   effectiveLogoForAccount,
+  businessService,
+  findBusinessGrantByEmail,
+  findBusinessGrantByLicenseId,
 } from "./business-service.ts";
+import { effectiveDeviceLimitForGrant } from "./license-device-limit.ts";
+import { organisationOverviewForActor, type BusinessOrganisationOverview } from "./business-organisation.ts";
+import type { BusinessError, BusinessSeatRole } from "./business-types.ts";
 import { defaultBusinessStore } from "./business-store.ts";
 import { fulfillLicenseFromCheckout } from "./license-fulfillment.ts";
+import { reconcilePaidCheckoutSession } from "./checkout-reconciliation.ts";
 import { publicDevicesForLicense, type LicenseDevicePublic } from "./license-devices.ts";
 import type { FulfilledCheckoutSession } from "./verify-stripe-session.ts";
-import { verifyStripeCheckoutSession } from "./verify-stripe-session.ts";
 import { desktopStatusForGrant, normalizeLicenseGrant } from "./license-entitlement.ts";
+import { grantAllowsPresentationBrand } from "./license-presentation.ts";
 import { consumeActivationAttempt } from "./activation-attempt.ts";
 import { consumeVerifiedEmailProof } from "./email-verification.ts";
+import { presentedTokenAlgorithmFromLicenseToken } from "./license-hmac-retirement-metrics.ts";
 import {
   activeDeviceCount,
   findActivation,
@@ -56,16 +64,29 @@ export type LicenseSession = {
 
 type ServiceResult<T> =
   | { ok: true; context?: T; session?: LicenseSession; deactivated?: true }
-  | { ok: false; error: LicenseApiError };
+  | { ok: false; error: LicenseApiError; devices?: LicenseDevicePublic[] };
 
-function signingSecret(): string {
-  return process.env.LICENSE_SIGNING_SECRET?.trim() || "";
+async function devicesForLicense(
+  licenseId: string,
+  currentDeviceId: string,
+): Promise<LicenseDevicePublic[]> {
+  const devices = await listActivations(licenseId);
+  return publicDevicesForLicense(devices, licenseId, currentDeviceId);
+}
+
+function signingMaterialConfigured(): boolean {
+  return Boolean(
+    process.env.LICENSE_SIGNING_PRIVATE_KEY?.trim() || process.env.LICENSE_SIGNING_SECRET?.trim(),
+  );
+}
+
+function presentationRejected(grant: LicenseGrant): boolean {
+  return !grantAllowsPresentationBrand(grant, brand.id);
 }
 
 async function decodeToken(licenseToken: string): Promise<LicenseContext | null> {
-  const secret = signingSecret();
-  if (!secret) return null;
-  const unsigned = await readSignedLicenseToken(licenseToken, secret);
+  if (!signingMaterialConfigured()) return null;
+  const unsigned = await readSignedLicenseToken(licenseToken);
   if (!unsigned) return null;
   return { ...unsigned, licenseToken };
 }
@@ -119,8 +140,9 @@ async function refreshExistingMonthlyGrant(grant: LicenseGrant): Promise<License
 
 async function resolveGrant(email: string): Promise<LicenseGrant | null> {
   const durable = await findGrantByEmail(email);
-  if (!durable) return null;
-  return refreshExistingMonthlyGrant(durable);
+  if (durable) return refreshExistingMonthlyGrant(durable);
+  const business = findBusinessGrantByEmail(email);
+  return business ?? null;
 }
 
 function organisationLogoForGrant(grant: LicenseGrant): string | null {
@@ -137,10 +159,46 @@ async function contextFromGrant(
   activatedDevices: number,
   now = new Date(),
 ): Promise<LicenseContext> {
-  const secret = signingSecret();
-  if (!secret) {
-    throw new Error("LICENSE_SIGNING_SECRET is not configured");
+  if (!signingMaterialConfigured()) {
+    throw new Error("LICENSE_SIGNING_PRIVATE_KEY or LICENSE_SIGNING_SECRET is not configured");
   }
+
+  const { commercialGenerationEnforcementActive } = await import(
+    "./commercial-generations/enforcement.ts"
+  );
+  const { readCommercialGenerationRegistry } = await import(
+    "./commercial-generations/persistence.ts"
+  );
+  const { effectiveCapabilitiesForLicense } = await import(
+    "@suhuella/product/lib/generation-rights.ts"
+  );
+  const { listLicenseAcquisitions, cumulativeCommercialGenerationIds } = await import(
+    "./commercial-generations/persistence.ts"
+  );
+  const registry = await readCommercialGenerationRegistry();
+  const enforcementActive = commercialGenerationEnforcementActive();
+  const status = desktopStatusForGrant(grant);
+  const validUntil = lifetimeHasNoExpiry(grant.edition)
+    ? null
+    : (grant.validUntil ?? grant.currentPeriodEnd ?? null);
+  const acquiredCommercialGenerationIds = cumulativeCommercialGenerationIds({
+    grantCommercialGenerationId: grant.commercialGenerationId,
+    acquisitions: await listLicenseAcquisitions(grant.licenseId),
+  });
+  const capabilities = effectiveCapabilitiesForLicense({
+    edition: grant.edition,
+    status,
+    validUntil,
+    commercialGenerationId: grant.commercialGenerationId,
+    acquiredCommercialGenerationIds,
+    generationAccessMode: grant.generationAccessMode,
+    origin: grant.origin,
+    registry,
+    enforcementActive,
+  });
+  const { commercialGenerationPolicyRevision } = await import(
+    "@suhuella/product/lib/signed-license-contract.ts"
+  );
 
   const context = await buildSignedLicenseContext(
     {
@@ -148,20 +206,31 @@ async function contextFromGrant(
       customerId: grant.customerId,
       email: grant.email,
       edition: grant.edition,
-      status: desktopStatusForGrant(grant),
-      deviceLimit: deviceLimitForEdition(grant.edition, grant.deviceLimit),
+      status,
+      capabilities,
+      deviceLimit: effectiveDeviceLimitForGrant(grant),
       activatedDevices,
       organisationId: grant.organisationId,
       organisationName: grant.organisationName,
       organisationLogo: organisationLogoForGrant(grant),
       seatId: grant.seatId,
       memberRole: grant.memberRole,
-      validUntil: lifetimeHasNoExpiry(grant.edition) ? null : (grant.validUntil ?? grant.currentPeriodEnd ?? null),
+      validUntil,
       lastCheckedAt: now.toISOString(),
       offlineUntil: offlineUntilFrom(now, grant.validUntil ?? null),
       channel: grant.channel ?? "stable",
+      ...(grant.commercialGenerationId !== undefined
+        ? { commercialGenerationId: grant.commercialGenerationId }
+        : {}),
+      ...(grant.generationAccessMode !== undefined
+        ? { generationAccessMode: grant.generationAccessMode }
+        : {}),
+      ...(acquiredCommercialGenerationIds.length > 0
+        ? { acquiredCommercialGenerationIds }
+        : {}),
+      generationEnforcementActive: enforcementActive,
+      policyRevision: commercialGenerationPolicyRevision(registry),
     },
-    secret,
   );
   return context;
 }
@@ -187,7 +256,11 @@ export async function activateFromCheckoutSession(input: {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
   if (!secretKey) return { ok: false, error: "server_error" };
 
-  const verified = await verifyStripeCheckoutSession(input.sessionId, secretKey, input.origin);
+  const verified = await reconcilePaidCheckoutSession({
+    sessionId: input.sessionId,
+    secretKey,
+    origin: input.origin,
+  });
   if (!verified.ok) {
     if (verified.error === "payment_incomplete") return { ok: false, error: "payment_incomplete" };
     if (verified.error === "invalid_session" || verified.error === "missing_session") {
@@ -198,7 +271,6 @@ export async function activateFromCheckoutSession(input: {
 
   const attemptId = input.activationAttemptId?.trim() ?? "";
   if (!attemptId) {
-    await fulfillLicenseFromCheckout(verified.session);
     return { ok: false, error: "email_verification_required" };
   }
 
@@ -208,7 +280,6 @@ export async function activateFromCheckoutSession(input: {
     checkoutSessionId: input.sessionId,
   });
   if (!attempt.ok) {
-    await fulfillLicenseFromCheckout(verified.session);
     return { ok: false, error: "email_verification_required" };
   }
 
@@ -237,35 +308,43 @@ async function activateLicenseForEmail(
   if (grant.status === "expired") {
     return { ok: false, error: "no_license" };
   }
+  if (presentationRejected(grant)) {
+    return { ok: false, error: "no_license" };
+  }
   if (grant.validUntil && new Date(grant.validUntil).getTime() < Date.now()) {
     return { ok: false, error: "expired" };
   }
 
   const existing = await findActivation(grant.licenseId, deviceId);
-  const limit = deviceLimitForEdition(grant.edition, grant.deviceLimit);
+  const limit = effectiveDeviceLimitForGrant(grant);
   const active = await activeDeviceCount(grant.licenseId);
   if (!existing && active >= limit) {
-    return { ok: false, error: "device_limit" };
+    return {
+      ok: false,
+      error: "device_limit",
+      devices: await devicesForLicense(grant.licenseId, deviceId),
+    };
   }
   if (existing?.status === "revoked") {
     return { ok: false, error: "revoked" };
   }
 
   const now = new Date().toISOString();
-  await upsertActivation({
-    licenseId: grant.licenseId,
-    deviceId,
-    deviceName,
-    platform: input.platform?.trim() ?? "",
-    appVersion: input.appVersion?.trim() ?? "",
-    activatedAt: existing?.activatedAt ?? now,
-    lastSeen: now,
-    status: "active",
-  });
 
   try {
     const activatedDevices = await activeDeviceCount(grant.licenseId);
     const context = await contextFromGrant(grant, activatedDevices);
+    await upsertActivation({
+      licenseId: grant.licenseId,
+      deviceId,
+      deviceName,
+      platform: input.platform?.trim() ?? "",
+      appVersion: input.appVersion?.trim() ?? "",
+      activatedAt: existing?.activatedAt ?? now,
+      lastSeen: now,
+      status: "active",
+      lastPresentedTokenAlgorithm: presentedTokenAlgorithmFromLicenseToken(context.licenseToken),
+    });
     touchBusinessSeat(email);
     const devices = await listActivations(grant.licenseId);
     return {
@@ -318,17 +397,25 @@ export async function checkLicense(input: TokenInput): Promise<ServiceResult<Lic
 
   const found =
     (await findGrantByEmail(previous.email)) ??
-    (await findGrantByLicenseId(previous.licenseId));
+    (await findGrantByLicenseId(previous.licenseId)) ??
+    findBusinessGrantByEmail(previous.email) ??
+    findBusinessGrantByLicenseId(previous.licenseId);
   if (!found) {
     return { ok: false, error: "no_license" };
   }
-  const grant = await refreshExistingMonthlyGrant(found);
+  const grant =
+    found.origin === "business"
+      ? found
+      : await refreshExistingMonthlyGrant(found);
 
   if (grant.status === "revoked" || previous.status === "revoked") {
     return { ok: false, error: "revoked" };
   }
   if (grant.status !== "active") {
     return { ok: false, error: "expired" };
+  }
+  if (presentationRejected(grant)) {
+    return { ok: false, error: "no_license" };
   }
   if (grant.validUntil && new Date(grant.validUntil).getTime() < Date.now()) {
     return { ok: false, error: "expired" };
@@ -339,27 +426,33 @@ export async function checkLicense(input: TokenInput): Promise<ServiceResult<Lic
     return { ok: false, error: "revoked" };
   }
 
-  const limit = deviceLimitForEdition(grant.edition, grant.deviceLimit);
+  const limit = effectiveDeviceLimitForGrant(grant);
   const active = await activeDeviceCount(grant.licenseId);
   if (!activation && active >= limit) {
-    return { ok: false, error: "device_limit" };
+    return {
+      ok: false,
+      error: "device_limit",
+      devices: await devicesForLicense(grant.licenseId, deviceId),
+    };
   }
 
   const deviceName = input.deviceName?.trim() || activation?.deviceName || "This computer";
-  await upsertActivation({
-    licenseId: grant.licenseId,
-    deviceId,
-    deviceName,
-    platform: activation?.platform ?? "",
-    appVersion: activation?.appVersion ?? "",
-    activatedAt: activation?.activatedAt ?? new Date().toISOString(),
-    lastSeen: new Date().toISOString(),
-    status: "active",
-  });
+  const presentedAlgorithm = presentedTokenAlgorithmFromLicenseToken(licenseToken);
 
   try {
     const activatedDevices = await activeDeviceCount(grant.licenseId);
     const context = await contextFromGrant(grant, activatedDevices);
+    await upsertActivation({
+      licenseId: grant.licenseId,
+      deviceId,
+      deviceName,
+      platform: activation?.platform ?? "",
+      appVersion: activation?.appVersion ?? "",
+      activatedAt: activation?.activatedAt ?? new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      status: "active",
+      lastPresentedTokenAlgorithm: presentedAlgorithm,
+    });
     touchBusinessSeat(previous.email);
     const devices = await listActivations(grant.licenseId);
     return {
@@ -402,6 +495,119 @@ export async function deactivateLicense(input: TokenInput): Promise<ServiceResul
   }
 
   return { ok: true, deactivated: true };
+}
+
+export type OrganisationAction = "invite" | "remove" | "reset_devices" | "change_seats";
+
+export type OrganisationServiceError = LicenseApiError | BusinessError;
+
+export type OrganisationServiceResult =
+  | { ok: true; organisation: BusinessOrganisationOverview }
+  | { ok: false; error: OrganisationServiceError };
+
+async function organisationActorFromToken(input: TokenInput): Promise<
+  | { ok: true; actor: { kind: "business_admin"; email: string; organisationId: string } }
+  | { ok: false; error: OrganisationServiceError }
+> {
+  const deviceId = input.deviceId?.trim() ?? "";
+  const licenseToken = input.licenseToken?.trim() ?? "";
+  if (!deviceId || !licenseToken) return { ok: false, error: "invalid_request" };
+
+  const previous = await decodeToken(licenseToken);
+  if (!previous) return { ok: false, error: "not_activated" };
+  if (previous.edition !== "business" && previous.edition !== "enterprise") {
+    return { ok: false, error: "forbidden" };
+  }
+  if (previous.memberRole !== "owner" && previous.memberRole !== "admin") {
+    return { ok: false, error: "forbidden" };
+  }
+  if (!previous.organisationId) return { ok: false, error: "not_found" };
+
+  const found =
+    (await findGrantByEmail(previous.email)) ??
+    (await findGrantByLicenseId(previous.licenseId));
+  if (!found) return { ok: false, error: "no_license" };
+  if (presentationRejected(found)) return { ok: false, error: "no_license" };
+  if (found.status === "revoked") return { ok: false, error: "revoked" };
+  if (found.status !== "active") return { ok: false, error: "expired" };
+
+  const activation = await findActivation(previous.licenseId, deviceId);
+  if (!activation || activation.status !== "active") {
+    return { ok: false, error: "not_activated" };
+  }
+
+  return {
+    ok: true,
+    actor: {
+      kind: "business_admin",
+      email: normalizeEmail(previous.email),
+      organisationId: previous.organisationId,
+    },
+  };
+}
+
+export async function organisationForLicense(input: TokenInput): Promise<OrganisationServiceResult> {
+  const session = await organisationActorFromToken(input);
+  if (!session.ok) return session;
+  const result = await organisationOverviewForActor(session.actor);
+  return result.ok ? result : { ok: false, error: result.error };
+}
+
+export async function manageOrganisation(
+  input: TokenInput & {
+    action: OrganisationAction;
+    seatId?: string;
+    email?: string;
+    role?: BusinessSeatRole;
+    seatCount?: number;
+  },
+): Promise<OrganisationServiceResult> {
+  const session = await organisationActorFromToken(input);
+  if (!session.ok) return session;
+
+  const organisationId = session.actor.organisationId;
+  const seatId = input.seatId?.trim() ?? "";
+  const email = input.email?.trim() ?? "";
+
+  if (input.action === "change_seats") {
+    const changed = await businessService.changeSeatQuantity(
+      session.actor,
+      organisationId,
+      Number(input.seatCount),
+      { source: "desktop", reason: "Organisation admin requested a seat change" },
+    );
+    if (!changed.ok) return { ok: false, error: changed.error };
+  } else if (input.action === "invite") {
+    const invited = businessService.inviteSeat(session.actor, organisationId, email, input.role ?? "member");
+    if (!invited.ok) return { ok: false, error: invited.error };
+  } else if (input.action === "remove") {
+    const listed = businessService.listSeats(session.actor, organisationId);
+    if (!listed.ok) return { ok: false, error: listed.error };
+    const target = listed.value.seats.find((item) => item.seatId === seatId);
+    if (target && normalizeEmail(target.email) === session.actor.email) {
+      return { ok: false, error: "invalid_request" };
+    }
+    const removed = businessService.removeSeat(session.actor, organisationId, seatId);
+    if (!removed.ok) return { ok: false, error: removed.error };
+  } else if (input.action === "reset_devices") {
+    const reset = await businessService.resetSeatDevices(session.actor, organisationId, seatId);
+    if (!reset.ok) return { ok: false, error: reset.error };
+  } else {
+    return { ok: false, error: "invalid_request" };
+  }
+
+  const overview = await organisationOverviewForActor(session.actor);
+  return overview.ok ? overview : { ok: false, error: overview.error };
+}
+
+export function organisationErrorStatus(error: OrganisationServiceError): number {
+  if (error === "forbidden") return 403;
+  if (error === "not_found" || error === "no_license") return 404;
+  if (error === "seat_limit" || error === "duplicate_email" || error === "seat_in_use" || error === "min_seats") {
+    return 409;
+  }
+  if (error === "stripe_unavailable" || error === "stripe_timeout") return 503;
+  return licenseErrorStatus(error as LicenseApiError);
 }
 
 export function licenseErrorStatus(error: LicenseApiError): number {

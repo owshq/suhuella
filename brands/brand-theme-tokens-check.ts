@@ -77,7 +77,7 @@ function run(): void {
   assert(dbasenetIdentity.theme.accent === dbasenet.theme.accent, "Dbasenet identity theme matches BrandConfig");
 
   const layout = readText("site/app/layout.tsx");
-  assert(layout.includes("brandCssVars"), "site layout injects theme variables");
+  assert(layout.includes("requestBrandCssVars"), "site layout injects theme variables");
 
   const language = readText("site/components/LanguageSwitcher.tsx");
   assert(language.includes("--nav-active-bg"), "language toggle uses nav-active-bg");

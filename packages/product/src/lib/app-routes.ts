@@ -3,7 +3,7 @@ export type AppSection = 'search' | 'home' | 'organise' | 'locations' | 'activit
 export const PRODUCT_PATHS = {
   home: '/home',
   search: '/search',
-  organise: '/organise',
+  organise: '/plan-mode',
   locations: '/sources',
   activity: '/activity',
   settings: '/settings',
@@ -12,7 +12,7 @@ export const PRODUCT_PATHS = {
 const PATH_TO_SECTION: Record<string, AppSection> = {
   '/home': 'home',
   '/search': 'search',
-  '/organise': 'organise',
+  '/plan-mode': 'organise',
   '/sources': 'locations',
   '/activity': 'activity',
   '/settings': 'settings',

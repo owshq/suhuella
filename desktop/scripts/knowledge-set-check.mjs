@@ -16,12 +16,20 @@ await esbuild.build({
   logLevel: 'silent',
   alias: {
     '@suhuella/brand': path.join(desktopRoot, '../brands/index.ts'), // catalog OK for Node checks
+    '@suhuella/product': path.join(desktopRoot, '../packages/product/src'),
   },
 })
 
-const child = spawn(process.execPath, ['dist-electron/knowledge-set-check.cjs'], {
-  stdio: 'inherit',
-})
+const electronMock = path.join(desktopRoot, 'electron/test-electron-mock.cjs')
+
+const child = spawn(
+  process.execPath,
+  ['-r', electronMock, 'dist-electron/knowledge-set-check.cjs'],
+  {
+    stdio: 'inherit',
+    cwd: desktopRoot,
+  },
+)
 
 child.on('exit', (code) => {
   process.exit(code ?? 1)

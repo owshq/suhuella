@@ -5,6 +5,7 @@ import { brandBuildDir, desktopRoot, selectedBrandEntry } from './brand-build.mj
 const brandEntry = selectedBrandEntry()
 const outDir = path.join(brandBuildDir(), 'dist-electron')
 const buildVersion = process.env.SUHUELLA_BUILD ?? 'local'
+const licenseVerifyPublicKeys = process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim() ?? ''
 
 const shared = {
   bundle: true,
@@ -19,6 +20,10 @@ const shared = {
   },
   define: {
     __SUHUELLA_BUILD__: JSON.stringify(buildVersion),
+    'process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS': JSON.stringify(licenseVerifyPublicKeys),
+    'process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEY': JSON.stringify(
+      licenseVerifyPublicKeys.split(',')[0]?.trim() ?? '',
+    ),
   },
 }
 

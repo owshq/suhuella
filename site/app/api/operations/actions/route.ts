@@ -38,13 +38,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const [snapshot, release] = await Promise.all([
+    const [result, release] = await Promise.all([
       performOperationsAction(auth.actor, action),
       getReleaseManifest(),
     ]);
 
     return Response.json(
-      { ok: true, snapshot, release },
+      {
+        ok: true,
+        snapshot: result.snapshot,
+        release,
+        ...(result.notice ? { notice: result.notice } : {}),
+      },
       { status: 200, headers: operationsAuthHeaders() },
     );
   } catch (error) {

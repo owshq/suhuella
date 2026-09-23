@@ -9,11 +9,17 @@
     },
     "mac": {
       "available": true,
-      "url": "https://download.suhuella.com/latest/mac"
+      "url": "https://download.suhuella.com/latest/mac",
+      "sha256": "2db738fe4f11f9c3983274080c0b3dc9c9cdf7340560cb46a3a9ea0849003c4d",
+      "filename": "SuHuella-0.1.0-pre-rc.dmg",
+      "size": 131533425
     },
     "windows": {
       "available": true,
-      "url": "https://download.suhuella.com/latest/win"
+      "url": "https://download.suhuella.com/latest/win",
+      "sha256": "5b0d1ba2aab4b48f817ea87fb8e58193dc21b09e55aabc66bf3e6bcac4ba234b",
+      "filename": "SuHuella-Setup-0.1.0-pre-rc.exe",
+      "size": 226177159
     }
   },
   "minimumVersion": "0.1.0-pre-rc",

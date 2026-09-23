@@ -1,23 +1,27 @@
-import type { ActivityRun } from "../../types";
+import type { ActivityRun, SavedPlan, SavedPlanDraft } from "../../types";
+import {
+  buildSourceActivityRun,
+  nextActivityRunNumber,
+} from "../../lib/activity-general-events.ts";
+import { duplicateSavedPlan, parseSavedPlan, planFromDraft } from "../../lib/saved-plan.ts";
+import {
+  resolveSourceDisplayName,
+  sourceNameNeedsRecovery,
+  usableSourceFolderName,
+} from "../../lib/source-display-name.ts";
 import {
   commitSourceBeforeScan,
   connectTrace,
-  humanFolderName,
   mergeLiveSources,
   pendingBrowserSource,
+  UNKNOWN_SOURCE_NAME,
 } from "./connect-source";
-import {
-  directoryAvailable,
-  ensurePermission,
-  loadHandle,
-  persistHandle,
-  queryPermission,
-  removeHandle,
-  requestLocalFolder,
-  scanDirectory,
-  scanFileList,
-  type WellKnownDirectory,
-} from "./fs";
+import type { SourcePermissionState } from "../../lib/source-handle.ts";
+import { recordHealthObservation, type SourceAvailabilityReason } from "../../lib/source-health.ts";
+import { sourceAccessState } from "../../lib/source-host-vocabulary.ts";
+import { availabilityReasonForStatus } from "../handle-lifecycle-bridge.ts";
+import { browserHandles } from "./handle-registry.ts";
+import { requestLocalFolder, scanDirectory, scanFileList, type WellKnownDirectory } from "./fs";
 import {
   DEV_DEMO_DISPLAY_NAME,
   DEV_DEMO_HINT,
@@ -38,6 +42,91 @@ import type {
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+type SourceProbeOutcome = {
+  status: WebSourceStatus;
+  availabilityReason: SourceAvailabilityReason | null;
+  permission: SourcePermissionState;
+};
+
+function applySourceHealth(
+  source: WebKnowledgeSource,
+  probe: SourceProbeOutcome,
+  name = source.name,
+  now = new Date().toISOString(),
+): WebKnowledgeSource {
+  const statusChanged = source.status !== probe.status;
+  const accessState = sourceAccessState(probe.status);
+  const health = recordHealthObservation(
+    {
+      lastIndexedAt: source.lastIndexed,
+      lastCheckedAt: source.lastCheckedAt ?? null,
+      lastStateChangeAt: source.lastStateChangeAt ?? null,
+      availabilityReason: source.availabilityReason ?? null,
+    },
+    {
+      at: now,
+      statusChanged,
+      availabilityReason:
+        probe.availabilityReason ?? availabilityReasonForStatus(accessState, source.availabilityReason),
+      stateChangeFallback: source.lastIndexed,
+    },
+  );
+  return {
+    ...source,
+    status: probe.status,
+    name,
+    lastCheckedAt: health.lastCheckedAt,
+    lastStateChangeAt: health.lastStateChangeAt,
+    availabilityReason: health.availabilityReason,
+    permission: probe.permission,
+  };
+}
+
+async function appendGeneralActivityRun(run: ActivityRun): Promise<void> {
+  await recordActivityRun(run);
+}
+
+async function recordSourceConnected(sourceName: string): Promise<void> {
+  const runs = await listActivityRuns();
+  await appendGeneralActivityRun(
+    buildSourceActivityRun({
+      kind: "connected",
+      sourceName,
+      toStatus: "ready",
+      runNumber: nextActivityRunNumber(runs),
+    }),
+  );
+}
+
+async function recordSourceRemoved(sourceName: string): Promise<void> {
+  const runs = await listActivityRuns();
+  await appendGeneralActivityRun(
+    buildSourceActivityRun({
+      kind: "removed",
+      sourceName,
+      runNumber: nextActivityRunNumber(runs),
+    }),
+  );
+}
+
+async function recordSourceTransition(
+  previousStatus: WebSourceStatus | undefined,
+  nextStatus: WebSourceStatus,
+  sourceName: string,
+): Promise<void> {
+  if (previousStatus === nextStatus) return;
+  const runs = await listActivityRuns();
+  await appendGeneralActivityRun(
+    buildSourceActivityRun({
+      kind: "transition",
+      sourceName,
+      fromStatus: previousStatus ?? null,
+      toStatus: nextStatus,
+      runNumber: nextActivityRunNumber(runs),
+    }),
+  );
 }
 
 const grantedThisSession = new Set<string>();
@@ -80,14 +169,9 @@ export function onBrowserSourcesChanged(listener: (sources: WebKnowledgeSource[]
 }
 
 async function rememberGrantedHandle(sourceId: string, handle: FileSystemDirectoryHandle): Promise<"persistent" | "limited"> {
-  try {
-    await persistHandle(sourceId, handle);
-    grantedThisSession.add(sourceId);
-    return "persistent";
-  } catch {
-    grantedThisSession.add(sourceId);
-    return "limited";
-  }
+  const access = await browserHandles.bind(sourceId, handle);
+  grantedThisSession.add(sourceId);
+  return access;
 }
 
 export async function listSources(): Promise<WebKnowledgeSource[]> {
@@ -135,33 +219,85 @@ export async function listWorkflows(): Promise<WebWorkflow[]> {
   return idbGetAll<WebWorkflow>(STORE.workflows);
 }
 
-export async function probeSourceStatus(sourceId: string): Promise<WebSourceStatus> {
+export async function listSavedPlans(): Promise<SavedPlan[]> {
+  const plans = await idbGetAll<unknown>(STORE.plans);
+  return plans.map(parseSavedPlan).filter((plan): plan is SavedPlan => plan !== null);
+}
+
+export async function saveSavedPlanRecord(draft: SavedPlanDraft): Promise<SavedPlan | null> {
+  const existing = draft.id ? parseSavedPlan(await idbGet<unknown>(STORE.plans, draft.id)) : null;
+  const next = planFromDraft(draft, new Date().toISOString(), existing);
+  if ("code" in next) return null;
+  await idbSet(STORE.plans, next.id, next);
+  return next;
+}
+
+export async function deleteSavedPlanRecord(id: string): Promise<void> {
+  await idbDelete(STORE.plans, id);
+}
+
+export async function duplicateSavedPlanRecord(id: string): Promise<SavedPlan | null> {
+  const current = parseSavedPlan(await idbGet<unknown>(STORE.plans, id));
+  if (!current) return null;
+  const copy = duplicateSavedPlan(current, new Date().toISOString());
+  await idbSet(STORE.plans, copy.id, copy);
+  return copy;
+}
+
+async function probeSource(sourceId: string): Promise<SourceProbeOutcome> {
   const source = await idbGet<WebKnowledgeSource>(STORE.sources, sourceId);
-  if (source?.access === "limited") return "ready";
-  if (grantedThisSession.has(sourceId)) return "ready";
-
-  const handle = await loadHandle(sourceId);
-  if (!handle) return source ? "unavailable" : "unavailable";
-
-  const read = await queryPermission(handle, "read");
-  if (read === "granted") {
-    grantedThisSession.add(sourceId);
-    return (await directoryAvailable(handle)) ? "ready" : "unavailable";
+  if (source?.access === "limited") {
+    return { status: "ready", availabilityReason: null, permission: "granted" };
   }
-  return "needs_permission";
+  if (grantedThisSession.has(sourceId)) {
+    return { status: "ready", availabilityReason: null, permission: "granted" };
+  }
+
+  const probe = await browserHandles.probe(sourceId);
+  if (!probe) {
+    return { status: "missing", availabilityReason: "folder_moved", permission: "unknown" };
+  }
+  if (probe.status === "ready") grantedThisSession.add(sourceId);
+  return probe;
+}
+
+export async function probeSourceStatus(sourceId: string): Promise<WebSourceStatus> {
+  return (await probeSource(sourceId)).status;
+}
+
+async function recoverStoredSourceName(sourceId: string): Promise<string | null> {
+  const handle = await browserHandles.grant(sourceId);
+  const fromHandle = usableSourceFolderName(handle?.name);
+  if (fromHandle) return fromHandle;
+
+  const folders = await listFolders();
+  const root = folders.find(
+    (folder) => folder.sourceId === sourceId && (folder.relativePath === "." || folder.relativePath === ""),
+  );
+  if (root) {
+    const fromIndex = usableSourceFolderName(root.folderName || root.name);
+    if (fromIndex) return fromIndex;
+  }
+  return null;
 }
 
 export async function reconcileSources(): Promise<WebKnowledgeSource[]> {
   const sources = await listSources();
   for (const source of sources) {
     if (removedSourceIds.has(source.id) || source.status === "indexing") continue;
-    const status = await probeSourceStatus(source.id);
+    const probe = await probeSource(source.id);
     const live = memorySources?.find((item) => item.id === source.id);
     if (!live || removedSourceIds.has(source.id) || live.status === "indexing") continue;
-    if (status === live.status) continue;
-    const updated = { ...live, status };
+    let nextName = live.name;
+    if (sourceNameNeedsRecovery(live.name)) {
+      const recovered = await recoverStoredSourceName(source.id);
+      nextName = recovered ?? UNKNOWN_SOURCE_NAME;
+    }
+    const previousStatus = live.status;
+    const updated = applySourceHealth(live, probe, nextName);
     rememberSource(updated);
     await idbSet(STORE.sources, source.id, updated);
+    await recordSourceTransition(previousStatus, probe.status, updated.name);
   }
   return listSources();
 }
@@ -177,8 +313,15 @@ async function finishSourceIndex(
     memorySources?.find((source) => source.id === id) ?? (await idbGet<WebKnowledgeSource>(STORE.sources, id));
   if (!existing || removedSourceIds.has(id)) return;
   try {
+    const opened = await browserHandles.open(id);
+    if (opened && opened.status !== "ready") {
+      throw new Error("source_handle_not_open");
+    }
+    // Future migration: scanDirectory() will become provider-independent
+    // (SyncEngine → Handle.open() → Indexer). No functional change required now.
     const scanned = await scanDirectory(handle, id);
-    const displayName = humanFolderName(handle.name, humanFolderName(existing.name, "Folder"));
+    const displayName = resolveSourceDisplayName(handle.name, existing.name);
+    const now = new Date().toISOString();
     const source: WebKnowledgeSource = {
       ...existing,
       ...scanned.source,
@@ -187,6 +330,11 @@ async function finishSourceIndex(
       status: "ready",
       access,
       wellKnownToken: existing.wellKnownToken,
+      lastIndexed: now,
+      lastCheckedAt: now,
+      availabilityReason: null,
+      permission: "granted",
+      lastStateChangeAt: existing.status === "ready" ? existing.lastStateChangeAt ?? now : now,
     };
     if (removedSourceIds.has(id)) return;
     rememberSource(source);
@@ -202,14 +350,17 @@ async function finishSourceIndex(
     notifySourcesChanged();
   } catch (error) {
     if (removedSourceIds.has(id)) return;
-    const kept: WebKnowledgeSource = {
-      ...existing,
-      status: "unavailable",
-      lastIndexed: existing.lastIndexed,
-    };
+    const now = new Date().toISOString();
+    const previousStatus = existing.status;
+    const kept = applySourceHealth(existing, {
+      status: "error",
+      availabilityReason: "scan_failed",
+      permission: existing.permission ?? "unknown",
+    }, existing.name, now);
     rememberSource(kept);
     if (removedSourceIds.has(id)) return;
     await idbSet(STORE.sources, id, kept);
+    await recordSourceTransition(previousStatus, kept.status, kept.name);
     connectTrace("scan_failed", {
       id,
       error: error instanceof Error ? error.message : "scan_failed",
@@ -229,6 +380,7 @@ export async function connectDemoSource(): Promise<WebKnowledgeSource> {
   reclaimSource(id);
   const files = demoFileDescriptors(id);
   const folders = demoFolderDescriptors(id);
+  const now = new Date().toISOString();
   const source: WebKnowledgeSource = {
     id,
     kind: "local",
@@ -237,10 +389,14 @@ export async function connectDemoSource(): Promise<WebKnowledgeSource> {
     fileCount: files.length,
     folderCount: folders.length,
     bytes: files.reduce((sum, file) => sum + file.size, 0),
-    lastIndexed: new Date().toISOString(),
+    lastIndexed: now,
+    lastCheckedAt: now,
+    lastStateChangeAt: now,
     status: "ready",
     access: "limited",
     wellKnownToken: DEV_DEMO_HINT,
+    availabilityReason: null,
+    permission: "granted",
   };
   rememberSource(source);
   await idbSet(STORE.sources, id, source);
@@ -260,7 +416,7 @@ export async function addSourceFromHandle(
   const access = await rememberGrantedHandle(id, handle);
   const pending = pendingBrowserSource({
     id,
-    name: humanFolderName(handle.name, "Folder"),
+    name: resolveSourceDisplayName(handle.name),
     access,
     wellKnownToken,
   });
@@ -275,6 +431,7 @@ export async function addSourceFromHandle(
     },
   });
   notifySourcesChanged();
+  await recordSourceConnected(committed.name);
   return committed;
 }
 
@@ -284,8 +441,10 @@ export async function addSourceFromFiles(files: File[]): Promise<WebKnowledgeSou
   }
   const id = createId("src");
   reclaimSource(id);
-  const name =
-    files[0]?.webkitRelativePath?.split(/[/\\]/).filter(Boolean)[0] || files[0]?.name || "Folder";
+  const name = resolveSourceDisplayName(
+    files[0]?.webkitRelativePath?.split(/[/\\]/).filter(Boolean)[0],
+    files[0]?.name,
+  );
   connectTrace("source_id_created", { id, name, kind: "files" });
   const pending = pendingBrowserSource({ id, name, access: "limited" });
   const committed = await commitSourceBeforeScan({
@@ -299,13 +458,19 @@ export async function addSourceFromFiles(files: File[]): Promise<WebKnowledgeSou
         .then(() => {
           if (removedSourceIds.has(source.id)) return;
           const scanned = scanFileList(files, source.id);
+          const now = new Date().toISOString();
           const next: WebKnowledgeSource = {
             ...source,
             ...scanned.source,
             id: source.id,
-            name: humanFolderName(scanned.source.name, source.name),
+            name: resolveSourceDisplayName(scanned.source.name, source.name),
             status: "ready",
             access: "limited",
+            lastIndexed: now,
+            lastCheckedAt: now,
+            availabilityReason: null,
+            permission: "granted",
+            lastStateChangeAt: now,
           };
           rememberSource(next);
           if (removedSourceIds.has(source.id)) return;
@@ -320,10 +485,16 @@ export async function addSourceFromFiles(files: File[]): Promise<WebKnowledgeSou
         })
         .catch(async (error) => {
           if (removedSourceIds.has(source.id)) return;
-          const kept: WebKnowledgeSource = { ...pending, status: "unavailable" };
+          const now = new Date().toISOString();
+          const kept = applySourceHealth(pending, {
+            status: "error",
+            availabilityReason: "scan_failed",
+            permission: "unknown",
+          }, pending.name, now);
           rememberSource(kept);
           if (removedSourceIds.has(source.id)) return;
           await idbSet(STORE.sources, source.id, kept);
+          await recordSourceTransition(pending.status, kept.status, kept.name);
           connectTrace("scan_failed", {
             id: source.id,
             error: error instanceof Error ? error.message : "scan_failed",
@@ -333,6 +504,7 @@ export async function addSourceFromFiles(files: File[]): Promise<WebKnowledgeSou
     },
   });
   notifySourcesChanged();
+  await recordSourceConnected(committed.name);
   return committed;
 }
 
@@ -376,23 +548,48 @@ async function replaceSourceKnowledge(
   await Promise.all(files.map((file) => idbSet(STORE.files, file.id, file)));
 }
 
+/**
+ * Restore or re-probe access for an existing Source.
+ * Invariant: always mutates the Source keyed by sourceId — never mints a new id.
+ * A new Handle may be bound later; identity, index keys and Activity history stay on sourceId.
+ */
 export async function restoreSourceAccess(sourceId: string): Promise<WebKnowledgeSource | null> {
   const source = await idbGet<WebKnowledgeSource>(STORE.sources, sourceId);
   if (!source) return null;
   if (source.access === "limited") {
-    const ready = { ...source, status: "ready" as const };
+    const previousStatus = source.status;
+    const ready = applySourceHealth(source, {
+      status: "ready",
+      availabilityReason: null,
+      permission: "granted",
+    });
+    rememberSource(ready);
     await idbSet(STORE.sources, sourceId, ready);
+    await recordSourceTransition(previousStatus, ready.status, ready.name);
+    notifySourcesChanged();
     return ready;
   }
-  const handle = await loadHandle(sourceId);
-  if (!handle) {
-    const missing = { ...source, status: "unavailable" as const };
+  const access = await browserHandles.requestAccess(sourceId);
+  if (!access) {
+    const previousStatus = source.status;
+    const missing = applySourceHealth(source, {
+      status: "missing",
+      availabilityReason: "folder_moved",
+      permission: "unknown",
+    });
+    rememberSource(missing);
     await idbSet(STORE.sources, sourceId, missing);
+    await recordSourceTransition(previousStatus, missing.status, missing.name);
+    notifySourcesChanged();
     return missing;
   }
-  if (!(await ensurePermission(handle, "read"))) {
-    const blocked = { ...source, status: "needs_permission" as const };
+  if (access.status !== "ready") {
+    const previousStatus = source.status;
+    const blocked = applySourceHealth(source, access);
+    rememberSource(blocked);
     await idbSet(STORE.sources, sourceId, blocked);
+    await recordSourceTransition(previousStatus, blocked.status, blocked.name);
+    notifySourcesChanged();
     return blocked;
   }
   grantedThisSession.add(sourceId);
@@ -403,43 +600,89 @@ export async function refreshSource(sourceId: string): Promise<WebKnowledgeSourc
   const source = await idbGet<WebKnowledgeSource>(STORE.sources, sourceId);
   if (!source) return null;
   if (source.access === "limited") {
-    const limited = { ...source, status: "ready" as const };
+    const limited = applySourceHealth(source, {
+      status: "ready",
+      availabilityReason: null,
+      permission: "granted",
+    });
+    rememberSource(limited);
     await idbSet(STORE.sources, sourceId, limited);
     return limited;
   }
-  const handle = await loadHandle(sourceId);
+  const access = await browserHandles.requestAccess(sourceId);
+  if (!access || access.status !== "ready") {
+    const previousStatus = source.status;
+    const next = applySourceHealth(
+      source,
+      access ?? { status: "missing", availabilityReason: "folder_moved", permission: "unknown" },
+    );
+    rememberSource(next);
+    await idbSet(STORE.sources, sourceId, next);
+    await recordSourceTransition(previousStatus, next.status, next.name);
+    notifySourcesChanged();
+    return next;
+  }
+  const handle = await browserHandles.grant(sourceId);
   if (!handle) {
-    const missing = { ...source, status: "unavailable" as const };
+    const previousStatus = source.status;
+    const missing = applySourceHealth(source, {
+      status: "missing",
+      availabilityReason: "folder_moved",
+      permission: "unknown",
+    });
+    rememberSource(missing);
     await idbSet(STORE.sources, sourceId, missing);
-    return missing;
-  }
-  if (!(await ensurePermission(handle, "read"))) {
-    const blocked = { ...source, status: "needs_permission" as const };
-    await idbSet(STORE.sources, sourceId, blocked);
-    return blocked;
-  }
-  if (!(await directoryAvailable(handle))) {
-    const missing = { ...source, status: "unavailable" as const };
-    await idbSet(STORE.sources, sourceId, missing);
+    await recordSourceTransition(previousStatus, missing.status, missing.name);
+    notifySourcesChanged();
     return missing;
   }
   grantedThisSession.add(sourceId);
-  const scanning = { ...source, status: "indexing" as const };
+  const previousStatus = source.status;
+  const scanning = applySourceHealth(source, {
+    status: "indexing",
+    availabilityReason: null,
+    permission: "granted",
+  });
+  rememberSource(scanning);
   await idbSet(STORE.sources, sourceId, scanning);
+  notifySourcesChanged();
   try {
+    const opened = await browserHandles.open(sourceId);
+    if (opened && opened.status !== "ready") {
+      throw new Error("source_handle_not_open");
+    }
+    // Future migration: scanDirectory() will become provider-independent
+    // (SyncEngine → Handle.open() → Indexer). No functional change required now.
     const scanned = await scanDirectory(handle, sourceId);
+    const now = new Date().toISOString();
     const next: WebKnowledgeSource = {
       ...source,
       ...scanned.source,
+      name: resolveSourceDisplayName(handle.name, source.name),
       status: "ready",
       access: "persistent",
+      lastIndexed: now,
+      lastCheckedAt: now,
+      availabilityReason: null,
+      permission: "granted",
+      lastStateChangeAt: source.status === "ready" ? source.lastStateChangeAt ?? now : now,
     };
+    rememberSource(next);
     await idbSet(STORE.sources, sourceId, next);
     await replaceSourceKnowledge(sourceId, scanned.folders, scanned.files);
+    await recordSourceTransition(previousStatus, next.status, next.name);
+    notifySourcesChanged();
     return next;
   } catch {
-    const failed = { ...source, status: "unavailable" as const };
+    const failed = applySourceHealth(source, {
+      status: "error",
+      availabilityReason: "scan_failed",
+      permission: source.permission ?? "granted",
+    });
+    rememberSource(failed);
     await idbSet(STORE.sources, sourceId, failed);
+    await recordSourceTransition(previousStatus, failed.status, failed.name);
+    notifySourcesChanged();
     return failed;
   }
 }
@@ -451,13 +694,17 @@ export async function refreshSource(sourceId: string): Promise<WebKnowledgeSourc
  * local-knowledge clear.
  */
 export async function removeSource(sourceId: string): Promise<void> {
+  const existing =
+    memorySources?.find((source) => source.id === sourceId) ??
+    (await idbGet<WebKnowledgeSource>(STORE.sources, sourceId));
+  if (existing) await recordSourceRemoved(existing.name);
   grantedThisSession.delete(sourceId);
   forgetSource(sourceId);
   if (memoryFiles) memoryFiles = memoryFiles.filter((file) => !file.id.startsWith(`${sourceId}:`));
   if (memoryFolders) memoryFolders = memoryFolders.filter((folder) => !folder.id.startsWith(`${sourceId}:`));
   notifySourcesChanged();
   await idbDelete(STORE.sources, sourceId);
-  await removeHandle(sourceId);
+  await browserHandles.unbind(sourceId);
   const folderKeys = await idbKeys(STORE.folders);
   const fileKeys = await idbKeys(STORE.files);
   await Promise.all(
@@ -474,6 +721,7 @@ export async function recordActivity(run: WebActivityRun): Promise<void> {
 
 export async function listActivityRuns(): Promise<ActivityRun[]> {
   const runs = await idbGetAll<ActivityRun | WebActivityRun>(STORE.activity);
+  const seenRunIds = new Set<string>();
   return runs
     .map((run) => {
       if ("runId" in run && run.runId) return run;
@@ -503,6 +751,11 @@ export async function listActivityRuns(): Promise<ActivityRun[]> {
       } satisfies ActivityRun;
     })
     .sort((left, right) => right.completedAt.localeCompare(left.completedAt))
+    .filter((run) => {
+      if (seenRunIds.has(run.runId)) return false
+      seenRunIds.add(run.runId)
+      return true
+    })
     .slice(0, 500);
 }
 
@@ -541,12 +794,14 @@ export async function clearLocalKnowledge(): Promise<void> {
   memoryFiles = [];
   memoryFolders = [];
   notifySourcesChanged();
+  await browserHandles.dispose();
   await Promise.all([
     idbClear(STORE.sources),
     idbClear(STORE.folders),
     idbClear(STORE.files),
     idbClear(STORE.activity),
     idbClear(STORE.workflows),
+    idbClear(STORE.plans),
     idbClear(STORE.handles),
   ]);
 }
