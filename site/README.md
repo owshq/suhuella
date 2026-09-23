@@ -233,7 +233,7 @@ cd desktop && npm run build
 npm run test:license-build-inlining --prefix desktop
 ```
 
-`package:check` / production `npm run build` in `desktop/` require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS` unless `SUHUELLA_DESKTOP_CI=1` (CI smoke only).
+`package:check` / publishable `npm run build` in `desktop/` require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS`. Compile-only smoke may use `SUHUELLA_DESKTOP_COMPILE_ONLY=1` (not publishable). `SUHUELLA_DESKTOP_CI=1` skips only the site version matrix in the release gate.
 
 `RESEND_FROM` is already in `wrangler.jsonc`. Do not deploy and claim email ready until `suhuella.com` is verified in the Operator Resend account. Copy DNS records from the Resend dashboard exactly (Cloudflare CNAME records must be DNS-only). Do not invent record values.
 

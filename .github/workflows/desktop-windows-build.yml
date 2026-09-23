@@ -15,7 +15,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     env:
+      # Skips site/wrangler version matrix in brands/run-release-gate only — not a publish bypass.
       SUHUELLA_DESKTOP_CI: "1"
+      SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS: ${{ secrets.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS }}
     steps:
       - uses: actions/checkout@v4
         with:

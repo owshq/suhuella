@@ -12,6 +12,28 @@ export type ReleaseDownloadTarget = {
   size?: number;
 };
 
+export type ReleaseMacCodeSigning = {
+  app: string;
+  dmg: string;
+  developerId: boolean;
+  notarized: boolean;
+  stapled: boolean;
+};
+
+export type ReleaseWindowsCodeSigning = {
+  authenticode: string;
+};
+
+export type ReleaseDistribution = {
+  channel: string;
+  commercialCodeSigning: {
+    mac: ReleaseMacCodeSigning;
+    windows: ReleaseWindowsCodeSigning;
+    cleanMachineInstallVerified: boolean;
+  };
+  decision?: string;
+};
+
 export type ReleaseArchiveEntry = {
   version: string;
   channel: ReleaseChannel;
@@ -30,6 +52,7 @@ export type ReleaseArchiveEntry = {
 
 export type ReleaseManifest = ReleaseArchiveEntry & {
   archive?: ReleaseArchiveEntry[];
+  distribution?: ReleaseDistribution;
 };
 
 function downloadTarget(
@@ -110,6 +133,62 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
   if (windows && !isValidHttpsUrl(windows)) return null;
   if (mac && !isValidHttpsUrl(mac)) return null;
 
+  const distributionRaw =
+    record.distribution && typeof record.distribution === "object"
+      ? (record.distribution as Record<string, unknown>)
+      : null;
+  const signingRaw =
+    distributionRaw?.commercialCodeSigning &&
+    typeof distributionRaw.commercialCodeSigning === "object"
+      ? (distributionRaw.commercialCodeSigning as Record<string, unknown>)
+      : null;
+  const macRaw =
+    signingRaw?.mac && typeof signingRaw.mac === "object"
+      ? (signingRaw.mac as Record<string, unknown>)
+      : null;
+  const windowsRaw =
+    signingRaw?.windows && typeof signingRaw.windows === "object"
+      ? (signingRaw.windows as Record<string, unknown>)
+      : null;
+  const distribution =
+    distributionRaw && signingRaw && typeof distributionRaw.channel === "string"
+      ? {
+          channel: distributionRaw.channel.trim(),
+          commercialCodeSigning: {
+            mac: macRaw
+              ? {
+                  app: typeof macRaw.app === "string" ? macRaw.app.trim() : "unknown",
+                  dmg: typeof macRaw.dmg === "string" ? macRaw.dmg.trim() : "unknown",
+                  developerId: macRaw.developerId === true,
+                  notarized: macRaw.notarized === true,
+                  stapled: macRaw.stapled === true,
+                }
+              : {
+                  app: typeof signingRaw.mac === "string" ? signingRaw.mac.trim() : "unknown",
+                  dmg: "unknown",
+                  developerId: false,
+                  notarized: signingRaw.notarized === true,
+                  stapled: false,
+                },
+            windows: windowsRaw
+              ? {
+                  authenticode:
+                    typeof windowsRaw.authenticode === "string"
+                      ? windowsRaw.authenticode.trim()
+                      : "unknown",
+                }
+              : {
+                  authenticode:
+                    typeof signingRaw.windows === "string" ? signingRaw.windows.trim() : "unknown",
+                },
+            cleanMachineInstallVerified: signingRaw.cleanMachineInstallVerified === true,
+          },
+          ...(typeof distributionRaw.decision === "string" && distributionRaw.decision.trim()
+            ? { decision: distributionRaw.decision.trim() }
+            : {}),
+        }
+      : undefined;
+
   const base: ReleaseManifest = {
     version,
     channel: record.channel === "beta" ? "beta" : "stable",
@@ -120,6 +199,7 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
     downloads,
     windows,
     mac,
+    ...(distribution ? { distribution } : {}),
   };
 
   const archiveRaw = Array.isArray(record.archive) ? record.archive : [];

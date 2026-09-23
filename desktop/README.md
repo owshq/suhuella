@@ -264,17 +264,32 @@ From repo root: `npm run desktop` · stop stuck session: `npm run desktop:stop`.
 
 Version **0.1.0-pre-rc** (`package.json`). Public version until tagged **0.1.0-rc1**.
 
-### Packaging
+### Packaging (pre-rc unsigned channel)
 
-Unsigned installers. SmartScreen / Gatekeeper will warn.
+Commercial code signing (Developer ID + notarization / Authenticode) is **deferred** — see `brands/suhuella/commercial-signing.json`. Pre-rc ships **adhoc-signed Mac** / **unsigned Windows** installers for technical testing (not Developer ID / not notarized / no Authenticode). Windows and macOS may warn or block depending on machine policy; document the install path (Right-click → Open / More info → Run anyway). **Do not** ask users to disable security globally.
+
+**License verification is separate:** publishable builds still require Ed25519 **public keys** at compile time. `LICENSE_SIGNING_PUBLIC_KEYS` (Worker) and `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS` (desktop) share the same format: comma-separated **Ed25519 SPKI DER, base64url** (no PEM). Validate with `node desktop/scripts/license-verify-public-keys-cli.mjs --require-desktop`.
 
 ```bash
-npm run package:check
-npm run package:mac    # macOS → SuHuella-0.1.0-pre-rc.dmg
-npm run package:win      # Windows only → SuHuella-Setup-0.1.0-pre-rc.exe
+export SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS="<SPKI base64url — same value as LICENSE_SIGNING_PUBLIC_KEYS>"
+npm run package:check --prefix desktop
+npm run package:mac --prefix desktop    # macOS → SuHuella-0.1.0-pre-rc.dmg
+npm run package:win --prefix desktop      # Windows only → SuHuella-0.1.0-pre-rc.exe
+npm run validate-release -- --platform mac   # integrity + license embed (pre-rc)
+npm run publish:desktop-mac                  # from repo root
 ```
 
-Upload artifacts to R2 per [../site/README.md](../site/README.md). `dist/`, `dist-electron/`, `release/` are gitignored.
+Compile-only CI smoke (no keys, not publishable):
+
+```bash
+SUHUELLA_DESKTOP_COMPILE_ONLY=1 npm run build --prefix desktop
+```
+
+`SUHUELLA_DESKTOP_CI=1` skips only the site version matrix in the release gate — **not** license keys or publish checks.
+
+Clean-machine install is **not** verified until tested on a fresh Mac/PC. `release.json` `distribution` records unsigned status honestly.
+
+Upload flow: [../RELEASE-PUBLISH-PIPELINE-001.md](../RELEASE-PUBLISH-PIPELINE-001.md). `dist/`, `dist-electron/`, `release/` are gitignored.
 
 ## Performance (implementation notes)
 

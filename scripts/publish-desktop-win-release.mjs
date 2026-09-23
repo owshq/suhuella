@@ -11,7 +11,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchRemoteSha256 } from "./release-artifact-sha256.mjs";
 import { runBuildHealthGate } from "./build-health.mjs";
-import { assertCommercialSigningEnabledForPublish } from "./commercial-signing.mjs";
+import {
+  assertCommercialSigningEnabledForPublish,
+  stampDistributionMetadata,
+} from "./commercial-signing.mjs";
 
 runBuildHealthGate();
 
@@ -81,6 +84,7 @@ async function releaseAssets() {
 }
 
 function updateReleaseManifest({ winSha256, winSize, winName }) {
+  stampDistributionMetadata(manifest, version);
   manifest.downloads ??= {};
   manifest.downloads.windows = {
     available: true,

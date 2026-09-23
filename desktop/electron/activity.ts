@@ -7,7 +7,6 @@ import {
   buildSourceActivityRun,
 } from '@suhuella/product/lib/activity-general-events.ts'
 import { summarizeActivity, summarizeActivityProgress } from '@suhuella/product/lib/activity-summary.ts'
-import { runActivityWhenChecks } from '@suhuella/product/lib/activity-when-check.ts'
 import { estimateTimeSaved } from '@suhuella/product/lib/time-saved.ts'
 import type {
   ActivityRun,
@@ -286,7 +285,6 @@ export function runActivityChecks(): void {
     assert(progress?.todayMoved === 1, 'today counts real moves')
     assert(progress.todayUndoExpiresInDays === null, 'moves without undo stay without an expiry')
     assert(progress.estimatedTimeSaved === null, 'one move is not enough for an estimate')
-    runActivityWhenChecks()
 
     const stale = persistOrganisationActivity(
       root,

@@ -68,7 +68,9 @@ Commercial signing is an external prerequisite for **promotion** to `0.1.0-rc1` 
 
 It is not a product blocker. It is not a release-engineering blocker. It does not block building, uploading, downloading, or testing `0.1.0-pre-rc`.
 
-`validate-release` stays **SKIPPED** (not FAIL) while `commercial-signing.json` status is `deferred`. That skip means “not attempting a trusted external release”. It does not mean “do not publish the pre-rc artifacts”.
+While `commercial-signing.json` status is `deferred`, **Gate 6** (Developer ID + notarization / Authenticode) is **not attempted**. `validate-release` runs **PreRcReleaseValidation** instead: artifact built, bundle integrity, SHA256 sidecar, and **Ed25519 license public keys embedded** at build time. That is not clean-machine install verification. OS warnings remain possible.
+
+`SUHUELLA_DESKTOP_CI=1` skips only the site/wrangler version matrix in the release gate — it is **not** a publish bypass. Publishable builds require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS`. Compile-only smoke may use `SUHUELLA_DESKTOP_COMPILE_ONLY=1` without keys (not publishable).
 
 Unsigned or notarization-deferred artifacts are for internal and technical testing. Say that honestly. Do not present them as a commercially trusted install.
 

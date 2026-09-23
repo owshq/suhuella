@@ -17,7 +17,11 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isCommercialSigningDeferred, printCommercialSigningSkipped } from "./commercial-signing.mjs";
+import {
+  isCommercialSigningDeferred,
+  isPreRcUnsignedPublishChannel,
+  printCommercialSigningSkipped,
+} from "./commercial-signing.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -44,9 +48,19 @@ if (!platformArg || !PLATFORM[platformArg]) {
 const spec = PLATFORM[platformArg];
 
 if (platformArg === "mac" || platformArg === "windows") {
-  if (isCommercialSigningDeferred()) {
+  if (isPreRcUnsignedPublishChannel()) {
     printCommercialSigningSkipped(spec.label);
-    process.exit(0);
+    const preRc = spawnSync(
+      process.execPath,
+      [path.join(root, "scripts/validate-release-pre-rc.mjs"), "--platform", platformArg],
+      { cwd: root, stdio: "inherit", env: process.env },
+    );
+    process.exit(preRc.status ?? 1);
+  }
+  if (isCommercialSigningDeferred()) {
+    console.error("ReleaseValidation FAIL — signing deferred but version is not pre-rc.");
+    console.error("Only pre-rc unsigned publish is allowed while commercial signing is deferred.");
+    process.exit(1);
   }
 }
 

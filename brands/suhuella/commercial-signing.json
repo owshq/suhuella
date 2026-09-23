@@ -1,7 +1,8 @@
 {
   "status": "deferred",
+  "publishChannel": "pre-rc-deferred-commercial-signing",
   "decision": "DECISION-PRIVATE-BETA-001",
   "reason": "business decision",
   "reopenOnlyBy": "explicit human decision",
-  "supersede": "Set status to enabled when commercial signing infrastructure is purchased and configured."
+  "supersede": "Set status to enabled when commercial signing infrastructure is purchased and configured. Until then, pre-rc may publish unsigned with validate-release-pre-rc integrity checks and SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS at build time."
 }

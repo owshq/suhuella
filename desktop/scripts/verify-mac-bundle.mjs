@@ -1,7 +1,7 @@
 /**
  * Post-build bundle integrity (package:mac only).
  * Checks CFBundleIdentifier and adhoc/resigned codesign — not release validation.
- * Publish requires `npm run validate-release -- --platform mac` (Developer ID + notarization).
+ * Publish requires `npm run validate-release -- --platform mac` (commercial signing when enabled; pre-rc integrity when deferred).
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";

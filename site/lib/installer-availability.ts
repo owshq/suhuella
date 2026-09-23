@@ -47,6 +47,22 @@ export function publicReleasePayload(release: {
     mac: { available: boolean; url?: string | null };
     windows: { available: boolean; url?: string | null };
   };
+  distribution?: {
+    channel: string;
+    commercialCodeSigning: {
+      mac: {
+        app: string;
+        dmg: string;
+        developerId: boolean;
+        notarized: boolean;
+        stapled: boolean;
+      };
+      windows: {
+        authenticode: string;
+      };
+      cleanMachineInstallVerified: boolean;
+    };
+  };
   windows: string;
   mac: string;
 }) {
@@ -55,6 +71,7 @@ export function publicReleasePayload(release: {
     ...publicReleaseAliases(release),
     ...(release.releaseDate ? { releaseDate: release.releaseDate } : {}),
     ...(release.downloads ? { downloads: release.downloads } : {}),
+    ...(release.distribution ? { distribution: release.distribution } : {}),
     ...shown,
   };
 }

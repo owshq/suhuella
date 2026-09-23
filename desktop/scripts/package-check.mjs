@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { brandIdentity, brandReleasePath, resolveBrandId } from '../../brands/select.mjs'
 
 import { spawnSync } from 'node:child_process'
+import { assertLicenseVerifyKeysForPackage } from './license-build-env.mjs'
+import { isCommercialSigningDeferred } from '../../scripts/commercial-signing.mjs'
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(desktopRoot, '..')
@@ -73,16 +75,12 @@ if (!version) {
   fail('desktop/package.json is missing version.')
 }
 
-if (!process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim()) {
-  if (process.env.SUHUELLA_DESKTOP_CI === '1') {
-    console.warn(
-      '[package-check] SUHUELLA_DESKTOP_CI: building without SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS — offline Ed25519 verify will fail in this artifact',
-    )
-  } else {
-    fail(
-      'SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS must be set for release builds (comma-separated Ed25519 SPKI public keys).',
-    )
-  }
+assertLicenseVerifyKeysForPackage('package-check')
+const signingDeferred = isCommercialSigningDeferred()
+if (signingDeferred) {
+  note(
+    'Commercial code signing deferred — pre-rc unsigned channel. Gatekeeper/SmartScreen may warn; clean-machine install is not verified until tested.',
+  )
 }
 
 if (manifest.brandId && manifest.brandId !== brandId) {
@@ -143,7 +141,7 @@ if (await exists(generatedConfigPath)) {
   if (!String(generated.afterPack ?? '').includes('sign-mac-app')) {
     fail('generated afterPack must sign the Mac app (sign-mac-app.cjs).')
   }
-  if (!String(generated.afterSign ?? '').includes('notarize')) {
+  if (!signingDeferred && !String(generated.afterSign ?? '').includes('notarize')) {
     fail('generated afterSign must notarize when Developer ID credentials exist.')
   }
 } else {

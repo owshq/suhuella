@@ -20,7 +20,10 @@ import {
   sha256File,
 } from "./release-artifact-sha256.mjs";
 import { runBuildHealthGate } from "./build-health.mjs";
-import { assertCommercialSigningEnabledForPublish } from "./commercial-signing.mjs";
+import {
+  assertCommercialSigningEnabledForPublish,
+  stampDistributionMetadata,
+} from "./commercial-signing.mjs";
 
 runBuildHealthGate();
 
@@ -172,6 +175,7 @@ async function uploadNewMacAsset(release, localSha256, localSize) {
 }
 
 function updateReleaseManifest(localSha256, localSize, filename) {
+  stampDistributionMetadata(manifest, version);
   manifest.downloads ??= {};
   manifest.downloads.mac = {
     available: true,

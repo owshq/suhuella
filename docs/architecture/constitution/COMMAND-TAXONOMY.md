@@ -63,7 +63,7 @@ npm run publish:desktop-win
 npm run cf:deploy
 ```
 
-`validate-release` is the same contract on every OS (built · verified · signed · trusted · installable). Publish refuses if it fails. Prepublish also runs **Build Health** (`scripts/build-health.mjs`) — still not Smoke.
+`validate-release` is the same entry point on every OS. When commercial signing is **enabled**, it checks built · verified · signed · trusted · installable. While signing is **deferred** and the version is **pre-rc**, it runs **PreRcReleaseValidation** (integrity + license public-key embed) without Developer ID / Authenticode. Publish refuses if either path fails. Prepublish also runs **Build Health** (`scripts/build-health.mjs`) — still not Smoke.
 
 Platform implementations differ; the contract does not. macOS: Developer ID, notarization, stapling, `spctl`. Windows: Authenticode and signature verification. Linux: not opened. See [docs/release/README.md](../../release/README.md).
 
