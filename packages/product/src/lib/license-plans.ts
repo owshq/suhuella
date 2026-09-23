@@ -294,8 +294,8 @@ export function activateDeviceCopy(locale: LicenseCopyLocale = 'en'): {
     return {
       title: 'Activar este dispositivo',
       intro:
-        'Introduce el email de tu compra o licencia. Te enviamos un código de 6 dígitos; al verificarlo, activamos este dispositivo.',
-      emailLabel: 'Email',
+        '¿Ya compraste? Introduce aquí el email de esa compra. Te enviamos un código de 6 dígitos para activar este dispositivo — aparte del checkout de Stripe de arriba.',
+      emailLabel: 'Email de la compra',
       sendCode: 'Enviar código',
       codeLabel: 'Código de verificación',
       activate: 'Activar licencia',
@@ -304,8 +304,8 @@ export function activateDeviceCopy(locale: LicenseCopyLocale = 'en'): {
   return {
     title: 'Activate this device',
     intro:
-      'Enter the email on your purchase or license. We send a 6-digit code; verifying it activates this device.',
-    emailLabel: 'Email',
+      'Already purchased? Enter that purchase email here. We send a 6-digit code to activate this device — separate from Stripe checkout above.',
+    emailLabel: 'Purchase email',
     sendCode: 'Send code',
     codeLabel: 'Verification code',
     activate: 'Activate license',

@@ -88,7 +88,11 @@ export type SuhuellaAPI = {
   getLicense: () => Promise<LicenseStatusView>
   getServiceHealth: () => Promise<PublicServiceHealth>
   openExternal: (url: string) => Promise<boolean>
-  openCheckout: (plan: 'lifetime' | 'monthly' | 'business', email?: string) => Promise<boolean>
+  openCheckout: (
+    plan: 'lifetime' | 'monthly' | 'business',
+    email?: string,
+    activationAttemptId?: string,
+  ) => Promise<boolean>
   createCheckoutAttempt: (
     plan: CheckoutPlan,
   ) => Promise<{ ok: true; activationAttemptId: string } | { ok: false; error: LicenseApiError }>

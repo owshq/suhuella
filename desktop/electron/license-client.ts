@@ -333,13 +333,23 @@ function isSafeExternalUrl(url: string): boolean {
 }
 
 export async function openExternalUrl(url: string): Promise<boolean> {
-  if (!isSafeExternalUrl(url)) return false
-  if (url.startsWith('http:') && !url.startsWith('http://localhost')) return false
-  await shell.openExternal(url)
+  const resolved = url.startsWith('/') ? `${licenseApiBaseUrl()}${url}` : url
+  if (!isSafeExternalUrl(resolved)) return false
+  if (resolved.startsWith('http:') && !resolved.startsWith('http://localhost')) return false
+  await shell.openExternal(resolved)
   return true
 }
 
-export async function openCheckout(plan: CheckoutPlan, email = ''): Promise<boolean> {
-  const pathName = checkoutPath(plan, { email, platform: process.platform, returnTo: 'desktop' })
-  return openExternalUrl(`${licenseApiBaseUrl()}${pathName}`)
+export async function openCheckout(
+  plan: CheckoutPlan,
+  email = '',
+  activationAttemptId = '',
+): Promise<boolean> {
+  const pathName = checkoutPath(plan, {
+    ...(email.trim() ? { email: email.trim() } : {}),
+    platform: process.platform,
+    returnTo: 'desktop',
+    ...(activationAttemptId.trim() ? { activationAttemptId: activationAttemptId.trim() } : {}),
+  })
+  return openExternalUrl(pathName)
 }

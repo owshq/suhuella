@@ -644,7 +644,10 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(licensePanel.includes("paidPlanUnavailableCta"), "settings shows Not available yet while gated");
     assert(licensePanel.includes("paidCheckoutClosedMessage"), "settings explains closed checkout");
     assert(licensePanel.includes("personalPaidClosed"), "settings disables lifetime/monthly while gated");
-    assert(licensePanel.includes("if (!checkoutOpen)"), "settings buyPlan does not open checkout while gated");
+    assert(
+      licensePanel.includes("plan !== 'business' && !checkoutOpen"),
+      "settings buyPlan does not open personal checkout while gated",
+    );
     assert(licensePanel.includes("unavailablePlanMessage"), "Stripe unavailable return shows a visible message");
     assert(licensePanel.includes('role="status"'), "closed checkout message is accessible");
 

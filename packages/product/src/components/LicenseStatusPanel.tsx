@@ -32,10 +32,6 @@ function purchaseEmailReady(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase())
 }
 
-function missingPurchaseEmailMessage(locale: 'es' | 'en'): string {
-  return locale === 'es' ? 'Añade un email.' : 'Add an email.'
-}
-
 type LicenseStatusPanelProps = {
   compact?: boolean
   onOpenLicense?: () => void
@@ -361,6 +357,7 @@ export function LicenseStatusPanel({
   const [codeMessage, setCodeMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [purchaseError, setPurchaseError] = useState<string | null>(null)
   const [showSupportInfo, setShowSupportInfo] = useState(false)
   const [deviceLimitReached, setDeviceLimitReached] = useState(false)
   const [platform, setPlatform] = useState('')
@@ -488,57 +485,40 @@ export function LicenseStatusPanel({
   const activationCopy = activateDeviceCopy(locale)
 
   async function buyPlan(plan: CheckoutPlan) {
-    if ((plan === 'lifetime' || plan === 'monthly') && !purchaseEmailReady(email)) {
-      setFeedback({ tone: 'error', text: missingPurchaseEmailMessage(locale) })
+    setPurchaseError(null)
+    if (plan !== 'business' && !checkoutOpen) {
+      setPurchaseError(paidCheckoutClosedMessage(locale))
       return
     }
-    if (plan === 'business') {
-      const path = checkoutPath('business', {
-        returnTo: window.__suhuellaHost === 'browser' ? 'settings' : 'desktop',
-      })
-      if (window.__suhuellaHost === 'browser') {
-        window.location.assign(path)
-        return
-      }
-      await openExternal(path)
-      return
-    }
-    if (!checkoutOpen) {
-      setFeedback({
-        tone: 'error',
-        text: paidCheckoutClosedMessage(locale),
-      })
-      return
-    }
-    if (checkoutLimited) {
-      setFeedback({
-        tone: 'error',
-        text: licenseErrorMessage('service_unavailable'),
-      })
+    if (plan !== 'business' && checkoutLimited) {
+      setPurchaseError(licenseErrorMessage('service_unavailable'))
       return
     }
     const api = getSuhuellaApi()
     let activationAttemptId: string | undefined
-    if (typeof api.createCheckoutAttempt === 'function') {
+    if (plan !== 'business' && typeof api.createCheckoutAttempt === 'function') {
       const attempt = await api.createCheckoutAttempt(plan)
       if (attempt.ok) {
         activationAttemptId = attempt.activationAttemptId
-        sessionStorage.setItem(ACTIVATION_ATTEMPT_STORAGE_KEY, activationAttemptId)
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(ACTIVATION_ATTEMPT_STORAGE_KEY, activationAttemptId)
+        }
       }
     }
-    if (typeof api.openCheckout === 'function') {
-      await api.openCheckout(plan, email)
-      return
-    }
+    const returnTo = window.__suhuellaHost === 'browser' ? 'settings' : 'desktop'
     const path = checkoutPath(plan, {
-      email,
-      platform,
-      activationAttemptId,
-      returnTo: window.__suhuellaHost === 'browser' ? 'settings' : 'desktop',
+      ...(email.trim() ? { email: email.trim() } : {}),
+      ...(platform ? { platform } : {}),
+      ...(activationAttemptId ? { activationAttemptId } : {}),
+      returnTo,
     })
     if (window.__suhuellaHost === 'browser') {
       window.location.assign(path)
       return
+    }
+    if (typeof api.openCheckout === 'function') {
+      const opened = await api.openCheckout(plan, email, activationAttemptId)
+      if (opened) return
     }
     await openExternal(path)
   }
@@ -737,12 +717,22 @@ export function LicenseStatusPanel({
 
       <Card>
         <h3 className="text-base font-semibold text-slate-900">Choose a plan</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+          {locale === 'es'
+            ? 'Compra en Stripe con el email que quieras. No hace falta rellenar el email de abajo.'
+            : 'Pay on Stripe with whatever email you prefer. You do not need the email field below to buy.'}
+        </p>
         {!checkoutOpen ? (
           <p
             role="status"
             className="mt-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-600"
           >
             {paidCheckoutClosedMessage(locale)}
+          </p>
+        ) : null}
+        {purchaseError ? (
+          <p role="alert" className="mt-3 text-sm text-rose-700">
+            {purchaseError}
           </p>
         ) : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -797,11 +787,6 @@ export function LicenseStatusPanel({
               autoComplete="email"
             />
           </label>
-          {feedback?.tone === 'error' && !purchaseEmailReady(email) ? (
-            <p className="text-sm text-rose-700" role="alert">
-              {feedback.text}
-            </p>
-          ) : null}
           <SecondaryButton disabled={busy || !purchaseEmailReady(email)} onClick={() => void sendVerificationCode()}>
             {busy && !challengeId ? 'Sending…' : activationCopy.sendCode}
           </SecondaryButton>

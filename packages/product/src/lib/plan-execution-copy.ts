@@ -1,4 +1,5 @@
 import type { OrganisationPlanItem, PlanExecutionMode } from '../types.ts'
+import { destinationLabel as planItemDestinationLabel } from './plan-editor-copy.ts'
 
 /** User visibility axis only — same executor for background and watch. See ADR-005. */
 export type { PlanExecutionMode }
@@ -18,10 +19,9 @@ function fileNameFromPath(filePath: string): string {
   return parts.at(-1) ?? filePath
 }
 
-function destinationLabel(item: OrganisationPlanItem): string {
+function liveLogDestination(item: OrganisationPlanItem): string {
   if (item.proposedPath) return fileNameFromPath(item.proposedPath)
-  if (item.destinationLabel) return item.destinationLabel
-  return '—'
+  return planItemDestinationLabel(item)
 }
 
 function resultLabel(item: OrganisationPlanItem): string {
@@ -51,7 +51,7 @@ export function planLiveLogLine(item: OrganisationPlanItem, index: number): Plan
   return {
     id: `${item.currentPath}-${index}`,
     origin: fileNameFromPath(item.currentPath),
-    destination: destinationLabel(item),
+    destination: liveLogDestination(item),
     result: resultLabel(item),
     tone,
   }

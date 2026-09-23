@@ -77,6 +77,7 @@ import {
   loadLicense,
   renameDevice,
 } from './browser/license'
+import { checkoutPath } from '../lib/license-checkout'
 import {
   browseCloudSourceChildren,
   disconnectCloudIntegration,
@@ -854,15 +855,21 @@ export function installBrowserHost(): void {
       return true
     },
     createCheckoutAttempt: async (plan) => createCheckoutAttempt(plan),
-    openCheckout: async (plan, email) => {
-      const attempt = await createCheckoutAttempt(plan)
-      const params = new URLSearchParams({ return: 'settings' })
-      if (email?.trim()) params.set('email', email.trim())
-      if (attempt.ok) {
-        sessionStorage.setItem('suhuella_activation_attempt_id', attempt.activationAttemptId)
-        params.set('attempt', attempt.activationAttemptId)
+    openCheckout: async (plan, email, activationAttemptId) => {
+      let resolvedAttemptId = activationAttemptId?.trim() ?? ''
+      if (!resolvedAttemptId && plan !== 'business') {
+        const attempt = await createCheckoutAttempt(plan)
+        if (attempt.ok) resolvedAttemptId = attempt.activationAttemptId
       }
-      window.location.assign(`/checkout/${plan}?${params.toString()}`)
+      const path = checkoutPath(plan, {
+        returnTo: 'settings',
+        ...(email?.trim() ? { email: email.trim() } : {}),
+        ...(resolvedAttemptId ? { activationAttemptId: resolvedAttemptId } : {}),
+      })
+      if (resolvedAttemptId) {
+        sessionStorage.setItem('suhuella_activation_attempt_id', resolvedAttemptId)
+      }
+      window.location.assign(path)
       return true
     },
     activateFromCheckout: async (sessionId: string, activationAttemptId?: string) => {

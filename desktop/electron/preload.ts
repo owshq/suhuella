@@ -113,8 +113,12 @@ const api = {
   getLicense: (): Promise<LicenseStatusView> => ipcRenderer.invoke('license:get'),
   getServiceHealth: () => ipcRenderer.invoke('license:serviceHealth'),
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('shell:openExternal', url),
-  openCheckout: (plan: 'lifetime' | 'monthly' | 'business', email?: string): Promise<boolean> =>
-    ipcRenderer.invoke('license:openCheckout', plan, email ?? ''),
+  openCheckout: (
+    plan: 'lifetime' | 'monthly' | 'business',
+    email?: string,
+    activationAttemptId?: string,
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('license:openCheckout', plan, email ?? '', activationAttemptId ?? ''),
   createCheckoutAttempt: (
     plan: 'lifetime' | 'monthly' | 'business',
   ): Promise<{ ok: true; activationAttemptId: string } | { ok: false; error: string }> =>

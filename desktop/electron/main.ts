@@ -1161,10 +1161,17 @@ function registerIpc(): void {
     if (typeof url !== 'string') return false
     return openExternalUrl(url)
   })
-  ipcMain.handle('license:openCheckout', (_event, plan: unknown, email: unknown) => {
-    if (plan !== 'lifetime' && plan !== 'monthly' && plan !== 'business') return false
-    return openCheckout(plan, typeof email === 'string' ? email : '')
-  })
+  ipcMain.handle(
+    'license:openCheckout',
+    (_event, plan: unknown, email: unknown, activationAttemptId: unknown) => {
+      if (plan !== 'lifetime' && plan !== 'monthly' && plan !== 'business') return false
+      return openCheckout(
+        plan,
+        typeof email === 'string' ? email : '',
+        typeof activationAttemptId === 'string' ? activationAttemptId : '',
+      )
+    },
+  )
   ipcMain.handle('license:activateFromCheckout', (_event, sessionId: unknown, activationAttemptId: unknown) => {
     if (typeof sessionId !== 'string' || !sessionId.trim()) {
       return { ok: false, error: 'invalid_request', license: getLicenseView() }
