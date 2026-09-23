@@ -11,7 +11,10 @@ export type CommercialGenerationGrantUpdate =
       generationAccessMode: GenerationAccessMode;
       commercialGenerationId?: string | null;
     }
-  | { deferReconciliation: true; reason: "binding_missing" | "version_unresolved" };
+  | {
+      deferReconciliation: true;
+      reason: "binding_missing" | "version_unresolved" | "version_binding_required";
+    };
 
 /**
  * Resolves generation for fulfillment from server checkout binding only.

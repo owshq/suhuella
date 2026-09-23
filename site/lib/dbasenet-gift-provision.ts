@@ -160,7 +160,12 @@ export async function provisionDbasenetPartnerGift(input: {
       isPaid: false,
     });
     const listed = await listPartnerCustomerLicenses(
-      { kind: "partner_admin", email: DBASENET_GIFT_OWNER_EMAIL, partnerId: created.summary.partner.partnerId },
+      {
+        kind: "partner",
+        role: "partner_admin",
+        email: DBASENET_GIFT_OWNER_EMAIL,
+        partnerId: created.summary.partner.partnerId,
+      },
       { partnerId: created.summary.partner.partnerId },
     );
     if (!listed.licenses.some((item) => item.licenseId === customerLicenseId)) {

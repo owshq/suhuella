@@ -7,6 +7,7 @@ export type PresentationDomainStatus =
   | "active"
   | "suspended"
   | "revoked"
+  | "failed"
   | "unknown"
   | "platform";
 

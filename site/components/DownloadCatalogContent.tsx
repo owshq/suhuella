@@ -160,7 +160,7 @@ function CurrentReleaseCard({
                       {available ? statusLabels.available : statusLabels.unavailable}
                     </span>
                   </p>
-                  {available ? (
+                  {available && row.action.kind === "link" ? (
                     <CorporateDownloadButton
                       href={row.action.href}
                       label={actionLabel}
@@ -206,7 +206,7 @@ function CurrentReleaseCard({
                   </p>
                 </div>
               </div>
-              {available ? (
+              {available && row.action.kind === "link" ? (
                 <CorporateDownloadButton
                   href={row.action.href}
                   label={actionLabel}

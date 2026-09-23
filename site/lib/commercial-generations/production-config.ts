@@ -20,7 +20,9 @@ function parseRegistry(raw: string): CommercialGenerationRecord[] {
     const label = typeof row.label === "string" ? row.label.trim() : "";
     if (!id || !label || id.startsWith("gen_fixture_")) return [];
     const requiredCapabilities = Array.isArray(row.requiredCapabilities)
-      ? row.requiredCapabilities.filter((cap): cap is string => typeof cap === "string" && cap.trim())
+      ? row.requiredCapabilities.filter(
+          (cap): cap is string => typeof cap === "string" && cap.trim().length > 0,
+        )
       : [];
     const effectiveFrom =
       typeof row.effectiveFrom === "string" && row.effectiveFrom.trim()

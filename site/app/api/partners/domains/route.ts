@@ -92,12 +92,7 @@ export async function POST(request: NextRequest) {
   }
 
   const hostname = typeof body.hostname === "string" ? body.hostname : "";
-  const partnerId =
-    actor.kind === "platform"
-      ? typeof body.targetPartnerId === "string"
-        ? body.targetPartnerId.trim()
-        : ""
-      : actor.partnerId;
+  const partnerId = actor.partnerId;
   if (!hostname || !partnerId) return json({ ok: false, error: "invalid_request" }, 400);
 
   try {
