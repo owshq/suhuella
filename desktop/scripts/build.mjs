@@ -42,4 +42,18 @@ await writeElectronBuilderConfig(brandId)
 await run('npx', ['tsc', '-b'])
 await viteBuild()
 await buildElectron({ minify: true })
+if (process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim()) {
+  const inlining = spawnSync(process.execPath, ['scripts/license-build-inlining-check.mjs'], {
+    cwd: path.dirname(fileURLToPath(import.meta.url)),
+    stdio: 'inherit',
+    env: process.env,
+  })
+  if (inlining.status !== 0) {
+    process.exit(inlining.status ?? 1)
+  }
+} else {
+  console.warn(
+    '[brand] SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS unset — offline Ed25519 verify will fail in this build',
+  )
+}
 console.log(`[brand] desktop production build ready for ${brandId}`)

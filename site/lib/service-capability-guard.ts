@@ -56,6 +56,8 @@ export async function rejectIfRateLimited(buckets: Array<{ key: string; limit: n
       );
     }
   }
-  await Promise.all(buckets.map((bucket) => recordRateLimitEvent(bucket.key)));
+  for (const bucket of buckets) {
+    await recordRateLimitEvent(bucket.key);
+  }
   return null;
 }

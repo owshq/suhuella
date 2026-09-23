@@ -443,10 +443,7 @@ export function IndexedLocationsPanel({
             </div>
 
             {summaries.map((location) => {
-              const status =
-                isScanning && (location.status === 'ready' || location.status === 'needs_refresh')
-                  ? 'indexing'
-                  : location.status
+              const status = location.status
               const issue = locationIssueCopy(status, healthyOthersByPath.get(location.path) ?? 0)
 
               return (
@@ -550,9 +547,18 @@ export function IndexedLocationsPanel({
                 />
               </div>
               <div className="flex items-center justify-between gap-3 text-xs text-[var(--app-fg)] opacity-50">
-                <span>{formatEta(scan.estimatedRemainingSeconds)}</span>
+                <span>
+                  {typeof scan.locationsTotal === 'number' && scan.locationsTotal > 1
+                    ? `${Math.min((scan.locationsDone ?? 0) + 1, scan.locationsTotal)} of ${scan.locationsTotal} folders`
+                    : formatEta(scan.estimatedRemainingSeconds)}
+                </span>
                 <span>{progressPercent}%</span>
               </div>
+              {scan.foldersReused ? (
+                <p className="text-xs text-[var(--app-fg)] opacity-50">
+                  Kept {scan.foldersReused.toLocaleString()} already learned
+                </p>
+              ) : null}
               {scan.currentPath ? (
                 <p className="truncate text-xs text-[var(--app-fg)] opacity-50">{scan.currentPath}</p>
               ) : null}

@@ -6,7 +6,7 @@ EFFECTIVE = 2026-09-19
 TYPE = Permanent policy (not a track)
 ```
 
-Release **architecture** is frozen in [RELEASE-ARCHITECTURE-FROZEN.md](../../RELEASE-ARCHITECTURE-FROZEN.md). This document freezes the **process** — the order phases run in.
+Release **architecture** is [release-architecture.md](../architecture/constitution/release-architecture.md). This document freezes the **process** — the order phases run in.
 
 ---
 

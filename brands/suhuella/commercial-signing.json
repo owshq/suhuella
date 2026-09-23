@@ -1,0 +1,7 @@
+{
+  "status": "deferred",
+  "decision": "DECISION-PRIVATE-BETA-001",
+  "reason": "business decision",
+  "reopenOnlyBy": "explicit human decision",
+  "supersede": "Set status to enabled when commercial signing infrastructure is purchased and configured."
+}

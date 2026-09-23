@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import { brand, brandCssVars, siteOrigin } from "@suhuella/brand";
+import { brand, siteOrigin } from "@suhuella/brand";
 import { getRequestLocale } from "@/lib/i18n/detect-locale-server";
 import { getDictionary } from "@/lib/i18n/dictionary";
+import { toPresentationBrand } from "@/lib/partners/presentation-brand";
+import { presentationPageTitle } from "@/lib/partners/unconfigured-hostname-copy";
+import {
+  requestBrandCssVars,
+  requestBrandServesApp,
+  resolveRequestBrandFromHeaders,
+} from "@/lib/partners/request-brand";
+import { RequestBrandProvider } from "@/components/RequestBrandProvider";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,53 +28,104 @@ const geistMono = Geist_Mono({
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
   const t = getDictionary(locale);
+  const requestBrand = await resolveRequestBrandFromHeaders(await headers());
+  const servesApp = requestBrandServesApp(requestBrand);
+  const displayName =
+    requestBrand.kind === "partner"
+      ? requestBrand.displayName
+      : requestBrand.kind === "platform"
+        ? requestBrand.displayName
+        : presentationPageTitle({ kind: requestBrand.kind, locale });
+  const iconUrl =
+    servesApp && (requestBrand.faviconUrl || requestBrand.logoUrl)
+      ? requestBrand.faviconUrl || requestBrand.logoUrl
+      : null;
+  const productIcon = brand.icon.public256;
+  const neutralTitle = presentationPageTitle({ kind: requestBrand.kind, locale });
+  const neutralDescription =
+    locale === "es"
+      ? "Este sitio no está disponible."
+      : "This site is not available.";
+  const pageTitle = servesApp
+    ? requestBrand.kind === "partner"
+      ? displayName
+      : t.meta.title
+    : neutralTitle;
+  const pageDescription = servesApp
+    ? requestBrand.kind === "partner"
+      ? `${displayName} — your knowledge, on this computer.`
+      : t.meta.description
+    : neutralDescription;
+  const titleDisplayName = servesApp ? displayName : neutralTitle;
 
   return {
-    metadataBase: new URL(siteOrigin()),
+    ...(servesApp ? { metadataBase: new URL(siteOrigin()) } : {}),
     title: {
-      default: t.meta.title,
-      template: `%s — ${brand.displayName}`,
+      default: pageTitle,
+      template: `%s — ${titleDisplayName}`,
     },
-    description: t.meta.description,
+    description: pageDescription,
     icons: {
       icon: [
         { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
-        { url: brand.icon.public256, sizes: "256x256", type: "image/png" },
-        { url: "/suhuella-app-icon.svg", type: "image/svg+xml" },
+        ...(servesApp && iconUrl ? [{ url: iconUrl, sizes: "256x256" as const }] : []),
       ],
       shortcut: [{ url: "/favicon.ico", type: "image/x-icon" }],
-      apple: [{ url: brand.icon.public512, sizes: "512x512", type: "image/png" }],
+      apple: [
+        {
+          url: servesApp ? (iconUrl ?? productIcon) : "/favicon.ico",
+          sizes: "512x512",
+        },
+      ],
     },
     openGraph: {
-      title: t.meta.title,
-      description: t.meta.description,
-      url: siteOrigin(),
-      siteName: brand.displayName,
+      title: pageTitle,
+      description: pageDescription,
+      ...(servesApp
+        ? {
+            url: siteOrigin(),
+            siteName: displayName,
+          }
+        : {
+            siteName: neutralTitle,
+          }),
       locale: locale === "es" ? "es_ES" : "en_US",
       type: "website",
     },
     twitter: {
       card: "summary",
-      title: brand.displayName,
-      description: t.meta.description,
+      title: pageTitle,
+      description: pageDescription,
     },
+    robots: servesApp ? undefined : { index: false, follow: false },
   };
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const locale = await getRequestLocale();
+  const requestBrand = await resolveRequestBrandFromHeaders(await headers());
+  const cssVars = requestBrandCssVars(requestBrand);
+  const publicBrand = toPresentationBrand(requestBrand);
+  const background =
+    requestBrand.kind === "platform"
+      ? brand.pwa.backgroundColor
+      : requestBrand.kind === "partner"
+        ? "#F8FAFC"
+        : "#F1F5F9";
 
   return (
     <html
       lang={locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      style={brandCssVars() as CSSProperties}
+      style={cssVars as CSSProperties}
     >
       <body
         className="flex h-full min-h-full flex-col text-[#111827]"
-        style={{ backgroundColor: brand.pwa.backgroundColor }}
+        style={{ backgroundColor: background }}
       >
-        {children}
+        <RequestBrandProvider value={publicBrand} cssVars={cssVars}>
+          {children}
+        </RequestBrandProvider>
       </body>
     </html>
   );

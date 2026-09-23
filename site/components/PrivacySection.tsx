@@ -6,8 +6,22 @@ import Link from "next/link";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 
-export function PrivacySection() {
+export function PrivacySection({ compact = false }: { compact?: boolean }) {
   const { t } = useLocale();
+
+  if (compact) {
+    return (
+      <section className="w-full pt-1">
+        <div className="flex items-start gap-2.5 rounded-xl border border-white/50 bg-white/40 px-3 py-2.5 backdrop-blur-sm">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-accent)]" strokeWidth={2} />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900">{t.privacy.title}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-600">{t.privacy.description}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-4xl px-6">

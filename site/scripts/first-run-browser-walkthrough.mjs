@@ -13,7 +13,7 @@ const routes = [
   { name: "home", path: "/home" },
   { name: "sources", path: "/sources" },
   { name: "search", path: "/search" },
-  { name: "organise", path: "/organise" },
+  { name: "plan-mode", path: "/plan-mode" },
   { name: "activity", path: "/activity" },
   { name: "settings", path: "/settings" },
   { name: "landing-overlay", path: "/" },
@@ -123,7 +123,7 @@ async function main() {
   await page.waitForTimeout(1000);
   report.journey.push({ step: "open-home", url: page.url() });
 
-  for (const label of ["Sources", "Fuentes", "Search", "Buscar", "Organise", "Organizar"]) {
+  for (const label of ["Sources", "Fuentes", "Search", "Buscar", "Plan Mode", "Modo Plan"]) {
     const link = page.getByRole("link", { name: new RegExp(label, "i") }).first();
     if (await link.count()) {
       await link.click();

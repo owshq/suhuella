@@ -62,13 +62,15 @@ function toPublic(row: CloudConnectionRecord): CloudConnectionPublic {
 }
 
 export function listIntegrationCatalog(brandId = brand.id) {
-  return listCloudProviders().map((p) => ({
-    provider: p.provider,
-    displayName: p.displayName,
-    supportsWebhooks: p.supportsWebhooks,
-    enabled: providerEnabledForBrand(p.provider, brandId) && isCloudIntegrationsPubliclyEnabled(),
-    scopes: [...p.scopes],
-  }));
+  return listCloudProviders()
+    .filter((p) => p.showInSourcesCatalog !== false)
+    .map((p) => ({
+      provider: p.provider,
+      displayName: p.displayName,
+      supportsWebhooks: p.supportsWebhooks,
+      enabled: providerEnabledForBrand(p.provider, brandId) && isCloudIntegrationsPubliclyEnabled(),
+      scopes: [...p.scopes],
+    }));
 }
 
 export async function listOwnerConnections(input: {
@@ -112,7 +114,7 @@ export async function startOAuth(input: {
   }
 
   const returnPath =
-    input.returnPath && SAFE_RETURN.test(input.returnPath) ? input.returnPath : "/home";
+    input.returnPath && SAFE_RETURN.test(input.returnPath) ? input.returnPath : "/sources";
   const state = randomOAuthState();
   const codeVerifier = randomCodeVerifier();
   const nonce = randomNonce();
@@ -353,6 +355,7 @@ export async function reconnectConnection(input: {
   ownerId: string;
   origin: string;
   brandId?: string;
+  returnPath?: string;
 }): Promise<{ ok: true; authorizeUrl: string } | { ok: false; error: string }> {
   const store = await getCloudIntegrationsStore();
   const row = await store.getConnection(input.connectionId);
@@ -363,7 +366,7 @@ export async function reconnectConnection(input: {
     ownerKind: input.ownerKind,
     ownerId: input.ownerId,
     origin: input.origin,
-    returnPath: "/home",
+    returnPath: input.returnPath ?? "/sources",
   });
 }
 

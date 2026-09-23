@@ -5,16 +5,11 @@ import {
   type OperationsAccessConfigKey,
   type OperationsAccessConfigStatus,
 } from "@/lib/operations/auth";
-import {
-  getOperationsBaseUrl,
-  isOperationsCanonicalHost,
-  requestHost,
-} from "@/lib/operations/host";
 import { buildOperationsSession } from "@/lib/operations/session";
 import { readOperationsSnapshot } from "@/lib/operations/service";
+import type { OperationsConsoleSection } from "@/lib/operations/routes";
 import { getReleaseManifest } from "@/lib/release-manifest";
 import { headers } from "next/headers";
-import { permanentRedirect } from "next/navigation";
 
 const CONFIG_KEYS: OperationsAccessConfigKey[] = [
   "SUPERADMIN_EMAILS",
@@ -72,13 +67,12 @@ function Denied({
   );
 }
 
-export async function OperationsPage() {
+export async function OperationsPage({
+  section = "dashboard",
+}: {
+  section?: OperationsConsoleSection;
+} = {}) {
   const requestHeaders = await headers();
-  const host = requestHost(requestHeaders);
-
-  if (isProductionRuntime() && !isOperationsCanonicalHost(host)) {
-    permanentRedirect(getOperationsBaseUrl());
-  }
 
   const auth = await authenticateOperations(requestHeaders);
 
@@ -118,6 +112,7 @@ export async function OperationsPage() {
       initialSnapshot={snapshot}
       initialRelease={release}
       initialSession={session}
+      initialSection={section}
     />
   );
 }

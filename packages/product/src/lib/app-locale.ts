@@ -60,8 +60,10 @@ export type AppChromeCopy = {
   settings: string;
   settingsIntro: string;
   general: string;
+  permissions: string;
   ai: string;
   license: string;
+  support: string;
   privacy: string;
   notifications: string;
   diagnostics: string;
@@ -84,14 +86,16 @@ const chrome: Record<AppLocale, AppChromeCopy> = {
   es: {
     search: "Buscar",
     home: "Inicio",
-    organise: "Organizar",
+    organise: "Modo Plan",
     sources: "Fuentes",
     activity: "Actividad",
     settings: "Ajustes",
     settingsIntro: "Cómo está configurada SuHuella.",
     general: "General",
+    permissions: "Permisos",
     ai: "IA",
     license: "Licencia",
+    support: "Soporte",
     privacy: "Privacidad",
     notifications: "Notificaciones",
     diagnostics: "Diagnóstico",
@@ -113,14 +117,16 @@ const chrome: Record<AppLocale, AppChromeCopy> = {
   en: {
     search: "Search",
     home: "Home",
-    organise: "Organise",
+    organise: "Plan Mode",
     sources: "Sources",
     activity: "Activity",
     settings: "Settings",
     settingsIntro: "How SuHuella is configured.",
     general: "General",
+    permissions: "Permissions",
     ai: "AI",
     license: "License",
+    support: "Support",
     privacy: "Privacy",
     notifications: "Notifications",
     diagnostics: "Diagnostics",

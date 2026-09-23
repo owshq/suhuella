@@ -70,6 +70,20 @@ Settings and Preview Save As are never visible together. Launch always opens onb
 
 No automatic rescans or filesystem watchers. Scan on add folder, rescan, or onboarding.
 
+### Release build — offline license verify
+
+Production `npm run build` embeds Ed25519 **public keys only** at compile time (never HMAC or private keys):
+
+```bash
+export SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS="<SPKI public key(s), comma-separated>"
+npm run build
+npm run test:license-build-inlining
+npm run test:license-offline-verify
+npm run test:license-dual-verify
+```
+
+Must match the Worker’s `LICENSE_SIGNING_PUBLIC_KEYS` after Ed25519 is enabled in production. See [SIGNED-LICENSE-RIGHTS-DELIVERY-006.md](../SIGNED-LICENSE-RIGHTS-DELIVERY-006.md).
+
 ### settings.json
 
 ```json

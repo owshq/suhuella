@@ -53,8 +53,8 @@ export function buildDesktopDownloadOffer(
     return {
       label: 'Download for Mac',
       panelLabel: 'Download desktop app',
-      href: mac,
-      external: true,
+      href: '/download/preparing?platform=mac',
+      external: false,
     }
   }
 
@@ -62,8 +62,8 @@ export function buildDesktopDownloadOffer(
     return {
       label: 'Download for Windows',
       panelLabel: 'Download desktop app',
-      href: windows,
-      external: true,
+      href: '/download/preparing?platform=windows',
+      external: false,
     }
   }
 

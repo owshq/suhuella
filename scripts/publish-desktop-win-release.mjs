@@ -9,6 +9,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { fetchRemoteSha256 } from "./release-artifact-sha256.mjs";
+import { runBuildHealthGate } from "./build-health.mjs";
+import { assertCommercialSigningEnabledForPublish } from "./commercial-signing.mjs";
+
+runBuildHealthGate();
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = process.env.GITHUB_REPO ?? "owshq/suhuella";
@@ -21,6 +26,7 @@ const manifest = JSON.parse(readFileSync(releaseJsonPath, "utf8"));
 const version = manifest.version?.trim();
 const tag = version.startsWith("v") ? version : `v${version}`;
 const winName = `SuHuella-Setup-${version}.exe`;
+const winShaName = `${winName}.sha256`;
 
 function resolveToken() {
   const fromEnv = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
@@ -54,19 +60,39 @@ async function releaseAssets() {
   const release = await res.json();
   const assets = release.assets ?? [];
   const win = assets.find((a) => a.name === winName);
+  const winSha = assets.find((a) => a.name === winShaName);
   const dmg = assets.find((a) => a.name === `SuHuella-${version}.dmg`);
   if (!win?.browser_download_url) fail(`Missing ${winName} on release ${tag}.`);
-  return { winUrl: win.browser_download_url, macUrl: dmg?.browser_download_url ?? "" };
+  const winSha256 = winSha?.browser_download_url
+    ? await fetchRemoteSha256(winSha.browser_download_url)
+    : null;
+  if (!winSha256) {
+    fail(`Missing ${winShaName} on release ${tag} — upload SHA256 sidecar with the Windows build.`);
+  }
+  return {
+    winUrl: win.browser_download_url,
+    macUrl: dmg?.browser_download_url ?? "",
+    winSha256,
+    winSize: typeof win.size === "number" ? Math.trunc(win.size) : 0,
+  };
 }
 
-function updateReleaseManifest() {
+function updateReleaseManifest({ winSha256, winSize }) {
   manifest.downloads ??= {};
-  manifest.downloads.windows = { available: true, url: WIN_ALIAS };
+  manifest.downloads.windows = {
+    available: true,
+    url: WIN_ALIAS,
+    sha256: winSha256,
+    filename: winName,
+    size: winSize,
+  };
   if (!manifest.downloads.mac?.url) {
     manifest.downloads.mac = { available: true, url: MAC_ALIAS };
   }
   writeFileSync(releaseJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`Updated ${releaseJsonPath} → windows ${WIN_ALIAS}`);
+  console.log(`Manifest SHA256: ${winSha256}`);
+  console.log(`Manifest size: ${winSize} bytes`);
 }
 
 function run(cmd, args, cwd = root) {
@@ -86,12 +112,15 @@ async function smoke() {
 }
 
 async function main() {
+  assertCommercialSigningEnabledForPublish();
   console.log(`Publishing Windows → GitHub Release ${tag}`);
-  const { winUrl, macUrl } = await releaseAssets();
+  run(process.execPath, ["scripts/validate-release.mjs", "--platform", "windows"]);
+  const { winUrl, macUrl, winSha256, winSize } = await releaseAssets();
   console.log(`GitHub win asset (redirect only): ${winUrl}`);
   if (macUrl) console.log(`GitHub mac asset preserved: ${macUrl}`);
 
-  updateReleaseManifest();
+  if (!winSize) fail(`Missing size metadata for ${winName} on release ${tag}.`);
+  updateReleaseManifest({ winSha256, winSize });
   deployDownloadWorker(macUrl, winUrl);
 
   if (!SKIP_DEPLOY) {

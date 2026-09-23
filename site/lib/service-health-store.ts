@@ -161,6 +161,7 @@ async function createD1Store(db: {
 }
 
 async function resolveD1Database(): Promise<any | null> {
+  if (process.env.SUHUELLA_DEV_OPENNEXT === "0") return null;
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = await getCloudflareContext({ async: true });

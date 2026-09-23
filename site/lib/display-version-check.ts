@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { brand } from "@suhuella/brand";
 import {
+  customerInstallerFilename,
   deriveDisplayVersion,
   displayVersionFromRelease,
 } from "../../packages/product/src/lib/display-version.ts";
@@ -44,6 +45,23 @@ export async function runDisplayVersionCheck(): Promise<void> {
   assert(deriveDisplayVersion("0.1.0-beta.1") === "0.1.0-beta.1", "beta prerelease is kept");
   assert(deriveDisplayVersion("0.1.0-rc") === "0.1.0-rc", "rc without a number is kept");
   assert(deriveDisplayVersion(" 0.1.0-pre-rc ") === "0.1.0", "suffix strip trims the version");
+  assert(
+    customerInstallerFilename("SuHuella", "0.1.0-pre-rc", "exe") === "SuHuella-0.1.0.exe",
+    "windows download name is the brand and the display version",
+  );
+  assert(
+    customerInstallerFilename("Dbasenet", "0.1.0-pre-rc", "exe") === "Dbasenet-0.1.0.exe",
+    "partner download name uses the partner product name",
+  );
+  assert(
+    customerInstallerFilename("SuHuella", "0.1.0-pre-rc", "dmg") === "SuHuella-0.1.0.dmg",
+    "mac download name is the brand and the display version",
+  );
+  assert(
+    customerInstallerFilename("SuHuella", "0.1.0-rc1", "dmg") === "SuHuella-0.1.0.dmg",
+    "download name drops rcN",
+  );
+  assert(!customerInstallerFilename("SuHuella", "0.1.0-pre-rc", "exe").includes("Setup"), "download name has no Setup segment");
 
   assert(
     displayVersionFromRelease({ version: "0.1.0-pre-rc", displayVersion: "0.2.0" }) === "0.2.0",
@@ -61,6 +79,10 @@ export async function runDisplayVersionCheck(): Promise<void> {
   const releaseJson = readFileSync(join(process.cwd(), "../brands/suhuella/release.json"), "utf8");
   assert(!releaseJson.includes("displayVersion"), "release.json has no displayVersion field");
   assert(JSON.parse(releaseJson).version === "0.1.0-pre-rc", "release.json version stays internal");
+  assert(
+    JSON.parse(releaseJson).downloads.windows.filename === "SuHuella-Setup-0.1.0-pre-rc.exe",
+    "published windows asset name stays internal",
+  );
   assert(brand.release.version === "0.1.0-pre-rc", "BrandConfig release version stays internal");
   assert(
     displayVersionFromRelease(brand.release) === "0.1.0",
@@ -117,6 +139,21 @@ export async function runDisplayVersionCheck(): Promise<void> {
   const releaseCheck = readFileSync(join(repoRoot, "desktop/electron/release-check.ts"), "utf8");
   assert(releaseCheck.includes("const installed = app.getVersion()"), "update checks keep the internal version");
   assert(!releaseCheck.includes("deriveDisplayVersion"), "update checks do not use the display version");
+
+  const preparing = readFileSync(join(process.cwd(), "components/DownloadPreparingContent.tsx"), "utf8");
+  assert(preparing.includes("entry?.filename"), "download page shows the published filename");
+  assert(!preparing.includes("customerInstallerFilename"), "download page does not rename the installer");
+  assert(preparing.includes("/api/desktop-download/"), "download page starts at the site download alias");
+  assert(preparing.includes("formatAppVersion(artifact.version)"), "download page shows the display version");
+  assert(!preparing.includes("artifact.version.replace"), "download page does not print the internal version");
+
+  const downloadRoute = readFileSync(
+    join(process.cwd(), "app/api/desktop-download/[platform]/route.ts"),
+    "utf8",
+  );
+  assert(downloadRoute.includes("resolveDesktopDownloadRoute"), "desktop download resolves authorized alias");
+  assert(downloadRoute.includes("desktopDownloadRouteResponse"), "desktop download returns redirect response");
+  assert(!downloadRoute.includes("upstream.body"), "desktop download does not re-host installer bytes");
 
   const preferences = readFileSync(
     join(repoRoot, "packages/product/src/components/PreferencesPanel.tsx"),

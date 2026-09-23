@@ -1,5 +1,5 @@
-import { movedActivityItems } from './activity-copy'
-import type { ActivityItem, ActivityRun } from '../types'
+import { movedActivityItems } from './activity-copy.ts'
+import type { ActivityItem, ActivityRun } from '../types.ts'
 
 function undoableItems(run: ActivityRun) {
   return movedActivityItems(run).filter((item) => item.undoAvailable)
@@ -87,6 +87,19 @@ export function humanItemRecoveryNote(item: ActivityItem, runState: RunRecoveryS
 
 export function expiresInLabel(days: number): string {
   if (days <= 0) return 'Undo period expired'
-  if (days === 1) return 'Expires in 1 day'
-  return `Expires in ${days} days`
+  if (days === 1) return 'Can undo for 1 more day'
+  return `Can undo for ${days} more days`
+}
+
+export function activityUndoAvailabilityDetail(run: ActivityRun, now = Date.now()): string {
+  const count = undoableItems(run).length
+  const documents = `${count} document${count === 1 ? '' : 's'}`
+  const days = undoExpiresInDays(run.completedAt, now)
+  if (days <= 0) return documents
+  return `${documents} · ${expiresInLabel(days)}`
+}
+
+/** Source lifecycle events are history only — they never enter the Plan undo window. */
+export function activitySourceHistoryNote(): string {
+  return 'Kept in history · Cannot be undone'
 }

@@ -1,4 +1,4 @@
-import type { KnowledgeDescriptor, KnowledgeOrigin } from "./types";
+import type { KnowledgeDescriptor, KnowledgeOrigin } from "./types.ts";
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: "application/pdf",

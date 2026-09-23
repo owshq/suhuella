@@ -5,6 +5,7 @@ import { productCopy } from '../lib/product-copy'
 import { checkoutReturnFromLocation } from '../lib/app-routes'
 import { getSuhuellaApi } from '../lib/api'
 import {
+  activateDeviceCopy,
   checkoutPath,
   licensePlanCards,
   paidCheckoutClosedMessage,
@@ -22,9 +23,18 @@ import {
 } from '../lib/license-status'
 import { isServiceCapabilityLimited, NORMAL_SERVICE_HEALTH, type PublicServiceHealth } from '../lib/service-health'
 import { BusinessOrganisationSection } from './BusinessOrganisationSection'
+import { PlanFeatureList } from './PlanFeatureList'
 import type { LicenseApiError, LicenseDeviceInfo, LicenseStatusView } from '../types'
 
 const SUPPORT_EMAIL = brand.supportEmail
+
+function purchaseEmailReady(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase())
+}
+
+function missingPurchaseEmailMessage(locale: 'es' | 'en'): string {
+  return locale === 'es' ? 'Añade un email.' : 'Add an email.'
+}
 
 type LicenseStatusPanelProps = {
   compact?: boolean
@@ -474,9 +484,25 @@ export function LicenseStatusPanel({
   }
 
   const kind = license?.kind ?? 'free'
-  const plans = licensePlanCards(kind)
+  const plans = licensePlanCards(kind, 'settings', locale)
+  const activationCopy = activateDeviceCopy(locale)
 
   async function buyPlan(plan: CheckoutPlan) {
+    if ((plan === 'lifetime' || plan === 'monthly') && !purchaseEmailReady(email)) {
+      setFeedback({ tone: 'error', text: missingPurchaseEmailMessage(locale) })
+      return
+    }
+    if (plan === 'business') {
+      const path = checkoutPath('business', {
+        returnTo: window.__suhuellaHost === 'browser' ? 'settings' : 'desktop',
+      })
+      if (window.__suhuellaHost === 'browser') {
+        window.location.assign(path)
+        return
+      }
+      await openExternal(path)
+      return
+    }
     if (!checkoutOpen) {
       setFeedback({
         tone: 'error',
@@ -711,9 +737,6 @@ export function LicenseStatusPanel({
 
       <Card>
         <h3 className="text-base font-semibold text-slate-900">Choose a plan</h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-          Buying opens a secure checkout in your browser. It does not activate an existing license.
-        </p>
         {!checkoutOpen ? (
           <p
             role="status"
@@ -734,6 +757,7 @@ export function LicenseStatusPanel({
             >
               <p className="text-sm font-semibold text-slate-900">{plan.title}</p>
               <p className="mt-1 text-sm leading-relaxed text-slate-500">{plan.summary}</p>
+              <PlanFeatureList features={plan.features} />
               <div className="mt-3">
                 {plan.current ? (
                   <span className="inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
@@ -756,13 +780,13 @@ export function LicenseStatusPanel({
       </Card>
 
       <Card>
-        <h3 className="text-base font-semibold text-slate-900">Already purchased?</h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-          Enter your purchase email. We send a 6-digit code to verify ownership before activating this device.
-        </p>
+        <h3 className="text-base font-semibold text-slate-900">{activationCopy.title}</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{activationCopy.intro}</p>
         <div className="mt-4 space-y-3">
           <label className="block">
-            <span className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">Email</span>
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+              {activationCopy.emailLabel}
+            </span>
             <input
               type="email"
               required
@@ -770,17 +794,23 @@ export function LicenseStatusPanel({
               onChange={(event) => setEmail(event.target.value)}
               className="mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-[var(--brand-accent)]"
               placeholder="you@company.com"
+              autoComplete="email"
             />
           </label>
-          <SecondaryButton disabled={busy || !email.trim()} onClick={() => void sendVerificationCode()}>
-            {busy && !challengeId ? 'Sending…' : 'Send code'}
+          {feedback?.tone === 'error' && !purchaseEmailReady(email) ? (
+            <p className="text-sm text-rose-700" role="alert">
+              {feedback.text}
+            </p>
+          ) : null}
+          <SecondaryButton disabled={busy || !purchaseEmailReady(email)} onClick={() => void sendVerificationCode()}>
+            {busy && !challengeId ? 'Sending…' : activationCopy.sendCode}
           </SecondaryButton>
           {codeMessage ? <p className="text-sm text-slate-600">{codeMessage}</p> : null}
           {challengeId ? (
             <>
               <label className="block">
                 <span className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
-                  Verification code
+                  {activationCopy.codeLabel}
                 </span>
                 <input
                   type="text"
@@ -799,7 +829,7 @@ export function LicenseStatusPanel({
                 disabled={busy || verificationCode.trim().length !== 6}
                 onClick={() => void activateWithVerificationCode()}
               >
-                {busy ? 'Activating…' : 'Activate license'}
+                {busy ? 'Activating…' : activationCopy.activate}
               </PrimaryButton>
             </>
           ) : null}
@@ -814,12 +844,6 @@ export function LicenseStatusPanel({
       {showSupportInfo && license ? (
         <QuietCard>
           <dl className="grid gap-2 text-sm">
-            {license.email ? (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-slate-500">Email</dt>
-                <dd className="min-w-0 truncate font-semibold text-slate-900">{license.email}</dd>
-              </div>
-            ) : null}
             {license.supportCode ? (
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-500">Support code</dt>
@@ -837,7 +861,7 @@ export function LicenseStatusPanel({
       {deviceLimitReached && license?.kind !== 'free' ? (
         <QuietCard>
           <h3 className="text-sm font-semibold text-slate-900">
-            This Personal license allows 1 device.
+            This Personal license allows one active device.
           </h3>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
             {productCopy('Deactivate another computer, then activate this one. SuHuella will not remove a device for you.')}

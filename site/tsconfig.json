@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,9 +24,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@suhuella/brand": ["../brands/.build/entry.ts"],
-      "@suhuella/product/*": ["../packages/product/src/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@suhuella/brand": [
+        "../brands/.build/entry.ts"
+      ],
+      "@suhuella/product/*": [
+        "../packages/product/src/*"
+      ]
     }
   },
   "include": [
@@ -31,7 +41,13 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "/Users/narcisclavell/Library/Caches/suhuella/site-next/types/**/*.ts",
+    "/Users/narcisclavell/Library/Caches/suhuella/site-next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "**/*-check.ts", "**/*-audit-check.ts"]
+  "exclude": [
+    "node_modules",
+    "**/*-check.ts",
+    "**/*-audit-check.ts"
+  ]
 }

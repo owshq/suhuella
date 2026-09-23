@@ -115,7 +115,13 @@ export type RecommendedFolder = {
 
 export type WebSourceKind = "local";
 
-export type WebSourceStatus = "ready" | "needs_permission" | "indexing" | "unavailable";
+export type WebSourceStatus =
+  | "ready"
+  | "needs_permission"
+  | "indexing"
+  | "unavailable"
+  | "missing"
+  | "error";
 
 export type WebKnowledgeSource = {
   id: string;
@@ -130,6 +136,17 @@ export type WebKnowledgeSource = {
   access?: "persistent" | "limited";
   /** suhuella:documents etc. when connected from the Sources catalog card */
   wellKnownToken?: string;
+  lastCheckedAt?: string | null;
+  lastStateChangeAt?: string | null;
+  availabilityReason?:
+    | "disk_offline"
+    | "permission_revoked"
+    | "folder_deleted"
+    | "folder_moved"
+    | "scan_failed"
+    | "unknown"
+    | null;
+  permission?: "granted" | "denied" | "unknown";
 };
 
 export type WebIndexedFile = {
@@ -150,6 +167,9 @@ export type WebPlanItem = {
   proposedPath: string | null;
   fileName: string;
   sourceId: string;
+  /** Destination source. Omitted means the same source as `sourceId`. */
+  destSourceId?: string;
+  createdFolders?: string[];
   explanation: string;
   renameReasons: string[];
   warnings: string[];
@@ -185,6 +205,12 @@ export type LicenseEdition =
 
 export type LicenseStatus = "active" | "expired" | "revoked";
 
+export type GenerationAccessMode =
+  | "legacy_unassigned"
+  | "purchased_generation"
+  | "active_subscription"
+  | "version_binding_required";
+
 export type LicenseContext = {
   licenseId: string;
   customerId: string;
@@ -204,6 +230,12 @@ export type LicenseContext = {
   offlineUntil: string;
   channel: "stable" | "beta";
   licenseToken: string;
+  commercialGenerationId?: string | null;
+  acquiredCommercialGenerationIds?: string[];
+  generationAccessMode?: GenerationAccessMode;
+  generationEnforcementActive?: boolean;
+  policyRevision?: string | null;
+  signedContractVersion?: number;
 };
 
 export type LicenseApiError =

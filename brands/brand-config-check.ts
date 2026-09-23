@@ -251,7 +251,7 @@ function run(): void {
     );
     assert(brand.emails?.partners === "partners@suhuella.com", "partners alias is frozen");
     assert(brand.emails?.operations === "operations@suhuella.com", "operations alias is frozen");
-    assert(businessCheckoutUrl().includes("sales@suhuella.com"), "checkout presentation uses BrandConfig sales");
+    assert(businessCheckoutUrl() === "", "SuHuella business checkout stays closed until PAID_CHECKOUT_ENABLED");
     assert(
       licenseErrorMessage("offline") === "SuHuella can keep working offline for a limited time.",
       "desktop license copy uses BrandConfig",
@@ -303,9 +303,15 @@ function run(): void {
   const layout = readText("site/app/layout.tsx");
   assert(layout.includes("@suhuella/brand"), "site metadata imports BrandConfig");
   assert(layout.includes("siteOrigin()"), "site metadataBase uses BrandConfig");
-  assert(layout.includes("brand.displayName"), "site titles use BrandConfig");
+  assert(
+    layout.includes("brand.displayName") || layout.includes("requestBrand.displayName"),
+    "site titles use BrandConfig or request-scoped brand",
+  );
   assert(layout.includes("brand.pwa.backgroundColor"), "site body color uses BrandConfig");
-  assert(layout.includes("brandCssVars"), "site layout injects Brand theme CSS variables");
+  assert(
+    layout.includes("brandCssVars") || layout.includes("requestBrandCssVars"),
+    "site layout injects Brand theme CSS variables",
+  );
 
   const pageTitle = readText("site/lib/i18n/page-title.ts");
   assert(pageTitle.includes("brand.displayName"), "page titles use BrandConfig");
@@ -322,10 +328,7 @@ function run(): void {
   const downloadCatalog = readText("site/components/DownloadCatalogContent.tsx");
   const settingsWindow = readText("packages/product/src/windows/SettingsWindow.tsx");
   assert(siteLogo.includes("BrandMark"), "site SuhuellaLogo uses BrandConfig mark");
-  assert(
-    siteMark.includes("brand.logo.publicSvg") || siteMark.includes("BrandMarkGlyph"),
-    "site BrandMark reads BrandConfig logo",
-  );
+  assert(siteMark.includes("brand.icon.public256"), "site BrandMark reads BrandConfig app icon");
   const desktopBrandMark = readText("packages/product/src/components/BrandMark.tsx");
   const desktopBrandWordmark = readText("packages/product/src/components/BrandWordmark.tsx");
   assert(desktopBrandMark.includes("identity: EffectiveBrandIdentity"), "BrandMark paints identity.logo");
@@ -379,10 +382,13 @@ function run(): void {
     settingsWindow.includes("AppBrandingProvider"),
     "app shell provides business branding context",
   );
-  assert(overlayFrame.includes("SuhuellaWordmark"), "public overlays show brand name and logo");
+  const hero = readText("site/components/HeroSection.tsx");
+  assert(hero.includes("SuhuellaLogo"), "welcome popup version badge shows the brand logo");
+  assert(hero.includes("badge.name"), "welcome popup version badge shows the brand name");
+  assert(!overlayFrame.includes("SuhuellaWordmark"), "overlay chrome does not repeat a wordmark above the version badge");
   assert(downloadCatalog.includes("brand.displayName"), "download catalog shows BrandConfig name");
   assert(downloadCatalog.includes("BrandMark"), "download catalog shows BrandConfig logo");
-  assert(settingsWindow.includes("SuhuellaWordmark"), "app sidebar shows brand name and logo");
+  assert(!settingsWindow.includes("SuhuellaWordmark"), "app sidebar does not repeat the brand wordmark");
 
   assert(resolveEffectiveBranding("https://evil.example/logo.png") === null, "Business branding still rejects remote URLs");
   assert(

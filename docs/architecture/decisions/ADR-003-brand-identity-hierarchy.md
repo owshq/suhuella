@@ -344,5 +344,5 @@ Configuration changes (licence / org settings) update identity without rebuild.
 
 - [commercial-authority-model.md](../product/commercial-authority-model.md)
 - [brand-config.md](../product/brand-config.md)
-- [RELEASE-ARCHITECTURE-FROZEN.md](../../../RELEASE-ARCHITECTURE-FROZEN.md)
+- [release-architecture.md](../constitution/release-architecture.md)
 - [BRANDING-HIERARCHY-001.md](../../../BRANDING-HIERARCHY-001.md) — index alias

@@ -36,7 +36,7 @@ GET /api/release → release.json
 | `/app` | Permanent redirect → `/home` |
 | `/checkout/lifetime` | Stripe Checkout Session when selling is on; otherwise unavailable |
 | `/checkout/monthly` | Monthly Checkout Session when selling is on; otherwise unavailable |
-| `/checkout/business` | Contact sales |
+| `/checkout/business` | Business seat checkout (email verify → seats → Stripe) |
 | `/api/release` | Current stable release manifest (`release.json`) |
 | `/api/license/activate` | Email + device → signed `LicenseContext` |
 | `/api/license/check` | Refresh a signed licence |
@@ -64,30 +64,34 @@ Closing any overlay navigates to `/home`. No `?modal=` query UX.
 
 ## Environment variables
 
-Use these four delivery variables:
+Use these server variables. Do not put Stripe secrets or price ids in Git.
 
 | Variable | Scope | Purpose |
 | --- | --- | --- |
-| `PAID_CHECKOUT_ENABLED` | Server | Public sales switch. Must be exactly `true` to sell. Missing / any other value stays off |
-| `STRIPE_LIFETIME_PAYMENT_LINK` | Public | Gated helper. Unused while selling is off. Prefer Checkout Sessions |
-| `STRIPE_MONTHLY_PAYMENT_LINK` | Public | Gated helper. Unused while selling is off. Prefer Checkout Sessions |
-| `STRIPE_LIFETIME_PRICE_ID` | Secret | Creates a Checkout Session (`success_url` is a return, not proof) |
-| `STRIPE_MONTHLY_PRICE_ID` | Secret | Monthly Checkout Session |
-| `STRIPE_BUSINESS_PAYMENT_LINK` | Public | Optional Business checkout |
-| `BUSINESS_CONTACT_URL` | Public | Business contact if there is no Business checkout |
-| `STRIPE_SECRET_KEY` | Secret | `/api/verify-session` — never expose to the browser |
+| `PAID_CHECKOUT_ENABLED` | Server | Public sales switch. Must be exactly `true` to sell. Production stays `false` |
+| `STRIPE_SECRET_KEY` | Secret | Server only. `sk_test_` for Sandbox. `sk_live_` only when selling on suhuella.com |
+| `STRIPE_WEBHOOK_SECRET` | Secret | Verifies `POST /api/stripe/webhook` against the raw body |
+| `STRIPE_MONTHLY_PRICE_ID` | Secret | Personal Monthly Checkout Session. Server checks EUR 5.00 / month |
+| `STRIPE_LIFETIME_PRICE_ID` | Secret | Personal Lifetime Checkout Session. Server checks one-time EUR; the amount is the Stripe price |
+| `STRIPE_BUSINESS_PRICE_ID` | Secret | Reserved for Business seats (EUR 2.00 / user / month, minimum 20). Public checkout stays Contact Sales |
+| `STRIPE_PARTNER_PRICE_ID` | Secret | Reserved Partner Platform License. Not sold on `/license` |
+| `STRIPE_LIFETIME_UPGRADE_PRICE_ID` | Secret | Reserved. Purchase stays closed until commercial generations are enforced |
 | `RELEASE_MANIFEST_URL` | Server only | HTTPS URL to `release.json` in R2 (preferred) |
 | `INSTALLER_WINDOWS_URL` | Server only | Legacy fallback if manifest is unavailable |
 | `INSTALLER_MAC_URL` | Server only | Legacy fallback if manifest is unavailable |
-| `LICENSE_SIGNING_SECRET` | Secret | HMAC for `LicenseContext` tokens |
+| `LICENSE_SIGNING_SECRET` | Secret | Legacy HMAC license tokens only (server verify until Ed25519 cutover) |
+| `LICENSE_SIGNING_PRIVATE_KEY` | Secret | Ed25519 PKCS#8 (base64url) — server signs new license tokens |
+| `LICENSE_SIGNING_PUBLIC_KEYS` | Secret | Comma-separated Ed25519 SPKI public keys — server verify allowlist |
+| `LICENSE_EMAIL_OTP_SECRET` | Secret | Email OTP code hashing (activation / recovery / partner flows) |
+| `PARTNER_SESSION_SECRET` | Secret | Partner portal and applicant session cookies |
 | `LICENSE_GRANTS` | Secret JSON | Optional seed grants (Operations can also create grants) |
-| `SUPERADMIN_EMAILS` | Server | Superadmin allowlist (example: `admin@suhuella.com`) |
-| `SUPERADMIN_TOKEN` | Secret | Machine Bearer token for `/api/admin/business` only — not a console login |
+| `SUPERADMIN_EMAILS` | Server | Comma-separated allowlist. Example: `admin@suhuella.com` |
+| `SUPERADMIN_TOKEN` | Unused in production | Not an Operations login. `/api/admin/business` requires the same Cloudflare Access JWT as the console |
+| `CF_ACCESS_TEAM_DOMAIN` | Production | Hostname only: `<team>.cloudflareaccess.com` |
+| `CF_ACCESS_AUD` | Production | Application Audience (AUD) tag, copied exactly |
 | `OPERATIONS_ALLOW_DEV_ACCESS` | Local only | Optional: `true` for non-localhost dev hosts (LAN IP). `localhost` / `127.0.0.1` need no login |
 | `OPERATIONS_DEV_EMAIL` | Local only | With `OPERATIONS_ALLOW_DEV_ACCESS`, must be in `SUPERADMIN_EMAILS` |
 | `OPERATIONS_WORKER_ID` | Production | Optional worker/deployment id shown in the Operations panel |
-| `CF_ACCESS_TEAM_DOMAIN` | Production | Cloudflare Access team host for JWT verification |
-| `CF_ACCESS_AUD` | Production | Cloudflare Access application audience |
 | `BUSINESS_MIN_SEATS` | Server | Minimum Business seats (default 20) |
 | `BUSINESS_SEAT_PRICE_CENTS` | Server | Price per seat per month in cents (default 200 = €2) |
 | `BUSINESS_CURRENCY` | Server | Business currency (default `eur`) |
@@ -162,6 +166,10 @@ npx wrangler secret put RELEASE_MANIFEST_URL
 npx wrangler secret put INSTALLER_WINDOWS_URL
 npx wrangler secret put INSTALLER_MAC_URL
 npx wrangler secret put LICENSE_SIGNING_SECRET
+npx wrangler secret put LICENSE_SIGNING_PRIVATE_KEY
+npx wrangler secret put LICENSE_SIGNING_PUBLIC_KEYS
+npx wrangler secret put LICENSE_EMAIL_OTP_SECRET
+npx wrangler secret put PARTNER_SESSION_SECRET
 npx wrangler secret put LICENSE_GRANTS
 npx wrangler secret put RESEND_API_KEY
 ```
@@ -209,9 +217,23 @@ Required production secrets (names only — never commit or log values):
 
 ```bash
 cd site
-npx wrangler secret put LICENSE_SIGNING_SECRET
+npx wrangler secret put LICENSE_SIGNING_SECRET   # legacy HMAC until Ed25519 cutover
+npx wrangler secret put LICENSE_SIGNING_PRIVATE_KEY
+npx wrangler secret put LICENSE_SIGNING_PUBLIC_KEYS
+npx wrangler secret put LICENSE_EMAIL_OTP_SECRET
+npx wrangler secret put PARTNER_SESSION_SECRET
 npx wrangler secret put RESEND_API_KEY
 ```
+
+Desktop release builds embed **public keys only** at compile time (never the private key or HMAC secret):
+
+```bash
+export SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS="<same SPKI public key(s) as LICENSE_SIGNING_PUBLIC_KEYS>"
+cd desktop && npm run build
+npm run test:license-build-inlining --prefix desktop
+```
+
+`package:check` / production `npm run build` in `desktop/` require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS` unless `SUHUELLA_DESKTOP_CI=1` (CI smoke only).
 
 `RESEND_FROM` is already in `wrangler.jsonc`. Do not deploy and claim email ready until `suhuella.com` is verified in the Operator Resend account. Copy DNS records from the Resend dashboard exactly (Cloudflare CNAME records must be DNS-only). Do not invent record values.
 
@@ -226,7 +248,7 @@ Smoke (authorized inbox only, no sale):
 
 Public DNS inspect (no secrets): `npm run test:resend-dns`. After registrar records exist: `npm run test:resend-dns -- --require`.
 
-Rollback / retry: `wrangler rollback` restores Worker code, not D1 rows. Re-apply migrations only if a new migration exists. Rotate `RESEND_API_KEY` or `LICENSE_SIGNING_SECRET` with `wrangler secret put` (each put deploys a new Worker version).
+Rollback / retry: `wrangler rollback` restores Worker code, not D1 rows. Re-apply migrations only if a new migration exists. Rotate secrets independently: `RESEND_API_KEY`, `LICENSE_EMAIL_OTP_SECRET`, `PARTNER_SESSION_SECRET`, and `LICENSE_SIGNING_SECRET` (legacy HMAC only) each use `wrangler secret put` (each put deploys a new Worker version). Rotating `LICENSE_SIGNING_SECRET` must not affect OTP or partner sessions.
 
 Future (not implemented here):
 

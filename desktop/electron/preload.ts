@@ -23,6 +23,8 @@ import type {
   SearchResults,
   KnowledgeSet,
   KnowledgeSetItem,
+  SavedPlan,
+  SavedPlanDraft,
   KnowledgeSetValidationError,
   LicenseActionResult,
   LicenseStatusView,
@@ -59,12 +61,14 @@ const api = {
     ipcRenderer.invoke('index:getKnowledgeHealth'),
   getSuggestedLocations: (): Promise<SuggestedLocation[]> =>
     ipcRenderer.invoke('index:getSuggestedLocations'),
-  addIndexedLocation: (): Promise<AppSettings> => ipcRenderer.invoke('index:addLocation'),
+  addIndexedLocation: (hint?: string): Promise<AppSettings> =>
+    ipcRenderer.invoke('index:addLocation', hint),
   removeIndexedLocation: (location: string): Promise<AppSettings> =>
     ipcRenderer.invoke('index:removeLocation', location),
   setIndexedLocations: (locations: string[]): Promise<AppSettings> =>
     ipcRenderer.invoke('index:setLocations', locations),
-  startIndexScan: (): Promise<AppSettings> => ipcRenderer.invoke('index:startScan'),
+  startIndexScan: (refresh?: 'pending' | 'all'): Promise<AppSettings> =>
+    ipcRenderer.invoke('index:startScan', refresh),
   restoreSourceAccess: (sourceId: string): Promise<AppSettings> =>
     ipcRenderer.invoke('index:restoreSourceAccess', sourceId),
   cancelIndexScan: (): Promise<void> => ipcRenderer.invoke('index:cancelScan'),
@@ -92,6 +96,10 @@ const api = {
   },
   setLaunchAtLogin: (enabled: boolean): Promise<AppSettings> =>
     ipcRenderer.invoke('settings:setLaunchAtLogin', enabled),
+  setPermissionPreferences: (prefs: {
+    allowFolderChanges?: boolean
+    trashEnabled?: boolean
+  }): Promise<AppSettings> => ipcRenderer.invoke('settings:setPermissionPreferences', prefs),
   setSourceAppearanceColor: (path: string, color: string | null): Promise<AppSettings> =>
     ipcRenderer.invoke('settings:setSourceAppearanceColor', path, color),
   setSourceAppearance: (
@@ -129,6 +137,11 @@ const api = {
     ipcRenderer.invoke('license:activate', emailProofId),
   updateBusinessBranding: (dataUrl: string | null): Promise<LicenseActionResult> =>
     ipcRenderer.invoke('license:updateBranding', dataUrl),
+  getBusinessOrganisation: () => ipcRenderer.invoke('license:organisation'),
+  manageBusinessOrganisation: (
+    action: 'invite' | 'remove' | 'reset_devices' | 'change_seats',
+    payload?: { email?: string; seatId?: string; seatCount?: number },
+  ) => ipcRenderer.invoke('license:manageOrganisation', action, payload ?? {}),
   checkLicense: (): Promise<LicenseActionResult> => ipcRenderer.invoke('license:check'),
   deactivateLicense: (): Promise<LicenseActionResult> => ipcRenderer.invoke('license:deactivate'),
   deactivateRemoteDevice: (deviceIndex: number): Promise<LicenseActionResult> =>
@@ -141,6 +154,7 @@ const api = {
     ipcRenderer.invoke('diagnostics:export'),
   finishOnboarding: (destination?: 'home' | 'organise'): Promise<AppSettings> =>
     ipcRenderer.invoke('onboarding:finish', destination),
+  dismissWelcomeHint: (): Promise<AppSettings> => ipcRenderer.invoke('settings:dismissWelcomeHint'),
   previewSuggestions: (): Promise<void> => ipcRenderer.invoke('suggestion:preview'),
   previewSuggestionName: (fileName: string): Promise<SuggestionPayload> =>
     ipcRenderer.invoke('suggestion:previewName', fileName),
@@ -177,12 +191,13 @@ const api = {
   proposeOrganisationPlan: (
     knowledgeSet: KnowledgeSet,
     note?: string,
-    extras?: { workflowNames?: string[] },
+    extras?: { workflowNames?: string[]; assistantPreference?: 'on_device' | 'local' },
   ): Promise<PlanAssistantTurn> =>
     ipcRenderer.invoke('knowledge-set:suggestPlan', {
       knowledgeSet,
       note,
       workflowNames: extras?.workflowNames,
+      assistantPreference: extras?.assistantPreference,
     }),
   getPlanAssistantStatus: (): Promise<PlanAssistantStatus> =>
     ipcRenderer.invoke('plan-assistant:status'),
@@ -192,7 +207,21 @@ const api = {
     | { ok: true; result: OrganisationExecutionResult }
     | { ok: false; error: KnowledgeSetValidationError }
   > => ipcRenderer.invoke('knowledge-set:executePlan', request),
+  onPlanExecutionProgress: (
+    listener: (event: import('@suhuella/product/types.ts').PlanExecutionProgressEvent) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: unknown,
+      progress: import('@suhuella/product/types.ts').PlanExecutionProgressEvent,
+    ) => listener(progress)
+    ipcRenderer.on('knowledge-set:planProgress', handler)
+    return () => {
+      ipcRenderer.removeListener('knowledge-set:planProgress', handler)
+    }
+  },
   getByokStatus: (): Promise<ByokStatus> => ipcRenderer.invoke('byok:get'),
+  probeLocalModels: (): Promise<import('@suhuella/product/lib/local-model-discovery.ts').LocalModelProbeResult> =>
+    ipcRenderer.invoke('local-model:probe'),
   connectByok: (request: ByokConnectRequest): Promise<ByokConnectResult> =>
     ipcRenderer.invoke('byok:connect', request),
   disconnectByok: (): Promise<ByokStatus> => ipcRenderer.invoke('byok:disconnect'),
@@ -218,6 +247,19 @@ const api = {
   clearLogs: (): Promise<StorageUsage> => ipcRenderer.invoke('storage:clearLogs'),
   clearActivityHistory: (): Promise<StorageUsage> => ipcRenderer.invoke('storage:clearActivity'),
   exportActivity: (): Promise<string | null> => ipcRenderer.invoke('storage:exportActivity'),
+  listSavedPlans: (): Promise<SavedPlan[]> => ipcRenderer.invoke('plans:list'),
+  saveSavedPlan: (
+    draft: SavedPlanDraft,
+  ): Promise<{ ok: true; plan: SavedPlan } | { ok: false; error: KnowledgeSetValidationError }> =>
+    ipcRenderer.invoke('plans:save', draft),
+  deleteSavedPlan: (
+    planId: string,
+  ): Promise<{ ok: true; plans: SavedPlan[] } | { ok: false; error: KnowledgeSetValidationError }> =>
+    ipcRenderer.invoke('plans:delete', planId),
+  duplicateSavedPlan: (
+    planId: string,
+  ): Promise<{ ok: true; plan: SavedPlan } | { ok: false; error: KnowledgeSetValidationError }> =>
+    ipcRenderer.invoke('plans:duplicate', planId),
   listWorkflows: (): Promise<Workflow[]> => ipcRenderer.invoke('workflows:list'),
   saveWorkflow: (
     draft: {

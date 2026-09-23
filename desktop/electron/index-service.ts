@@ -1,6 +1,7 @@
-import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { inspectElectronLocation, syncElectronHandles } from './handle-registry.ts'
 import { app, type BrowserWindow } from 'electron'
 import { buildFolderIndex } from './indexer.ts'
 import { clearIndex, loadIndex, saveIndex } from './index-store.ts'
@@ -19,6 +20,7 @@ import type {
   IndexedLocationStatus,
   IndexedLocationSummary,
   IndexBrowse,
+  IndexRefreshMode,
   IndexScanProgress,
   SourceBrowse,
   SourceBrowseEntry,
@@ -61,19 +63,28 @@ const IDLE_SCAN: IndexScanProgress = {
 }
 
 function estimateRemainingSeconds(progress: IndexScanProgress): number | null {
-  if (!progress.startedAt || progress.foldersScanned < 12) {
+  const scannedNew = Math.max(0, progress.foldersScanned - (progress.foldersReused ?? 0))
+  if (!progress.startedAt || scannedNew < 12) {
     return null
   }
 
   const elapsedMs = Date.now() - new Date(progress.startedAt).getTime()
   if (elapsedMs <= 0) return null
 
-  const foldersPerMs = progress.foldersScanned / elapsedMs
+  const foldersPerMs = scannedNew / elapsedMs
   if (foldersPerMs <= 0) return null
 
-  const estimatedTotalFolders = Math.max(progress.foldersScanned + 1, progress.foldersScanned * 2.5)
-  const remainingFolders = Math.max(0, estimatedTotalFolders - progress.foldersScanned)
+  const estimatedTotalFolders = Math.max(scannedNew + 1, scannedNew * 2.5)
+  const remainingFolders = Math.max(0, estimatedTotalFolders - scannedNew)
   return Math.max(1, Math.round(remainingFolders / foldersPerMs / 1000))
+}
+
+function locationIsActivelyScanning(location: string, scan: IndexScanProgress): boolean {
+  if (scan.status !== 'scanning') return false
+  if (scan.refresh !== 'pending') return true
+  const root = scan.currentRoot
+  if (!root) return false
+  return normalizeLocationPath(root) === normalizeLocationPath(location)
 }
 
 function withScanEstimate(partial: Partial<IndexScanProgress>): IndexScanProgress {
@@ -289,17 +300,26 @@ export function cancelIndexScan(): void {
   cancelRequested = true
 }
 
-export function startIndexScan(windows: Array<BrowserWindow | null>): Promise<AppSettings> {
+export function startIndexScan(
+  windows: Array<BrowserWindow | null>,
+  options?: { refresh?: IndexRefreshMode },
+): Promise<AppSettings> {
   if (activeScan) {
     return activeScan
   }
 
+  const refresh = options?.refresh ?? 'all'
   cancelRequested = false
   scanState = withScanEstimate({
     status: 'scanning',
+    refresh,
     foldersScanned: 0,
     filesSeen: 0,
+    foldersReused: 0,
+    locationsDone: 0,
+    locationsTotal: 0,
     currentPath: '',
+    currentRoot: '',
     startedAt: new Date().toISOString(),
     finishedAt: null,
   })
@@ -307,6 +327,12 @@ export function startIndexScan(windows: Array<BrowserWindow | null>): Promise<Ap
 
   activeScan = (async () => {
     const settings = loadSettings()
+
+    scanState = withScanEstimate({
+      ...scanState,
+      locationsTotal: settings.indexedLocations.length,
+    })
+    broadcastProgress(windows)
 
     if (settings.indexedLocations.length === 0) {
       clearIndex()
@@ -316,7 +342,11 @@ export function startIndexScan(windows: Array<BrowserWindow | null>): Promise<Ap
         status: 'ready',
         foldersScanned: 0,
         filesSeen: 0,
+        foldersReused: 0,
+        locationsDone: 0,
+        locationsTotal: 0,
         currentPath: '',
+        currentRoot: '',
         finishedAt: new Date().toISOString(),
       })
       broadcastProgress(windows)
@@ -324,13 +354,17 @@ export function startIndexScan(windows: Array<BrowserWindow | null>): Promise<Ap
     }
 
     try {
+      const previous = refresh === 'pending' ? loadIndex() : undefined
       const index = await buildFolderIndex(settings.indexedLocations, {
         cancelled: () => cancelRequested,
+        previous,
+        refresh,
         onProgress: (partial) => {
           scanState = withScanEstimate({
             ...scanState,
             ...partial,
             status: 'scanning',
+            refresh,
           })
           broadcastProgress(windows)
         },
@@ -401,18 +435,7 @@ function inspectLocation(location: string): Extract<
   IndexedLocationStatus,
   'unavailable' | 'permission_denied' | 'external_drive_disconnected'
 > | null {
-  try {
-    const stat = statSync(location)
-    if (!stat.isDirectory()) return 'unavailable'
-    accessSync(location, constants.R_OK)
-    return null
-  } catch (error) {
-    const code =
-      error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
-    if (code === 'EACCES' || code === 'EPERM') return 'permission_denied'
-    if (isExternalLocation(location)) return 'external_drive_disconnected'
-    return 'unavailable'
-  }
+  return inspectElectronLocation(location)
 }
 
 function locationName(location: string): string {
@@ -524,6 +547,7 @@ export function getFoldersKnowledgeSummary(): FoldersKnowledgeSummary {
 
 export function getIndexedLocationSummaries(): IndexedLocationSummary[] {
   const settings = loadSettings()
+  void syncElectronHandles(settings.indexedLocations)
   const index = loadIndex()
   const scan = getScanProgress()
 
@@ -546,7 +570,7 @@ export function getIndexedLocationSummaries(): IndexedLocationSummary[] {
     let status: IndexedLocationStatus = 'ready'
     if (liveIssue) {
       status = liveIssue
-    } else if (scan.status === 'scanning') {
+    } else if (locationIsActivelyScanning(normalized, scan)) {
       status = 'indexing'
     } else if (source?.status === 'error') {
       status = isExternalLocation(normalized) ? 'external_drive_disconnected' : 'unavailable'

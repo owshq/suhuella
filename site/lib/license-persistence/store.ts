@@ -36,6 +36,41 @@ function parseDocument(value: unknown): LicensePersistenceDocument {
           .map((item) => parseLicenseGrant(item))
           .filter((item): item is LicenseGrant => item !== null)
       : [],
+    stripeEvents: Array.isArray(value.stripeEvents)
+      ? value.stripeEvents.flatMap((item) => {
+          if (!isRecord(item) || typeof item.id !== "string" || typeof item.processedAt !== "string") {
+            return [];
+          }
+          return [{ id: item.id, processedAt: item.processedAt }];
+        })
+      : [],
+    commercialGenerations: Array.isArray(value.commercialGenerations)
+      ? (value.commercialGenerations as LicensePersistenceDocument["commercialGenerations"])
+      : [],
+    commercialGenerationPrices: Array.isArray(value.commercialGenerationPrices)
+      ? (value.commercialGenerationPrices as LicensePersistenceDocument["commercialGenerationPrices"])
+      : [],
+    checkoutGenerationBindings: Array.isArray(value.checkoutGenerationBindings)
+      ? (value.checkoutGenerationBindings as LicensePersistenceDocument["checkoutGenerationBindings"]).map(
+          (row) => ({
+            ...row,
+            versionModelActiveAtBind: row.versionModelActiveAtBind === true,
+          }),
+        )
+      : [],
+    licenseAcquisitions: Array.isArray(value.licenseAcquisitions)
+      ? (value.licenseAcquisitions as LicensePersistenceDocument["licenseAcquisitions"])
+      : [],
+    checkoutReconciliationPending: Array.isArray(value.checkoutReconciliationPending)
+      ? (value.checkoutReconciliationPending as LicensePersistenceDocument["checkoutReconciliationPending"])
+      : [],
+    licenseVersionModelActivatedAt:
+      typeof value.licenseVersionModelActivatedAt === "string"
+        ? value.licenseVersionModelActivatedAt
+        : null,
+    lifetimeUpgradeIntents: Array.isArray(value.lifetimeUpgradeIntents)
+      ? (value.lifetimeUpgradeIntents as LicensePersistenceDocument["lifetimeUpgradeIntents"])
+      : [],
   };
 }
 
@@ -137,14 +172,7 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
     read: async () => {
       const document = emptyLicensePersistenceDocument();
 
-      const activations = await db
-        .prepare(
-          `SELECT license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status
-           FROM license_activation`,
-        )
-        .all();
-
-      document.activations = ((activations.results as any[]) ?? []).map((row) => ({
+      const mapActivationRow = (row: any) => ({
         licenseId: row.license_id,
         deviceId: row.device_id,
         deviceName: row.device_name,
@@ -152,8 +180,35 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
         appVersion: row.app_version,
         activatedAt: row.activated_at,
         lastSeen: row.last_seen,
-        status: row.status === "revoked" ? "revoked" : "active",
-      }));
+        status: row.status === "revoked" ? ("revoked" as const) : ("active" as const),
+        ...(row.last_presented_token_algorithm
+          ? {
+              lastPresentedTokenAlgorithm: row.last_presented_token_algorithm as
+                | "ed25519"
+                | "legacy-hmac-sha256"
+                | "unknown",
+            }
+          : {}),
+      });
+
+      try {
+        const activations = await db
+          .prepare(
+            `SELECT license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status,
+                    last_presented_token_algorithm
+             FROM license_activation`,
+          )
+          .all();
+        document.activations = ((activations.results as any[]) ?? []).map(mapActivationRow);
+      } catch {
+        const activations = await db
+          .prepare(
+            `SELECT license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status
+             FROM license_activation`,
+          )
+          .all();
+        document.activations = ((activations.results as any[]) ?? []).map(mapActivationRow);
+      }
 
       const challenges = await db
         .prepare(`SELECT * FROM email_verification_challenge`)
@@ -210,6 +265,149 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
         })
         .filter((item: LicenseGrant | null): item is LicenseGrant => item !== null);
 
+      try {
+        const events = await db.prepare(`SELECT event_id, processed_at FROM stripe_event`).all();
+        document.stripeEvents = ((events.results as any[]) ?? []).map((row) => ({
+          id: String(row.event_id),
+          processedAt: String(row.processed_at),
+        }));
+      } catch {
+        document.stripeEvents = [];
+      }
+
+      try {
+        const generations = await db
+          .prepare(
+            `SELECT id, label, required_capabilities, effective_from, created_at FROM commercial_generation`,
+          )
+          .all();
+        document.commercialGenerations = ((generations.results as any[]) ?? []).map((row) => ({
+          id: String(row.id),
+          label: String(row.label),
+          requiredCapabilities: JSON.parse(String(row.required_capabilities)) as string[],
+          effectiveFrom: row.effective_from ? String(row.effective_from) : null,
+          createdAt: String(row.created_at),
+        }));
+      } catch {
+        document.commercialGenerations = [];
+      }
+
+      try {
+        const prices = await db
+          .prepare(`SELECT price_id, commercial_generation_id, product FROM commercial_generation_price`)
+          .all();
+        document.commercialGenerationPrices = ((prices.results as any[]) ?? []).map((row) => ({
+          priceId: String(row.price_id),
+          commercialGenerationId: String(row.commercial_generation_id),
+          product: row.product as NonNullable<
+            LicensePersistenceDocument["commercialGenerationPrices"]
+          >[number]["product"],
+        }));
+      } catch {
+        document.commercialGenerationPrices = [];
+      }
+
+      try {
+        const bindings = await db
+          .prepare(
+            `SELECT checkout_session_id, commercial_generation_id, price_id, plan, bound_at,
+                    version_model_active_at_bind
+             FROM checkout_generation_binding`,
+          )
+          .all();
+        document.checkoutGenerationBindings = ((bindings.results as any[]) ?? []).map((row) => ({
+          checkoutSessionId: String(row.checkout_session_id),
+          commercialGenerationId: row.commercial_generation_id
+            ? String(row.commercial_generation_id)
+            : null,
+          priceId: String(row.price_id),
+          plan: String(row.plan),
+          boundAt: String(row.bound_at),
+          versionModelActiveAtBind: Number(row.version_model_active_at_bind) === 1,
+        }));
+      } catch {
+        document.checkoutGenerationBindings = [];
+      }
+
+      try {
+        const acquisitions = await db
+          .prepare(
+            `SELECT id, license_id, normalized_email, kind, commercial_generation_id,
+                    checkout_session_id, stripe_event_id, edition, acquired_at
+             FROM license_acquisition`,
+          )
+          .all();
+        document.licenseAcquisitions = ((acquisitions.results as any[]) ?? []).map((row) => ({
+          id: String(row.id),
+          licenseId: String(row.license_id),
+          normalizedEmail: String(row.normalized_email),
+          kind: row.kind as NonNullable<LicensePersistenceDocument["licenseAcquisitions"]>[number]["kind"],
+          commercialGenerationId: row.commercial_generation_id
+            ? String(row.commercial_generation_id)
+            : null,
+          checkoutSessionId: row.checkout_session_id ? String(row.checkout_session_id) : null,
+          stripeEventId: row.stripe_event_id ? String(row.stripe_event_id) : null,
+          edition: row.edition as NonNullable<
+            LicensePersistenceDocument["licenseAcquisitions"]
+          >[number]["edition"],
+          acquiredAt: String(row.acquired_at),
+        }));
+      } catch {
+        document.licenseAcquisitions = [];
+      }
+
+      try {
+        const pending = await db
+          .prepare(
+            `SELECT id, checkout_session_id, normalized_email, price_id, plan, reason,
+                    stripe_event_id, recorded_at, status
+             FROM checkout_reconciliation_pending`,
+          )
+          .all();
+        document.checkoutReconciliationPending = ((pending.results as any[]) ?? []).map((row) => ({
+          id: String(row.id),
+          checkoutSessionId: String(row.checkout_session_id),
+          normalizedEmail: String(row.normalized_email),
+          priceId: String(row.price_id),
+          plan: String(row.plan),
+          reason: row.reason as NonNullable<
+            LicensePersistenceDocument["checkoutReconciliationPending"]
+          >[number]["reason"],
+          stripeEventId: row.stripe_event_id ? String(row.stripe_event_id) : null,
+          recordedAt: String(row.recorded_at),
+          status: row.status === "resolved" ? "resolved" : "open",
+        }));
+      } catch {
+        document.checkoutReconciliationPending = [];
+      }
+
+      try {
+        const intents = await db
+          .prepare(
+            `SELECT id, license_id, normalized_email, source_generation_id, target_generation_id,
+                    checkout_session_id, idempotency_key, status, incident_note, created_at, updated_at
+             FROM lifetime_upgrade_intent`,
+          )
+          .all();
+        document.lifetimeUpgradeIntents = ((intents.results as any[]) ?? []).map((row) => ({
+          id: String(row.id),
+          licenseId: String(row.license_id),
+          normalizedEmail: String(row.normalized_email),
+          sourceGenerationId: String(row.source_generation_id),
+          targetGenerationId: String(row.target_generation_id),
+          checkoutSessionId: row.checkout_session_id ? String(row.checkout_session_id) : null,
+          idempotencyKey: String(row.idempotency_key),
+          status: row.status as NonNullable<
+            LicensePersistenceDocument["lifetimeUpgradeIntents"]
+          >[number]["status"],
+          incidentNote: row.incident_note ? String(row.incident_note) : null,
+          createdAt: String(row.created_at),
+          updatedAt: String(row.updated_at),
+        }));
+      } catch {
+        document.lifetimeUpgradeIntents = [];
+      }
+
       return document;
     },
     write: async (next) => {
@@ -221,25 +419,63 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
         db.prepare(`DELETE FROM rate_limit_event`),
         db.prepare(`DELETE FROM license_grant`),
       ]);
+      try {
+        await db.batch([
+          db.prepare(`DELETE FROM license_acquisition`),
+          db.prepare(`DELETE FROM checkout_reconciliation_pending`),
+          db.prepare(`DELETE FROM checkout_generation_binding`),
+          db.prepare(`DELETE FROM commercial_generation_price`),
+          db.prepare(`DELETE FROM commercial_generation`),
+          db.prepare(`DELETE FROM license_version_model_state`),
+        ]);
+      } catch {
+        /* 0011/0012 not applied yet */
+      }
+      try {
+        await db.prepare(`DELETE FROM lifetime_upgrade_intent`).run();
+      } catch {
+        /* 0012 not applied yet */
+      }
 
       const statements: any[] = [];
       for (const activation of next.activations) {
-        statements.push(
-          db.prepare(
-            `INSERT INTO license_activation
-             (license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).bind(
-            activation.licenseId,
-            activation.deviceId,
-            activation.deviceName,
-            activation.platform,
-            activation.appVersion,
-            activation.activatedAt,
-            activation.lastSeen,
-            activation.status,
-          ),
-        );
+        if (activation.lastPresentedTokenAlgorithm) {
+          statements.push(
+            db.prepare(
+              `INSERT INTO license_activation
+               (license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status,
+                last_presented_token_algorithm)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ).bind(
+              activation.licenseId,
+              activation.deviceId,
+              activation.deviceName,
+              activation.platform,
+              activation.appVersion,
+              activation.activatedAt,
+              activation.lastSeen,
+              activation.status,
+              activation.lastPresentedTokenAlgorithm,
+            ),
+          );
+        } else {
+          statements.push(
+            db.prepare(
+              `INSERT INTO license_activation
+               (license_id, device_id, device_name, platform, app_version, activated_at, last_seen, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            ).bind(
+              activation.licenseId,
+              activation.deviceId,
+              activation.deviceName,
+              activation.platform,
+              activation.appVersion,
+              activation.activatedAt,
+              activation.lastSeen,
+              activation.status,
+            ),
+          );
+        }
       }
       for (const challenge of next.challenges) {
         statements.push(
@@ -336,11 +572,148 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
       if (statements.length > 0) {
         await db.batch(statements);
       }
+
+      const commercialStatements: any[] = [];
+      for (const generation of next.commercialGenerations ?? []) {
+        commercialStatements.push(
+          db.prepare(
+            `INSERT INTO commercial_generation
+             (id, label, required_capabilities, effective_from, created_at)
+             VALUES (?, ?, ?, ?, ?)`,
+          ).bind(
+            generation.id,
+            generation.label,
+            JSON.stringify(generation.requiredCapabilities),
+            generation.effectiveFrom,
+            generation.createdAt,
+          ),
+        );
+      }
+      for (const price of next.commercialGenerationPrices ?? []) {
+        commercialStatements.push(
+          db.prepare(
+            `INSERT INTO commercial_generation_price (price_id, commercial_generation_id, product)
+             VALUES (?, ?, ?)`,
+          ).bind(price.priceId, price.commercialGenerationId, price.product),
+        );
+      }
+      for (const binding of next.checkoutGenerationBindings ?? []) {
+        commercialStatements.push(
+          db.prepare(
+            `INSERT INTO checkout_generation_binding
+             (checkout_session_id, commercial_generation_id, price_id, plan, bound_at,
+              version_model_active_at_bind)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          ).bind(
+            binding.checkoutSessionId,
+            binding.commercialGenerationId,
+            binding.priceId,
+            binding.plan,
+            binding.boundAt,
+            binding.versionModelActiveAtBind ? 1 : 0,
+          ),
+        );
+      }
+      for (const incident of next.checkoutReconciliationPending ?? []) {
+        commercialStatements.push(
+          db.prepare(
+            `INSERT INTO checkout_reconciliation_pending
+             (id, checkout_session_id, normalized_email, price_id, plan, reason,
+              stripe_event_id, recorded_at, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).bind(
+            incident.id,
+            incident.checkoutSessionId,
+            incident.normalizedEmail,
+            incident.priceId,
+            incident.plan,
+            incident.reason,
+            incident.stripeEventId,
+            incident.recordedAt,
+            incident.status,
+          ),
+        );
+      }
+      for (const acquisition of next.licenseAcquisitions ?? []) {
+        commercialStatements.push(
+          db.prepare(
+            `INSERT INTO license_acquisition
+             (id, license_id, normalized_email, kind, commercial_generation_id,
+              checkout_session_id, stripe_event_id, edition, acquired_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ).bind(
+            acquisition.id,
+            acquisition.licenseId,
+            acquisition.normalizedEmail,
+            acquisition.kind,
+            acquisition.commercialGenerationId,
+            acquisition.checkoutSessionId,
+            acquisition.stripeEventId,
+            acquisition.edition,
+            acquisition.acquiredAt,
+          ),
+        );
+      }
+      if (commercialStatements.length > 0) {
+        try {
+          await db.batch(commercialStatements);
+        } catch {
+          /* 0011 not applied yet — core grant writes remain durable */
+        }
+      }
+
+      const upgradeIntentStatements = (next.lifetimeUpgradeIntents ?? []).map((intent) =>
+        db
+          .prepare(
+            `INSERT INTO lifetime_upgrade_intent
+             (id, license_id, normalized_email, source_generation_id, target_generation_id,
+              checkout_session_id, idempotency_key, status, incident_note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            intent.id,
+            intent.licenseId,
+            intent.normalizedEmail,
+            intent.sourceGenerationId,
+            intent.targetGenerationId,
+            intent.checkoutSessionId,
+            intent.idempotencyKey,
+            intent.status,
+            intent.incidentNote,
+            intent.createdAt,
+            intent.updatedAt,
+          ),
+      );
+      if (upgradeIntentStatements.length > 0) {
+        try {
+          await db.batch(upgradeIntentStatements);
+        } catch {
+          /* 0012 not applied yet */
+        }
+      }
+
+      try {
+        const eventStatements = [
+          db.prepare(`DELETE FROM stripe_event`),
+          ...next.stripeEvents.map((event) =>
+            db
+              .prepare(`INSERT INTO stripe_event (event_id, processed_at) VALUES (?, ?)`)
+              .bind(event.id, event.processedAt),
+          ),
+        ];
+        await db.batch(eventStatements);
+      } catch {
+        /* 0005 is not applied yet. Grant writes stay durable; event receipts retry. */
+      }
     },
   };
 }
 
 async function resolveD1Database(): Promise<any | null> {
+  if (process.env.SUHUELLA_DEV_OPENNEXT === "0") {
+    const { resolveDevWranglerD1Adapter } = await import("../dev/local-wrangler-d1.ts");
+    return resolveDevWranglerD1Adapter();
+  }
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = await getCloudflareContext({ async: true });
@@ -352,8 +725,15 @@ async function resolveD1Database(): Promise<any | null> {
 }
 
 let storePromise: Promise<LicensePersistenceStore> | null = null;
+let testDatabase: unknown = null;
+
+export function setLicensePersistenceDatabaseForTests(db: unknown | null): void {
+  testDatabase = db;
+  storePromise = null;
+}
 
 async function createStore(): Promise<LicensePersistenceStore> {
+  if (testDatabase) return createD1Store(testDatabase);
   const d1 = await resolveD1Database();
   if (d1) return createD1Store(d1);
   if (isProductionRuntime()) return new UnavailableLicensePersistenceStore();
@@ -367,6 +747,7 @@ export function getLicensePersistenceStore(): Promise<LicensePersistenceStore> {
 
 export function resetLicensePersistenceStoreForTests(): void {
   storePromise = null;
+  testDatabase = null;
 }
 
 export async function isDurableLicensePersistenceReady(): Promise<boolean> {

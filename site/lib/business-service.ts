@@ -1,4 +1,9 @@
 import {
+  defaultBusinessBillingClient,
+  type BusinessBillingClient,
+  type StripeSubscriptionSnapshot,
+} from "./business-billing.ts";
+import {
   getBusinessPricingConfig,
   monthlyAmountCents,
   type BusinessPricingConfig,
@@ -19,14 +24,17 @@ import type {
   BusinessBranding,
   BusinessError,
   BusinessSeat,
+  BusinessSeatChangeRecord,
+  BusinessSeatChangeSource,
   BusinessSeatRole,
 } from "./business-types.ts";
 import { OCCUPIED_SEAT_STATUSES } from "./business-types.ts";
 import {
+  BUSINESS_DEFAULT_DEVICE_LIMIT,
   capabilitiesForEdition,
-  deviceLimitForEdition,
   isValidEmail,
   knowledgeSourcesForEdition,
+  MAX_DEVICE_LIMIT_PER_SEAT,
   normalizeEmail,
   type LicenseContext,
   type LicenseGrant,
@@ -42,12 +50,29 @@ import {
 
 export type BusinessResult<T> = { ok: true; value: T } | { ok: false; error: BusinessError };
 
+export function businessDeviceLimitForAccount(
+  account: Pick<BusinessAccount, "deviceLimitPerSeat">,
+): number {
+  const configured = account.deviceLimitPerSeat;
+  if (
+    typeof configured === "number" &&
+    Number.isInteger(configured) &&
+    configured >= 1 &&
+    configured <= MAX_DEVICE_LIMIT_PER_SEAT
+  ) {
+    return configured;
+  }
+  return BUSINESS_DEFAULT_DEVICE_LIMIT;
+}
+
 export type LicenseBridge = {
   findGrantByEmail(email: string): LicenseGrant | undefined | Promise<LicenseGrant | undefined>;
   findGrantByLicenseId(licenseId: string): LicenseGrant | undefined | Promise<LicenseGrant | undefined>;
   upsertGrant(grant: LicenseGrant): LicenseGrant | Promise<LicenseGrant>;
   resetActivations(licenseId: string): Promise<number>;
-  listActivations(licenseId: string): Promise<{ deviceId: string; status: string }[]>;
+  listActivations(licenseId: string): Promise<
+    { deviceId: string; status: string; deviceName?: string; platform?: string; lastSeen?: string }[]
+  >;
 };
 
 const defaultLicenseBridge: LicenseBridge = {
@@ -120,7 +145,7 @@ export function grantFromBusinessSeat(
     edition: "business",
     origin: "business",
     status,
-    deviceLimit: deviceLimitForEdition("business"),
+    deviceLimit: businessDeviceLimitForAccount(account),
     validUntil: account.trialEndsAt,
     organisationId: account.organisationId,
     organisationName: account.name,
@@ -130,6 +155,10 @@ export function grantFromBusinessSeat(
     isPaid: account.status !== "trial",
     isGifted: false,
     isRevocableByAdmin: false,
+    paymentProvider: account.stripeSubscriptionId ? "stripe" : null,
+    paymentReference: account.stripeSubscriptionId,
+    subscriptionId: account.stripeSubscriptionId,
+    currentPeriodEnd: account.currentPeriodEnd,
     entitlementStatus:
       status === "revoked" ? "suspended_seat" : status === "expired" ? "expired" : "active",
   };
@@ -152,7 +181,7 @@ export function licenseContextFromBusinessSeat(
     status: grant.status,
     capabilities: capabilitiesForEdition("business"),
     enabledKnowledgeSources: knowledgeSourcesForEdition("business"),
-    deviceLimit: deviceLimitForEdition("business", grant.deviceLimit),
+    deviceLimit: businessDeviceLimitForAccount(account),
     activatedDevices,
     organisationId: account.organisationId,
     organisationName: account.name,
@@ -170,10 +199,12 @@ export function createBusinessService(options?: {
   store?: BusinessStore;
   pricing?: BusinessPricingConfig;
   licenses?: LicenseBridge;
+  billing?: BusinessBillingClient;
   now?: () => Date;
 }) {
   const store = options?.store ?? defaultBusinessStore;
   const licenses = options?.licenses ?? defaultLicenseBridge;
+  const billing = options?.billing ?? defaultBusinessBillingClient;
   const now = options?.now ?? (() => new Date());
 
   function pricing(): BusinessPricingConfig {
@@ -203,6 +234,34 @@ export function createBusinessService(options?: {
     return occupiedSeats(snapshot().seats, organisationId).find((item) => item.email === normalized);
   }
 
+  function findManagedOrganisation(email: string): { account: BusinessAccount; seat: BusinessSeat } | undefined {
+    const normalized = normalizeEmail(email);
+    const data = snapshot();
+    const seat = data.seats.find(
+      (item) =>
+        item.email === normalized &&
+        OCCUPIED_SEAT_STATUSES.includes(item.status) &&
+        (item.role === "owner" || item.role === "admin"),
+    );
+    if (!seat) return undefined;
+    const account = data.accounts.find((item) => item.organisationId === seat.organisationId);
+    if (!account) return undefined;
+    return { account, seat };
+  }
+
+  function findBusinessGrantByLicenseId(licenseId: string): LicenseGrant | undefined {
+    const id = licenseId.trim();
+    if (!id) return undefined;
+    const data = snapshot();
+    const seat = data.seats.find(
+      (item) => item.licenseId === id && OCCUPIED_SEAT_STATUSES.includes(item.status),
+    );
+    if (!seat) return undefined;
+    const account = data.accounts.find((item) => item.organisationId === seat.organisationId);
+    if (!account) return undefined;
+    return grantFromBusinessSeat(account, seat, now()) ?? undefined;
+  }
+
   function findBusinessGrantByEmail(email: string): LicenseGrant | undefined {
     const normalized = normalizeEmail(email);
     const data = snapshot();
@@ -213,6 +272,20 @@ export function createBusinessService(options?: {
     const account = data.accounts.find((item) => item.organisationId === seat.organisationId);
     if (!account) return undefined;
     return grantFromBusinessSeat(account, seat, now()) ?? undefined;
+  }
+
+  async function syncOrganisationSeatGrants(account: BusinessAccount): Promise<number> {
+    const seats = snapshot().seats.filter(
+      (item) => item.organisationId === account.organisationId && item.status !== "removed",
+    );
+    let synced = 0;
+    for (const seat of seats) {
+      const grant = grantFromBusinessSeat(account, seat, now());
+      if (!grant) continue;
+      await licenses.upsertGrant(grant);
+      synced += 1;
+    }
+    return synced;
   }
 
   function requireManager(
@@ -266,6 +339,17 @@ export function createBusinessService(options?: {
         status === "trial"
           ? new Date(now().getTime() + Math.max(trialDays, 1) * 24 * 60 * 60 * 1000).toISOString()
           : null,
+      stripeSubscriptionId: null,
+      stripeSubscriptionItemId: null,
+      stripeStatus: null,
+      currentPeriodEnd: null,
+      recurringAmountCents: null,
+      billingInterval: null,
+      billingNeedsReconciliation: false,
+      lastStripeEventId: null,
+      lastStripeEventCreated: null,
+      stripeCheckoutSessionId: null,
+      deviceLimitPerSeat: BUSINESS_DEFAULT_DEVICE_LIMIT,
       createdAt,
       updatedAt: createdAt,
     };
@@ -291,7 +375,104 @@ export function createBusinessService(options?: {
     }
 
     persist(data);
+    if (owner) {
+      const grant = grantFromBusinessSeat(account, owner, now());
+      if (grant) void licenses.upsertGrant(grant);
+    }
     return { ok: true, value: { account, owner } };
+  }
+
+  async function setOrganisationDeviceLimit(
+    actor: BusinessActor,
+    organisationId: string,
+    deviceLimitPerSeat: number,
+  ): Promise<BusinessResult<{ account: BusinessAccount; syncedSeats: number }>> {
+    if (actor.kind !== "superadmin") return { ok: false, error: "forbidden" };
+    if (
+      !Number.isInteger(deviceLimitPerSeat) ||
+      deviceLimitPerSeat < 1 ||
+      deviceLimitPerSeat > MAX_DEVICE_LIMIT_PER_SEAT
+    ) {
+      return { ok: false, error: "invalid_request" };
+    }
+    const account = findAccount(organisationId);
+    if (!account) return { ok: false, error: "not_found" };
+
+    const data = snapshot();
+    const index = data.accounts.findIndex((item) => item.organisationId === organisationId);
+    const next: BusinessAccount = {
+      ...account,
+      deviceLimitPerSeat,
+      updatedAt: now().toISOString(),
+    };
+    data.accounts[index] = next;
+    persist(data);
+
+    const syncedSeats = await syncOrganisationSeatGrants(next);
+    return { ok: true, value: { account: next, syncedSeats } };
+  }
+
+  function assignedSeatCount(organisationId: string): number {
+    return occupiedSeats(snapshot().seats, organisationId).length;
+  }
+
+  function validatePurchasedQuantity(
+    account: BusinessAccount,
+    seatLimit: number,
+  ): BusinessError | null {
+    if (account.plan !== "business" && account.plan !== "enterprise") return "not_business";
+    const config = pricing();
+    const minSeats = account.plan === "enterprise" ? 1 : config.minSeats;
+    if (!Number.isInteger(seatLimit) || seatLimit < minSeats) return "min_seats";
+    if (seatLimit < assignedSeatCount(account.organisationId)) return "seat_in_use";
+    return null;
+  }
+
+  function recordSeatChange(entry: Omit<BusinessSeatChangeRecord, "id" | "timestamp">): void {
+    const data = snapshot();
+    data.seatChanges = [
+      {
+        ...entry,
+        id: newId("sch"),
+        timestamp: now().toISOString(),
+      },
+      ...(data.seatChanges ?? []),
+    ].slice(0, 200);
+    persist(data);
+  }
+
+  function applyConfirmedBilling(
+    account: BusinessAccount,
+    confirmed: StripeSubscriptionSnapshot,
+    event?: { id?: string | null; created?: number | null },
+  ): BusinessAccount {
+    const assigned = assignedSeatCount(account.organisationId);
+    const minSeats = account.plan === "enterprise" ? 1 : pricing().minSeats;
+    const belowMinimum = confirmed.quantity < minSeats;
+    const cannotApply = confirmed.quantity < assigned || belowMinimum;
+    const next: BusinessAccount = {
+      ...account,
+      seatLimit: cannotApply ? account.seatLimit : confirmed.quantity,
+      billingCustomerId: confirmed.customerId || account.billingCustomerId,
+      stripeSubscriptionId: confirmed.subscriptionId,
+      stripeSubscriptionItemId: confirmed.subscriptionItemId,
+      stripeStatus: confirmed.status,
+      currentPeriodEnd: confirmed.currentPeriodEnd,
+      recurringAmountCents: confirmed.amountCents,
+      currency: confirmed.currency || account.currency,
+      billingInterval: confirmed.interval,
+      billingNeedsReconciliation: cannotApply,
+      lastStripeEventId: event?.id ?? account.lastStripeEventId,
+      lastStripeEventCreated: event?.created ?? account.lastStripeEventCreated,
+      updatedAt: now().toISOString(),
+    };
+    const data = snapshot();
+    const index = data.accounts.findIndex((item) => item.organisationId === account.organisationId);
+    if (index !== -1) {
+      data.accounts[index] = next;
+      persist(data);
+    }
+    return next;
   }
 
   function setSeatCount(
@@ -302,18 +483,309 @@ export function createBusinessService(options?: {
     if (actor.kind !== "superadmin") return { ok: false, error: "forbidden" };
     const account = findAccount(organisationId);
     if (!account) return { ok: false, error: "not_found" };
-    const config = pricing();
-    const minSeats = account.plan === "enterprise" ? 1 : config.minSeats;
-    if (seatLimit < minSeats) return { ok: false, error: "min_seats" };
-    const assigned = occupiedSeats(snapshot().seats, organisationId).length;
-    if (seatLimit < assigned) return { ok: false, error: "seat_in_use" };
+    const invalid = validatePurchasedQuantity(account, seatLimit);
+    if (invalid) return { ok: false, error: invalid };
+    return { ok: false, error: "subscription_missing" };
+  }
+
+  async function changeSeatQuantity(
+    actor: BusinessActor,
+    organisationId: string,
+    requestedQuantity: number,
+    meta: {
+      source: BusinessSeatChangeSource;
+      reason?: string | null;
+      actorRole?: string | null;
+      idempotencyKey?: string;
+    },
+  ): Promise<BusinessResult<BusinessAccount>> {
+    const denied = requireManager(actor, organisationId);
+    if (denied) {
+      recordSeatChange({
+        organisationId,
+        actorEmail: actor.kind === "business_admin" ? actor.email : "superadmin",
+        actorKind: actor.kind,
+        actorRole: meta.actorRole ?? actor.kind,
+        source: meta.source,
+        reason: meta.reason ?? null,
+        previousQuantity: findAccount(organisationId)?.seatLimit ?? 0,
+        requestedQuantity,
+        confirmedQuantity: null,
+        stripeSubscriptionId: findAccount(organisationId)?.stripeSubscriptionId ?? null,
+        result: "rejected",
+        error: denied,
+      });
+      return { ok: false, error: denied };
+    }
+
+    const account = findAccount(organisationId);
+    if (!account) return { ok: false, error: "not_found" };
+
+    const actorEmail = actor.kind === "business_admin" ? actor.email : "superadmin";
+    const invalid = validatePurchasedQuantity(account, requestedQuantity);
+    if (invalid) {
+      recordSeatChange({
+        organisationId,
+        actorEmail,
+        actorKind: actor.kind,
+        actorRole: meta.actorRole ?? actor.kind,
+        source: meta.source,
+        reason: meta.reason ?? null,
+        previousQuantity: account.seatLimit,
+        requestedQuantity,
+        confirmedQuantity: null,
+        stripeSubscriptionId: account.stripeSubscriptionId,
+        result: "rejected",
+        error: invalid,
+      });
+      return { ok: false, error: invalid };
+    }
+
+    const live = await billing.readSubscription({
+      subscriptionId: account.stripeSubscriptionId,
+      customerId: account.billingCustomerId,
+    });
+    if (!live.ok) {
+      recordSeatChange({
+        organisationId,
+        actorEmail,
+        actorKind: actor.kind,
+        actorRole: meta.actorRole ?? actor.kind,
+        source: meta.source,
+        reason: meta.reason ?? null,
+        previousQuantity: account.seatLimit,
+        requestedQuantity,
+        confirmedQuantity: null,
+        stripeSubscriptionId: account.stripeSubscriptionId,
+        result: "failed",
+        error: live.error,
+      });
+      return { ok: false, error: live.error };
+    }
+
+    if (live.value.quantity === requestedQuantity) {
+      const reconciled = applyConfirmedBilling(account, live.value);
+      recordSeatChange({
+        organisationId,
+        actorEmail,
+        actorKind: actor.kind,
+        actorRole: meta.actorRole ?? actor.kind,
+        source: meta.source,
+        reason: meta.reason ?? null,
+        previousQuantity: account.seatLimit,
+        requestedQuantity,
+        confirmedQuantity: reconciled.seatLimit,
+        stripeSubscriptionId: reconciled.stripeSubscriptionId,
+        result: "success",
+        error: null,
+      });
+      return { ok: true, value: reconciled };
+    }
+
+    const updated = await billing.updateQuantity({
+      subscriptionId: live.value.subscriptionId,
+      subscriptionItemId: live.value.subscriptionItemId,
+      quantity: requestedQuantity,
+      idempotencyKey:
+        meta.idempotencyKey?.trim() ||
+        `seatqty:${organisationId}:${live.value.subscriptionItemId}:${account.seatLimit}:${requestedQuantity}`,
+    });
+    if (!updated.ok) {
+      recordSeatChange({
+        organisationId,
+        actorEmail,
+        actorKind: actor.kind,
+        actorRole: meta.actorRole ?? actor.kind,
+        source: meta.source,
+        reason: meta.reason ?? null,
+        previousQuantity: account.seatLimit,
+        requestedQuantity,
+        confirmedQuantity: null,
+        stripeSubscriptionId: live.value.subscriptionId,
+        result: "failed",
+        error: updated.error,
+      });
+      return { ok: false, error: updated.error };
+    }
+
+    const next = applyConfirmedBilling(account, updated.value);
+    recordSeatChange({
+      organisationId,
+      actorEmail,
+      actorKind: actor.kind,
+      actorRole: meta.actorRole ?? actor.kind,
+      source: meta.source,
+      reason: meta.reason ?? null,
+      previousQuantity: account.seatLimit,
+      requestedQuantity,
+      confirmedQuantity: next.seatLimit,
+      stripeSubscriptionId: next.stripeSubscriptionId,
+      result: "success",
+      error: null,
+    });
+    return { ok: true, value: next };
+  }
+
+  async function reconcileSeatBilling(
+    actor: BusinessActor,
+    organisationId: string,
+    event?: { id?: string | null; created?: number | null },
+  ): Promise<BusinessResult<BusinessAccount>> {
+    if (actor.kind !== "superadmin") return { ok: false, error: "forbidden" };
+    const account = findAccount(organisationId);
+    if (!account) return { ok: false, error: "not_found" };
+    const live = await billing.readSubscription({
+      subscriptionId: account.stripeSubscriptionId,
+      customerId: account.billingCustomerId,
+    });
+    if (!live.ok) return { ok: false, error: live.error };
+    if (
+      event?.created &&
+      account.lastStripeEventCreated &&
+      event.created < account.lastStripeEventCreated &&
+      live.value.quantity !== account.seatLimit
+    ) {
+      const data = snapshot();
+      const index = data.accounts.findIndex((item) => item.organisationId === organisationId);
+      const flagged = { ...account, billingNeedsReconciliation: true, updatedAt: now().toISOString() };
+      if (index !== -1) {
+        data.accounts[index] = flagged;
+        persist(data);
+      }
+      return { ok: false, error: "needs_reconciliation" };
+    }
+    return { ok: true, value: applyConfirmedBilling(account, live.value, event) };
+  }
+
+  function findAccountByStripeRef(ref: {
+    subscriptionId?: string | null;
+    customerId?: string | null;
+  }): BusinessAccount | undefined {
+    const data = snapshot();
+    return data.accounts.find(
+      (item) =>
+        (ref.subscriptionId && item.stripeSubscriptionId === ref.subscriptionId) ||
+        (ref.customerId && item.billingCustomerId === ref.customerId),
+    );
+  }
+
+  function findAccountByCheckoutSessionId(sessionId: string): BusinessAccount | undefined {
+    const id = sessionId.trim();
+    if (!id) return undefined;
+    return snapshot().accounts.find((item) => item.stripeCheckoutSessionId === id);
+  }
+
+  function provisionFromStripeCheckout(input: {
+    email: string;
+    organisationName: string;
+    checkoutSessionId: string;
+    confirmed: StripeSubscriptionSnapshot;
+    eventId: string;
+    eventCreated?: number | null;
+  }): BusinessResult<{ account: BusinessAccount }> | { ok: false; error: "busy" } {
+    const checkoutSessionId = input.checkoutSessionId.trim();
+    const email = normalizeEmail(input.email);
+    const organisationName = input.organisationName.trim();
+    if (!checkoutSessionId || !isValidEmail(email) || !organisationName) {
+      return { ok: false, error: "invalid_request" };
+    }
+
+    const bySession = findAccountByCheckoutSessionId(checkoutSessionId);
+    if (bySession) {
+      return {
+        ok: true,
+        value: {
+          account: applyConfirmedBilling(bySession, input.confirmed, {
+            id: input.eventId,
+            created: input.eventCreated ?? null,
+          }),
+        },
+      };
+    }
+
+    const byStripe = findAccountByStripeRef({
+      subscriptionId: input.confirmed.subscriptionId,
+      customerId: input.confirmed.customerId,
+    });
+    if (byStripe) {
+      const linked = {
+        ...byStripe,
+        stripeCheckoutSessionId: byStripe.stripeCheckoutSessionId ?? checkoutSessionId,
+      };
+      const data = snapshot();
+      const index = data.accounts.findIndex((item) => item.organisationId === linked.organisationId);
+      if (index !== -1) {
+        data.accounts[index] = linked;
+        persist(data);
+      }
+      return {
+        ok: true,
+        value: {
+          account: applyConfirmedBilling(linked, input.confirmed, {
+            id: input.eventId,
+            created: input.eventCreated ?? null,
+          }),
+        },
+      };
+    }
+
+    const managed = findManagedOrganisation(email);
+    if (managed?.account.stripeSubscriptionId) {
+      return {
+        ok: true,
+        value: {
+          account: applyConfirmedBilling(managed.account, input.confirmed, {
+            id: input.eventId,
+            created: input.eventCreated ?? null,
+          }),
+        },
+      };
+    }
+
+    const created = createAccount({ kind: "superadmin" }, {
+      name: organisationName,
+      seatLimit: input.confirmed.quantity,
+      ownerEmail: email,
+      billingCustomerId: input.confirmed.customerId,
+      status: "active",
+    });
+    if (!created.ok) return created;
 
     const data = snapshot();
-    const index = data.accounts.findIndex((item) => item.organisationId === organisationId);
-    const next = { ...account, seatLimit, updatedAt: now().toISOString() };
-    data.accounts[index] = next;
+    const index = data.accounts.findIndex(
+      (item) => item.organisationId === created.value.account.organisationId,
+    );
+    if (index === -1) return { ok: false, error: "not_found" };
+    const seeded = {
+      ...data.accounts[index],
+      stripeCheckoutSessionId: checkoutSessionId,
+    };
+    data.accounts[index] = seeded;
     persist(data);
-    return { ok: true, value: next };
+
+    return {
+      ok: true,
+      value: {
+        account: applyConfirmedBilling(seeded, input.confirmed, {
+          id: input.eventId,
+          created: input.eventCreated ?? null,
+        }),
+      },
+    };
+  }
+
+  function markStripeEventProcessed(eventId: string): boolean {
+    const data = snapshot();
+    const events = data.stripeEvents ?? [];
+    if (events.some((item) => item.id === eventId)) return false;
+    data.stripeEvents = [{ id: eventId, receivedAt: now().toISOString() }, ...events].slice(0, 500);
+    persist(data);
+    return true;
+  }
+
+  function listSeatChanges(organisationId?: string): BusinessSeatChangeRecord[] {
+    const rows = snapshot().seatChanges ?? [];
+    return organisationId ? rows.filter((item) => item.organisationId === organisationId) : rows;
   }
 
   function changePlan(
@@ -420,6 +892,8 @@ export function createBusinessService(options?: {
     const data = snapshot();
     data.seats.push(seat);
     persist(data);
+    const grant = grantFromBusinessSeat(account, seat, now());
+    if (grant) void licenses.upsertGrant(grant);
     return { ok: true, value: seat };
   }
 
@@ -513,6 +987,7 @@ export function createBusinessService(options?: {
       ...source,
       origin: source.origin,
       edition: "business",
+      deviceLimit: businessDeviceLimitForAccount(account),
       organisationId: account.organisationId,
       organisationName: account.name,
       seatId: seat.seatId,
@@ -575,7 +1050,13 @@ export function createBusinessService(options?: {
       seats: Array<{
         seat: BusinessSeat;
         context: Omit<LicenseContext, "licenseToken"> | null;
-        activations: { deviceId: string; status: string }[];
+        activations: {
+          deviceId: string;
+          status: string;
+          deviceName?: string;
+          platform?: string;
+          lastSeen?: string;
+        }[];
       }>;
       monthlyAmountCents: number;
     }>
@@ -606,7 +1087,8 @@ export function createBusinessService(options?: {
       ok: true,
       value: {
         account,
-        monthlyAmountCents: monthlyAmountCents(account.seatLimit, pricing()),
+        monthlyAmountCents:
+          account.recurringAmountCents ?? monthlyAmountCents(account.seatLimit, pricing()),
         seats: mapped,
       },
     };
@@ -735,9 +1217,20 @@ export function createBusinessService(options?: {
   return {
     pricing,
     findAccount,
+    findManagedOrganisation,
     findBusinessGrantByEmail,
+    findBusinessGrantByLicenseId,
+    setOrganisationDeviceLimit,
     createAccount,
     setSeatCount,
+    changeSeatQuantity,
+    reconcileSeatBilling,
+    findAccountByStripeRef,
+    findAccountByCheckoutSessionId,
+    provisionFromStripeCheckout,
+    markStripeEventProcessed,
+    listSeatChanges,
+    assignedSeatCount,
     changePlan,
     setOrganisationStatus,
     grantTrial,
@@ -767,6 +1260,14 @@ export const businessService = createBusinessService();
 
 export function findBusinessGrantByEmail(email: string): LicenseGrant | undefined {
   return businessService.findBusinessGrantByEmail(email);
+}
+
+export function findBusinessGrantByLicenseId(licenseId: string): LicenseGrant | undefined {
+  return businessService.findBusinessGrantByLicenseId(licenseId);
+}
+
+export function findManagedOrganisation(email: string) {
+  return businessService.findManagedOrganisation(email);
 }
 
 export function touchBusinessSeat(email: string): BusinessSeat | undefined {

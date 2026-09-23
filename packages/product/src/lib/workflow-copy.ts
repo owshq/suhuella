@@ -1,6 +1,6 @@
 import type { KnowledgeSetItem, OrganisationPlanAction, Workflow, WorkflowTrigger } from '../types.ts'
 
-export const WORKFLOW_NAME_EXAMPLES = ['Downloads', 'Invoices', 'Receipts', 'Contracts'] as const
+export const WORKFLOW_NAME_EXAMPLES = ['Weekly Downloads', 'Project Alpha documents'] as const
 export const WORKFLOW_CATEGORIES = ['Personal', 'Finance', 'Clients', 'Downloads', 'Photos'] as const
 
 export type WorkflowIconKind = 'downloads' | 'invoices' | 'contracts' | 'photos' | 'custom'
@@ -50,10 +50,8 @@ export function workflowTriggerHint(trigger: WorkflowTrigger): string {
   return 'You review the plan and confirm. Nothing moves on its own.'
 }
 
-export function workflowAutopilotLabel(workflow: Workflow): string {
-  if (workflow.autopilotEnabled) return 'Autopilot on'
-  if (workflow.approvedPlan) return 'Autopilot off'
-  return 'Confirm this plan once to unlock Autopilot'
+export function workflowAutopilotLabel(_workflow: Workflow): string | null {
+  return null
 }
 
 export function workflowSourceLabel(item: KnowledgeSetItem): string {
@@ -107,7 +105,7 @@ export function workflowIntentSummary(workflow: WorkflowIntentInput): string {
     return source ? `Moves contracts from ${source}` : 'Moves contracts into client folders'
   }
   if (/\bphoto|image/.test(name)) {
-    return source ? `Organises photos from ${source}` : 'Organises photos'
+    return source ? `Sorts photos from ${source}` : 'Sorts photos'
   }
   if (/\bdownload/.test(name)) {
     return source ? `Cleans up ${source}` : 'Cleans up Downloads'
@@ -129,4 +127,92 @@ export function workflowActionLabels(workflow: WorkflowIntentInput): string[] {
 
 export function workflowActionSummary(workflow: WorkflowIntentInput): string {
   return workflowActionLabels(workflow).join(' · ')
+}
+
+export function workflowUsingLabel(name: string): string {
+  const trimmed = name.trim()
+  return trimmed ? `Using ${trimmed}` : 'Using workflow'
+}
+
+export function workflowCompletedTitle(name: string | null | undefined, undone = false): string {
+  const trimmed = name?.trim() ?? ''
+  const outcome = undone ? 'Plan undone' : 'Plan completed'
+  return trimmed ? `${trimmed} · ${outcome}` : outcome
+}
+
+function workflowCopyFixture(overrides: Partial<Workflow> & Pick<Workflow, 'name'>): Workflow {
+  return {
+    id: 'wf_copy_check',
+    description: '',
+    category: null,
+    workflowVersion: 1,
+    trigger: 'manual',
+    plan: { knowledgeSet: { items: [] } },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    lastRunAt: null,
+    approvedPlan: null,
+    approvedAt: null,
+    autopilotEnabled: false,
+    ...overrides,
+  }
+}
+
+export function runWorkflowCopyChecks(): void {
+  if (workflowUsingLabel('Invoices') !== 'Using Invoices') {
+    throw new Error('review must name the active workflow')
+  }
+  if (workflowUsingLabel('  ') !== 'Using workflow') {
+    throw new Error('blank workflow names still have a using label')
+  }
+  if (workflowCompletedTitle('Invoices') !== 'Invoices · Plan completed') {
+    throw new Error('completion must name the workflow')
+  }
+  if (workflowCompletedTitle('Invoices', true) !== 'Invoices · Plan undone') {
+    throw new Error('undo completion must name the workflow')
+  }
+  if (workflowCompletedTitle(null) !== 'Plan completed') {
+    throw new Error('ad-hoc organise keeps the generic completion title')
+  }
+  if (workflowCompletedTitle('   ') !== 'Plan completed') {
+    throw new Error('blank workflow names fall back to Plan completed')
+  }
+  if (workflowAutopilotLabel(workflowCopyFixture({ name: 'Weekly Downloads', autopilotEnabled: true })) !== null) {
+    throw new Error('autopilot must not surface in product copy')
+  }
+  if (WORKFLOW_NAME_EXAMPLES.some((example) => /\b(invoices|clients|finance)\b/i.test(example))) {
+    throw new Error('workflow name examples must not push vertical categories')
+  }
+  if (/\bRun\b/.test(`${workflowUsingLabel('Invoices')} ${workflowCompletedTitle('Invoices')}`)) {
+    throw new Error('workflow copy must not say Run')
+  }
+  if (
+    workflowIntentSummary({
+      name: 'Invoices',
+      description: 'Organise downloaded invoices into client folders.',
+    }) !== 'Organise downloaded invoices into client folders.'
+  ) {
+    throw new Error('picker intent must prefer the saved description')
+  }
+  if (workflowLastRunLabel(null) !== 'Not run yet') {
+    throw new Error('unused workflows must say they have not run yet')
+  }
+  const ordered = recentWorkflows(
+    [
+      workflowCopyFixture({
+        name: 'Receipts',
+        lastRunAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+      workflowCopyFixture({
+        name: 'Weekly Downloads',
+        lastRunAt: '2026-03-01T00:00:00.000Z',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+      }),
+    ],
+    2,
+  )
+  if (ordered[0]?.name !== 'Weekly Downloads' || ordered[1]?.name !== 'Receipts') {
+    throw new Error('saved workflows must surface the last used intent first')
+  }
 }

@@ -151,9 +151,18 @@ export async function runDownloadPageSemanticsCheck(): Promise<void> {
   assert(brand.displayName.length > 0, "brand display name exists");
 
   const catalogSource = readFileSync(join(process.cwd(), "components/DownloadCatalogContent.tsx"), "utf8");
-  assert(catalogSource.includes("brand.displayName"), "download catalog shows BrandConfig name");
+  const overlayFrameSource = readFileSync(
+    join(process.cwd(), "components/web/RouteOverlayFrame.tsx"),
+    "utf8",
+  );
+  assert(
+    catalogSource.includes("detectClientDownloadPlatform"),
+    "download catalog filters rows by detected platform",
+  );
   assert(catalogSource.includes("BrandMark"), "download catalog shows BrandConfig logo");
   assert(catalogSource.includes("SuhuellaWordmark"), "download page chrome uses brand wordmark");
+  assert(overlayFrameSource.includes("brand.displayName"), "overlay frame shows BrandConfig name");
+  assert(overlayFrameSource.includes("badgeChannel"), "overlay frame can show release channel");
 
   const siteLogo = readFileSync(join(process.cwd(), "components/icons/SuhuellaLogo.tsx"), "utf8");
   assert(siteLogo.includes("BrandMark"), "site logo uses BrandConfig mark");

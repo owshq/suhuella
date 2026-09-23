@@ -1,10 +1,20 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { unlinkSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import electronPath from 'electron'
 import { createServer } from 'vite'
 import { desktopRoot, prepareDesktopPublic, selectedBrandId } from './brand-build.mjs'
 import { buildElectron } from './electron-esbuild.mjs'
+
+// Stale E2E bundles in dist-electron/ are not desktop entries — remove so they are not opened by mistake.
+for (const name of ['license-version-e2e-executor-check.cjs', 'license-ipc-gate-check.cjs']) {
+  try {
+    unlinkSync(path.join(desktopRoot, 'dist-electron', name))
+  } catch {
+    // absent is fine
+  }
+}
 
 const brandId = selectedBrandId()
 const repoRoot = path.resolve(desktopRoot, '..')

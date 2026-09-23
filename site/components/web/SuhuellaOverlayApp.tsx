@@ -3,6 +3,7 @@
 import { LocaleProvider } from "@/components/providers/LocaleProvider";
 import { RouteOverlayShell } from "@/components/web/RouteOverlayShell";
 import { SuhuellaApp } from "@/components/web/SuhuellaApp";
+import type { PublicPresentationBrand } from "@/lib/partners/presentation-brand-client";
 import type { RouteOverlay } from "@/lib/route-overlay";
 import type { ReleaseManifest } from "@/lib/release-manifest";
 
@@ -12,6 +13,7 @@ type SuhuellaOverlayAppProps = {
   installerUrls: { windows: string; mac: string };
   paidCheckoutEnabled: boolean;
   desktopDownloadAvailable: boolean;
+  presentationBrand: PublicPresentationBrand;
 };
 
 export function SuhuellaOverlayApp({
@@ -20,6 +22,7 @@ export function SuhuellaOverlayApp({
   installerUrls,
   paidCheckoutEnabled,
   desktopDownloadAvailable,
+  presentationBrand,
 }: SuhuellaOverlayAppProps) {
   // Publish before children render so Settings license CTAs see the gate on first paint.
   if (typeof window !== "undefined") {
@@ -35,7 +38,7 @@ export function SuhuellaOverlayApp({
         paidCheckoutEnabled={paidCheckoutEnabled}
         desktopDownloadAvailable={desktopDownloadAvailable}
       >
-        <SuhuellaApp />
+        <SuhuellaApp presentationBrand={presentationBrand} />
       </RouteOverlayShell>
     </LocaleProvider>
   );

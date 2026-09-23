@@ -1,5 +1,7 @@
 import { Archive, Clock3, FileText, Folder, FolderKanban, Image } from 'lucide-react'
 import { useAppLocale } from '../lib/app-locale'
+import { hostAccessFor } from '../lib/platform-capabilities'
+import { searchEmptyQueryCopy, searchNoSourcesCopy } from '../lib/sources-ui'
 import type { AppInfo, SearchDocumentFilter, SearchHit, SearchResults } from '../types'
 
 export const SEARCH_FILTERS: Array<{ id: Exclude<SearchDocumentFilter, 'all'>; label: string }> = [
@@ -64,6 +66,7 @@ export function SearchResultsPanel({
   onShowActivity,
   sourceCount = 0,
   indexedDocumentCount = 0,
+  host,
 }: {
   query: string
   results: SearchResults | null
@@ -73,6 +76,7 @@ export function SearchResultsPanel({
   nativeReveal?: boolean
   sourceCount?: number
   indexedDocumentCount?: number
+  host?: AppInfo['host']
   onFilterChange: (value: SearchDocumentFilter) => void
   onOpen: (hit: SearchHit) => void
   onReveal: (hit: SearchHit) => void
@@ -80,7 +84,8 @@ export function SearchResultsPanel({
   onShowWorkflow: (hit: SearchHit) => void
   onShowActivity: (hit: SearchHit) => void
 }) {
-  const { t } = useAppLocale()
+  const { locale } = useAppLocale()
+  const access = hostAccessFor(host)
   const reveal = revealLabel(platform)
   const hits = results?.hits ?? []
   const emptyQuery = !query.trim() && filter === 'all'
@@ -100,8 +105,7 @@ export function SearchResultsPanel({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
       <header>
-        <h1 className="text-[28px] font-bold tracking-tight text-[var(--app-fg)]">{t.search}</h1>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {SEARCH_FILTERS.map((item) => {
             const active = filter === item.id
             return (
@@ -135,9 +139,9 @@ export function SearchResultsPanel({
       ) : hits.length === 0 ? (
         <p className="pt-10 text-center text-[15px] text-slate-400">
           {emptyQuery
-            ? 'Type a name to find a document.'
+            ? searchEmptyQueryCopy(access, sourceCount, locale)
             : sourceCount === 0
-              ? 'Connect a folder first.'
+              ? searchNoSourcesCopy(access)
               : indexedDocumentCount > 0
                 ? 'No documents match this search.'
                 : 'Nothing matches. Try another name.'}

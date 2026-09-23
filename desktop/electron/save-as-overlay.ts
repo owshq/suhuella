@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { readDesktopSource, readProductSource } from './check-source.ts'
 import type {
   ConfidenceLabel,
   FileFamily,
@@ -499,18 +499,12 @@ export function runSaveAsOverlayChecks(): void {
     throw new Error('Missing file name must still show available places')
   }
 
-  const cwd = process.cwd()
-  const overlaySource = existsSync(path.join(cwd, 'electron/save-as-overlay.ts'))
-    ? readFileSync(path.join(cwd, 'electron/save-as-overlay.ts'), 'utf8')
-    : readFileSync(path.join(cwd, 'desktop/electron/save-as-overlay.ts'), 'utf8')
+  const overlaySource = readDesktopSource('electron/save-as-overlay.ts')
   if (/^import .+ from ['"]\.\/recommendations/m.test(overlaySource)) {
     throw new Error('Save As overlay must not import the Recommendation Engine')
   }
 
-  const cwdWindow = existsSync(path.join(cwd, 'src/windows/SuggestionWindow.tsx'))
-    ? path.join(cwd, 'src/windows/SuggestionWindow.tsx')
-    : path.join(cwd, 'packages/product/src/windows/SuggestionWindow.tsx')
-  const windowSource = readFileSync(cwdWindow, 'utf8')
+  const windowSource = readProductSource('src/windows/SuggestionWindow.tsx')
   if (windowSource.includes('Add folders first')) {
     throw new Error('Save As popup must not use Add folders first as the main experience')
   }

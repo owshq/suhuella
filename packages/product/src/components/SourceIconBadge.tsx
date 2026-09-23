@@ -24,6 +24,7 @@ import {
   type ResolvedSourceAppearance,
 } from '../lib/source-appearance'
 import type { SourceIconId } from '../types'
+import { isOfficialSourceMark, OfficialSourceMark } from './SourceBrandMarks'
 
 const ICONS: Record<SourceIconId, LucideIcon> = {
   folder: Folder,
@@ -89,34 +90,8 @@ export function SourceIconGlyph({
   iconId: SourceIconId
   className?: string
 }) {
-  if (iconId === 'dropbox') {
-    return (
-      <svg viewBox="0 0 24 24" className={className} aria-hidden>
-        <path
-          fill="currentColor"
-          d="M6 4.5 12 8.25 6 12 0 8.25 6 4.5Zm12 0L24 8.25 18 12l-6-3.75L18 4.5ZM6 13.5l6 3.75 6-3.75L12 9.75 6 13.5Zm0 4.5 6 3.75 6-3.75-6-3.75L6 18Z"
-        />
-      </svg>
-    )
-  }
-  if (iconId === 'onedrive') {
-    return (
-      <svg viewBox="0 0 24 24" className={className} aria-hidden>
-        <path
-          fill="currentColor"
-          d="M7.5 18.5a4.5 4.5 0 0 1-.9-8.92A5.5 5.5 0 0 1 18.5 9a4 4 0 0 1 .5 7.98H7.5Z"
-        />
-      </svg>
-    )
-  }
-  if (iconId === 'google_drive') {
-    return (
-      <svg viewBox="0 0 24 24" className={className} aria-hidden>
-        <path fill="#4285F4" d="M7.8 19.5 1.2 8.1A1.2 1.2 0 0 1 2.2 6.5h8.1L7.8 19.5Z" />
-        <path fill="#FBBC04" d="M16.8 19.5H7.8L10.3 6.5h9.6l-3.1 13Z" />
-        <path fill="#34A853" d="M22.8 8.1 16.8 19.5 10.3 6.5h8.1a1.2 1.2 0 0 1 1 1.6Z" />
-      </svg>
-    )
+  if (isOfficialSourceMark(iconId)) {
+    return <OfficialSourceMark iconId={iconId} className={className} />
   }
   const Icon = ICONS[iconId]
   return <Icon className={className} strokeWidth={1.75} />
@@ -393,25 +368,23 @@ export function SourceIconBadge({
           : size === 'lg'
             ? 'h-7 w-7'
             : 'h-4 w-4'
-  const brandedCloud = appearance.iconId === 'google_drive'
+  const officialMark = isOfficialSourceMark(appearance.iconId)
   const sourceAvatar = variant === 'source' || size === 'recent' || size === 'grid' || size === 'lg'
   const shellClass = appearance.color
     ? 'border border-[var(--sidebar-line)]'
-    : `bg-gradient-to-br ${SOURCE_TONE_CLASSES[appearance.tone]} border border-[var(--sidebar-line)]`
+    : officialMark
+      ? 'bg-[var(--overlay-row)] border border-[var(--sidebar-line)]'
+      : `bg-gradient-to-br ${SOURCE_TONE_CLASSES[appearance.tone]} border border-[var(--sidebar-line)]`
   const shellStyle = appearance.color
     ? {
         backgroundColor: `${appearance.color}26`,
-        color: brandedCloud ? undefined : appearance.color,
+        color: officialMark ? undefined : appearance.color,
       }
     : undefined
 
   const showInlinePicker = editing && size === 'grid' && onPickColor && onPickIcon
 
-  const icon = brandedCloud ? (
-    <SourceIconGlyph iconId={appearance.iconId} className={iconClass} />
-  ) : (
-    <SourceIconGlyph iconId={appearance.iconId} className={iconClass} />
-  )
+  const icon = <SourceIconGlyph iconId={appearance.iconId} className={iconClass} />
 
   return (
     <div

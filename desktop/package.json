@@ -13,7 +13,11 @@
     "build:icons": "node scripts/build-icons.mjs",
     "lint": "oxlint",
     "check:knowledge-set": "node scripts/knowledge-set-check.mjs",
+    "test:indexer": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/indexer-check.ts",
     "test:license": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/license-status-check.ts",
+    "test:license-offline-verify": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/license-offline-verify-check.ts",
+    "test:license-dual-verify": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/license-dual-verify-check.ts",
+    "test:license-build-inlining": "node scripts/license-build-inlining-check.mjs",
     "test:release-lifecycle": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/release-lifecycle-check.ts",
     "test:effective-brand-identity": "node --experimental-strip-types --import ../brands/node-register.mjs --disable-warning=ExperimentalWarning electron/effective-brand-identity-check.ts",
     "benchmark:match": "node scripts/benchmark-match.mjs",
@@ -22,7 +26,7 @@
     "publish:win-helper": "node scripts/publish-win-helper.mjs",
     "package:check": "node scripts/package-check.mjs",
     "package:win": "npm run package:check && npm run build && node scripts/publish-win-helper.mjs --required && node scripts/electron-package.mjs --win",
-    "package:mac": "npm run package:check && npm run build:icons && npm run build && node scripts/electron-package.mjs --mac"
+    "package:mac": "npm run package:check && npm run build:icons && npm run build && node scripts/electron-package.mjs --mac && node scripts/verify-mac-bundle.mjs && node scripts/make-mac-dmg.mjs && node scripts/seal-mac-dmg.mjs"
   },
   "dependencies": {
     "@suhuella/brand": "file:../brands",
@@ -73,8 +77,12 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
-      "identity": null,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
+        "CFBundleIdentifier": "com.suhuella.desktop",
         "CFBundleDisplayName": "SuHuella",
         "CFBundleName": "SuHuella"
       },
@@ -87,7 +95,7 @@
     },
     "win": {
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "artifactName": "${productName}-${version}.${ext}",
       "target": [
         "nsis"
       ],
@@ -106,7 +114,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "shortcutName": "SuHuella",
       "uninstallDisplayName": "SuHuella",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-${version}.${ext}"
     }
   }
 }

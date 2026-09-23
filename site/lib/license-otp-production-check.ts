@@ -18,7 +18,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function hashCode(challengeId: string, code: string): Promise<string> {
-  const secret = process.env.LICENSE_SIGNING_SECRET?.trim() || "dev-email-code-secret";
+  const secret = process.env.LICENSE_EMAIL_OTP_SECRET?.trim() || "dev-email-code-secret";
   const payload = new TextEncoder().encode(`${challengeId}:${code}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", payload);
   return Buffer.from(digest).toString("base64url");
@@ -27,13 +27,13 @@ async function hashCode(challengeId: string, code: string): Promise<string> {
 async function runLicenseOtpProductionCheck(): Promise<void> {
   const previous = {
     NODE_ENV: process.env.NODE_ENV,
-    LICENSE_SIGNING_SECRET: process.env.LICENSE_SIGNING_SECRET,
+    LICENSE_EMAIL_OTP_SECRET: process.env.LICENSE_EMAIL_OTP_SECRET,
     LICENSE_STORE_PATH: process.env.LICENSE_STORE_PATH,
   };
 
   try {
     process.env.NODE_ENV = "development";
-    process.env.LICENSE_SIGNING_SECRET = "otp-production-check-secret";
+    process.env.LICENSE_EMAIL_OTP_SECRET = "otp-production-check-secret";
     process.env.LICENSE_STORE_PATH = `${process.cwd()}/.data/license-otp-production-check.json`;
     resetLicensePersistenceStoreForTests();
 
@@ -129,8 +129,8 @@ async function runLicenseOtpProductionCheck(): Promise<void> {
     resetLicensePersistenceStoreForTests();
     if (previous.NODE_ENV === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previous.NODE_ENV;
-    if (previous.LICENSE_SIGNING_SECRET === undefined) delete process.env.LICENSE_SIGNING_SECRET;
-    else process.env.LICENSE_SIGNING_SECRET = previous.LICENSE_SIGNING_SECRET;
+    if (previous.LICENSE_EMAIL_OTP_SECRET === undefined) delete process.env.LICENSE_EMAIL_OTP_SECRET;
+    else process.env.LICENSE_EMAIL_OTP_SECRET = previous.LICENSE_EMAIL_OTP_SECRET;
     if (previous.LICENSE_STORE_PATH === undefined) delete process.env.LICENSE_STORE_PATH;
     else process.env.LICENSE_STORE_PATH = previous.LICENSE_STORE_PATH;
   }

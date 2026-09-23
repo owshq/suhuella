@@ -22,7 +22,7 @@ export function planAssistantBecause(reason: string): string {
 
 export const ON_DEVICE_PLAN_ASSISTANT_USING: PlanAssistantUsing = {
   backend: 'on_device',
-  label: 'On-device intelligence',
+  label: 'Built-in rules',
 }
 
 export const DEFAULT_PLAN_ASSISTANT_USING = ON_DEVICE_PLAN_ASSISTANT_USING
@@ -65,6 +65,17 @@ export function isSimplePlanAssistantTask(note: string): boolean {
   )
 }
 
+export const PLAN_ASSISTANT_CONFIRM_HINT =
+  'Review every action. Nothing changes until you Confirm Plan.'
+
+export function workflowAvailabilityReply(workflowNames: string[] = []): string {
+  const names = workflowNames.filter(Boolean)
+  if (names.length === 0) {
+    return 'There are no saved workflows yet. Choose documents in Plan Mode to build a Plan.'
+  }
+  return `${names.join(', ')}. Use workflow still builds a Plan you review.`
+}
+
 export function answerOnDevicePlanQuestion(
   question: string,
   items: OrganisationPlanItem[],
@@ -100,11 +111,7 @@ export function answerOnDevicePlanQuestion(
   }
 
   if (/which workflow|what workflow|should i use/i.test(question)) {
-    const names = extras?.workflowNames?.filter(Boolean) ?? []
-    if (names.length === 0) {
-      return 'You have no saved plans yet. Save a plan you reuse — Invoices, Downloads, Receipts.'
-    }
-    return `Saved plans you can use: ${names.join(', ')}. Using a workflow still builds a Plan you review.`
+    return workflowAvailabilityReply(extras?.workflowNames ?? [])
   }
 
   if (/why/i.test(question) && mentioned?.explanation) {
@@ -112,4 +119,25 @@ export function answerOnDevicePlanQuestion(
   }
 
   return null
+}
+
+export function runPlanAssistantCopyChecks(): void {
+  const empty = workflowAvailabilityReply([])
+  const named = workflowAvailabilityReply(['Invoices', 'Downloads'])
+  const haystack = `${empty} ${named} ${PLAN_ASSISTANT_CONFIRM_HINT}`
+  if (/Save a plan|Saved plans|Apply accepted changes|Run workflow/i.test(haystack)) {
+    throw new Error('assistant copy must not promise saved plans or Apply/Run')
+  }
+  if (!empty.includes('no saved workflows')) {
+    throw new Error('empty workflow reply must be honest')
+  }
+  if (/Save a plan|you reuse/i.test(empty)) {
+    throw new Error('empty workflow reply must not invite creation')
+  }
+  if (!named.includes('Use workflow') || !named.includes('Invoices')) {
+    throw new Error('named workflows keep Use workflow')
+  }
+  if (!PLAN_ASSISTANT_CONFIRM_HINT.includes('Confirm Plan')) {
+    throw new Error('assistant review hint must say Confirm Plan')
+  }
 }

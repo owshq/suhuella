@@ -6,9 +6,8 @@ import {
   indexedFileFromBrowserFile,
   knowledgeItemsFromBrowserFiles,
   knowledgeItemsFromIndexedFiles,
-  ORGANISE_CHOOSE_FILES,
-  ORGANISE_CHOOSE_FOLDER,
-  ORGANISE_CONNECT_FOLDER,
+  ORGANISE_CONNECT_SOURCE,
+  ORGANISE_OPEN_SOURCES,
   ORGANISE_DOCUMENTS_TITLE,
   ORGANISE_EMPTY_BODY,
   ORGANISE_EMPTY_NO_SOURCES,
@@ -30,19 +29,24 @@ function runBrowserOrganiseSelectionCheck(): void {
   const host = readFileSync(join(process.cwd(), "../packages/product/src/host/install-browser-host.ts"), "utf8");
 
   assert(!organise.includes("This browser cannot choose documents."), "Organise does not show the dead-end banner by default");
-  assert(organise.includes("ORGANISE_SELECT_FROM_SOURCES"), "Organise offers Select from Sources");
-  assert(organise.includes("ORGANISE_CHOOSE_FILES"), "Organise offers Choose files");
-  assert(organise.includes("ORGANISE_CHOOSE_FOLDER"), "Organise offers Choose folder");
-  assert(organise.includes("ORGANISE_CONNECT_FOLDER"), "Organise offers Connect a folder when empty");
-  assert(organise.includes("ORGANISE_DOCUMENTS_TITLE"), "Organise empty card is constructive");
-  assert(organise.includes("locations.length === 0"), "empty state branches on connected sources");
+  assert(organise.includes("PLAN_PROMPT_EXAMPLES"), "Plan Mode empty state offers prompt examples");
+  assert(organise.includes("ORGANISE_OPEN_SOURCES"), "Plan Mode keeps Open Sources secondary");
+  assert(organise.includes("ORGANISE_OPEN_SOURCES"), "Organise offers Open Sources");
+  assert(!organise.includes("Choose files"), "Organise empty state does not say Choose files");
+  assert(!organise.includes("Connect a folder"), "Organise empty state does not say Connect a folder");
+  assert(organise.includes("hasSources: locations.length > 0"), "empty state branches on sources");
   assert(organise.includes("openSourcePicker"), "connected sources can be selected");
   assert(organise.includes("factura-enero.pdf") === false, "UI does not hardcode demo filenames");
   assert(!organise.includes("Download Desktop"), "Organise does not require Desktop");
   assert(!organiseHasUploadLanguage(ORGANISE_EMPTY_BODY), "empty copy does not upload");
   assert(!organiseHasUploadLanguage(ORGANISE_EXECUTION_LIMIT), "execution copy does not upload");
   assert(!organiseRequiresDesktop(ORGANISE_EXECUTION_LIMIT), "execution limit does not require Desktop");
-  assert(ORGANISE_EMPTY_NO_SOURCES.includes("Connect") || ORGANISE_EMPTY_NO_SOURCES.includes("choose files"), "no-source copy is constructive");
+  assert(ORGANISE_EMPTY_NO_SOURCES.includes("Connect") && !/\bAdd\b/.test(ORGANISE_EMPTY_NO_SOURCES), "no-source copy uses Connect, not Add");
+  assert(ORGANISE_CONNECT_SOURCE === "Connect a source", "web empty primary connects a source");
+  assert(ORGANISE_OPEN_SOURCES === "Open Sources", "sources navigation label is stable");
+  assert(ORGANISE_SELECT_FROM_SOURCES === "Select from Sources", "sources path stays Select from Sources");
+  assert(ORGANISE_DOCUMENTS_TITLE === "Plan Mode", "web empty title uses Plan Mode");
+  assert(!/connected/i.test(ORGANISE_EMPTY_BODY), "source copy does not say Connected");
 
   assert(
     organisePickErrorMessage(Object.assign(new Error("The user aborted a request."), { name: "AbortError" })) === null,

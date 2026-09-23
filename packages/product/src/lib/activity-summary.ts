@@ -1,4 +1,5 @@
 import { humanFolderPath } from './activity-copy.ts'
+import { undoExpiresInDays } from './activity-recovery.ts'
 import { estimateTimeSaved } from './time-saved.ts'
 import type { ActivityPeriodSummary, ActivityRun } from '../types.ts'
 
@@ -94,6 +95,7 @@ export type ActivityProgress = {
   lastWeekMoved: number
   lastMonthMoved: number
   todayUndoAvailable: boolean
+  todayUndoExpiresInDays: number | null
   estimatedTimeSaved: string | null
   topDestinations: Array<{ label: string; count: number }>
 }
@@ -112,9 +114,16 @@ export function summarizeActivityProgress(runs: ActivityRun[], now = Date.now())
   const lastWeekMoved = movedInRange(organisationRuns, weekStart)
   const lastMonthMoved = movedInRange(organisationRuns, monthStart)
 
-  const todayUndoAvailable = organisationRuns.some(
-    (run) => Date.parse(run.completedAt) >= todayStart && run.items.some((item) => item.undoAvailable),
-  )
+  let todayUndoExpiresInDays: number | null = null
+  const todayUndoAvailable = organisationRuns.some((run) => {
+    if (Date.parse(run.completedAt) < todayStart) return false
+    if (!run.items.some((item) => item.undoAvailable)) return false
+    const days = undoExpiresInDays(run.completedAt, now)
+    if (todayUndoExpiresInDays === null || days < todayUndoExpiresInDays) {
+      todayUndoExpiresInDays = days
+    }
+    return true
+  })
 
   const destinationSource = organisationRuns.filter((run) => Date.parse(run.completedAt) >= monthStart)
   const destinationNames = (destinationSource.length > 0 ? destinationSource : organisationRuns)
@@ -129,6 +138,7 @@ export function summarizeActivityProgress(runs: ActivityRun[], now = Date.now())
     lastWeekMoved,
     lastMonthMoved,
     todayUndoAvailable,
+    todayUndoExpiresInDays,
     estimatedTimeSaved: estimateTimeSaved(lastMonthMoved > 0 ? lastMonthMoved : lastWeekMoved),
     topDestinations: rankDestinations(destinationNames),
   }

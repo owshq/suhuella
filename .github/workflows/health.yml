@@ -1,0 +1,26 @@
+name: Health
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install packages for health checks
+        run: |
+          npm install --prefix brands
+          npm install --prefix packages/product
+          npm install --prefix site --ignore-scripts
+          npm install --prefix desktop --ignore-scripts
+
+      - name: Health (build coherence)
+        run: npm run health:ci

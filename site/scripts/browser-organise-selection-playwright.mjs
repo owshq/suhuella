@@ -1,5 +1,5 @@
 /**
- * Organise: no dead-end banner, select from demo source, create a Plan draft.
+ * Plan Mode: prompt-first empty state and Prepare Plan with demo scope.
  */
 import { chromium } from "playwright";
 
@@ -13,37 +13,32 @@ async function main() {
 
   await page.goto(`${BASE}/sources`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(1200);
-  const loadDemo = page.getByRole("button", { name: /Load demo data|Reload demo data/ });
-  if (await loadDemo.count()) {
-    await loadDemo.click();
-    await page.getByText("dev-data", { exact: true }).first().waitFor({ timeout: 8000 });
-  }
+  await page.getByText("Developer Sources", { exact: true }).waitFor({ timeout: 8000 });
+  await page.getByRole("button", { name: /Load demo data|Reload demo data/ }).click();
+  await page.getByText("dev-data", { exact: true }).first().waitFor({ timeout: 8000 });
 
-  await page.goto(`${BASE}/organise`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto(`${BASE}/plan-mode`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForTimeout(800);
 
   const deadEnd = await page.getByText("This browser cannot choose documents.").count();
   if (deadEnd > 0) {
-    throw new Error("Organise still shows the dead-end banner");
+    throw new Error("Plan Mode still shows the dead-end banner");
   }
 
-  await page.getByRole("button", { name: "Select from Sources" }).waitFor({ timeout: 4000 });
-  await page.getByRole("button", { name: "Choose files" }).waitFor({ timeout: 2000 });
-  await page.getByRole("button", { name: "Choose folder" }).waitFor({ timeout: 2000 });
+  await page.getByPlaceholder("What should happen?").waitFor({ timeout: 4000 });
+  await page.getByRole("button", { name: "Prepare Plan" }).waitFor({ timeout: 2000 });
+  await page.getByRole("button", { name: "Open Sources" }).waitFor({ timeout: 2000 });
 
-  await page.getByRole("button", { name: /dev-data/ }).first().click();
-  await page.getByText("factura-enero.pdf", { exact: true }).waitFor({ timeout: 6000 });
-  await page.getByText("factura-enero.pdf", { exact: true }).click();
-  await page.getByRole("button", { name: "Add to Plan" }).click();
+  await page.getByRole("button", { name: "Move invoices in dev-data" }).click();
+  await page.getByRole("button", { name: "Prepare Plan" }).click();
 
   const planReady = await page
-    .getByText(/suggestion|accepted change|Analysing|What should SuHuella do/i)
-    .first()
-    .waitFor({ timeout: 8000 })
+    .getByRole("button", { name: "Save plan" })
+    .waitFor({ timeout: 12000 })
     .then(() => true)
     .catch(() => false);
   if (!planReady) {
-    throw new Error("Selecting a source document did not create a Plan draft");
+    throw new Error("Prepare Plan did not open PlanEditor with demo scope");
   }
 
   await browser.close();

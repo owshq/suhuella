@@ -13,16 +13,24 @@ import type {
 import { activityItemFromPlanItem } from '@suhuella/product/lib/activity-copy.ts'
 import { isFolderCreateAction } from '@suhuella/product/lib/plan-editor-copy.ts'
 import {
+  ACTIVITY_LOG_VERSION,
+  getActivityFilePath,
   loadActivityRuns,
   nextActivityRunNumber,
   recordActivityRun,
 } from './activity-store.ts'
 import { assertConfirmationReceived } from './confirmed-executor.ts'
-import { executeOrganisationPlan, previewOrganisationPlanForFolders } from './knowledge-set.ts'
+import {
+  executeOrganisationPlan,
+  executeOrganisationPlanForVerifiedUndo,
+  previewOrganisationPlanForFolders,
+} from './knowledge-set.ts'
+import { assertExecutorGenerationRights, setLicenseContextForTests } from './license-rights.ts'
 import {
   buildInverseOrganisationPlan,
   filterInversePlan,
-  inversePlanFromActivityRun,
+  inversePlanMatchesMovedItems,
+  verifiedInversePlanFromMovedItems,
   planFromExecutedItems,
 } from './organisation-plan.ts'
 import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
@@ -254,6 +262,10 @@ export function executeUndo(
     return validationError('undo_unavailable', UNDO_REASON.expired)
   }
 
+  if (runs.some((item) => item.trigger === 'undo' && item.reversesRunId === runId)) {
+    return validationError('undo_unavailable', 'This run was already undone.')
+  }
+
   const requestedPaths = Array.isArray(record.sourcePaths)
     ? record.sourcePaths.filter(
         (value): value is string => typeof value === 'string' && value.trim().length > 0,
@@ -285,17 +297,24 @@ export function executeUndo(
     )
   }
 
+  if (
+    run.inversePlan &&
+    run.inversePlan.items.length > 0 &&
+    !inversePlanMatchesMovedItems(run.inversePlan, moved)
+  ) {
+    return validationError('undo_unavailable', UNDO_REASON.unsafe)
+  }
+
   const startedAt = new Date().toISOString()
-  const inversePlan = filterInversePlan(inversePlanFromActivityRun(run), requestedPaths)
+  const inversePlan = filterInversePlan(verifiedInversePlanFromMovedItems(selected), requestedPaths)
   if (inversePlan.items.length === 0) {
     return validationError('undo_unavailable', UNDO_REASON.unsafe)
   }
 
   const runNumber = nextActivityRunNumber(loadActivityRuns(userDataDir))
-  const executed = executeOrganisationPlan(
+  const executed = executeOrganisationPlanForVerifiedUndo(
     { plan: inversePlan, confirmed: true, runNumber },
     [],
-    { inverse: true },
   )
   if (!executed.ok) {
     return { ok: false, error: executed.error }
@@ -402,12 +421,48 @@ function moveInvoiceFile(
     folders,
   )
   assert(preview.ok && preview.data.items[0]?.action === 'move', `invoice should be ready to move: ${filePath}`)
-  return executeOrganisationPlan({ plan: preview.data, confirmed: true, runNumber }, folders)
+  const plan = {
+    ...preview.data,
+    items: preview.data.items.map((item) => ({
+      ...item,
+      selected: true,
+      reviewGroup: 'ready' as const,
+    })),
+  }
+  return executeOrganisationPlan({ plan, confirmed: true, runNumber }, folders)
 }
 
 export function runUndoChecks(): void {
   const root = mkdtempSync(path.join(tmpdir(), 'suhuella-undo-'))
   const userData = mkdtempSync(path.join(tmpdir(), 'suhuella-undo-data-'))
+  setLicenseContextForTests({
+    licenseId: 'lic_undo_test',
+    customerId: 'cust_undo',
+    email: 'undo@test.local',
+    edition: 'personal_lifetime',
+    status: 'active',
+    capabilities: [
+      'recommend_folder',
+      'explain_recommendation',
+      'navigate_save_dialog',
+      'copy_path',
+      'open_folder',
+      'refresh_index',
+      'create_folder',
+      'rename_file',
+      'move_file',
+      'apply_bulk_organisation',
+    ],
+    enabledKnowledgeSources: ['local_folder'],
+    deviceLimit: 1,
+    activatedDevices: 0,
+    validUntil: null,
+    lastCheckedAt: new Date().toISOString(),
+    offlineUntil: new Date(Date.now() + 86_400_000).toISOString(),
+    channel: 'stable',
+    licenseToken: 'test',
+    generationAccessMode: 'legacy_unassigned',
+  })
   try {
     const sourceDir = path.join(root, 'Downloads')
     const destDir = path.join(root, 'Clients', 'ACME', 'Invoices')
@@ -459,6 +514,9 @@ export function runUndoChecks(): void {
       originalAfter?.items[0]?.undoReason === UNDO_REASON.fileMissing,
       'original run explains why undo is gone',
     )
+
+    const repeatUndo = executeUndo({ runId: recorded[0]!.runId, confirmed: true }, userData)
+    assert(!repeatUndo.ok, 'duplicate undo on the same run is rejected')
 
     writeFileSync(destFile, 'already-there')
     const overwritePreview = previewOrganisationPlanForFolders(
@@ -670,7 +728,66 @@ export function runUndoChecks(): void {
     assert(existsSync(keptSource) && !existsSync(keptFile), 'file returns after create_folder undo')
     assert(existsSync(keptDest), 'non-empty created folders are never deleted')
     assert(existsSync(path.join(keptDest, 'notes.txt')), 'other files in the created folder stay')
+
+    const tamperSource = path.join(sourceDir, 'Invoice_tamper.pdf')
+    const tamperDest = path.join(destDir, 'Invoice_tamper.pdf')
+    writeFileSync(tamperSource, 'tamper-me')
+    const tamperMove = moveInvoiceFile(tamperSource, liveFolders, 11)
+    assert(tamperMove.ok && tamperMove.data.appliedCount === 1, 'tamper case should move first')
+    const tamperRecorded = persistMovedRun(userData, tamperMove.data)
+    const evilPath = path.join(root, 'EVIL', 'stolen.pdf')
+    mkdirSync(path.dirname(evilPath), { recursive: true })
+    const tamperedRuns = loadActivityRuns(userData).map((run) =>
+      run.runId === tamperRecorded[0]!.runId && run.inversePlan
+        ? {
+            ...run,
+            inversePlan: {
+              ...run.inversePlan,
+              items: run.inversePlan.items.map((item, index) =>
+                index === 0 ? { ...item, proposedPath: evilPath } : item,
+              ),
+            },
+          }
+        : run,
+    )
+    writeFileSync(
+      getActivityFilePath(userData),
+      JSON.stringify(
+        { version: ACTIVITY_LOG_VERSION, updatedAt: new Date().toISOString(), runs: tamperedRuns },
+        null,
+        2,
+      ),
+    )
+    const tamperRejected = executeUndo(
+      { runId: tamperRecorded[0]!.runId, confirmed: true },
+      userData,
+    )
+    assert(!tamperRejected.ok, 'tampered inverse plan is rejected before filesystem changes')
+    assert(!existsSync(evilPath) && existsSync(tamperDest), 'tampered undo must not move to evil path')
+
+    const expiredOrganise = assertExecutorGenerationRights({
+      licenseId: 'lic_expired_undo',
+      customerId: 'cust_expired',
+      email: 'expired@example.com',
+      edition: 'personal_monthly',
+      status: 'expired',
+      capabilities: [],
+      enabledKnowledgeSources: [],
+      deviceLimit: 1,
+      activatedDevices: 0,
+      validUntil: '2020-01-01T00:00:00.000Z',
+      lastCheckedAt: new Date().toISOString(),
+      offlineUntil: '',
+      channel: 'stable',
+      licenseToken: '',
+    })
+    assert(
+      !expiredOrganise.ok && expiredOrganise.error.code === 'license_expired',
+      'expired license blocks new organise execution',
+    )
+    assert(undone.ok, 'verified undo still succeeds when subscription rights would block new organise')
   } finally {
+    setLicenseContextForTests(null)
     rmSync(root, { recursive: true, force: true })
     rmSync(userData, { recursive: true, force: true })
   }

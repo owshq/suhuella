@@ -10,7 +10,8 @@ import {
   resolveSourceIdentity,
   sourceLabelFromPath,
 } from '@suhuella/product/lib/source-appearance.ts'
-import type { AppSettings, SourceIconId, SuggestedLocationKind } from '@suhuella/product/types.ts'
+import { normalizePermissionPreferences } from '@suhuella/product/lib/permissions-preferences.ts'
+import type { AppPermissionPreferences, AppSettings, SourceIconId, SuggestedLocationKind } from '@suhuella/product/types.ts'
 import { DEFAULT_KNOWLEDGE_SOURCES_ENABLED, normalizeKnowledgeSourcesEnabled } from './knowledge-sources.ts'
 
 const SETTINGS_FILE = 'settings.json'
@@ -23,11 +24,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   lastLearnedNewFiles: null,
   lastLearnedUpdatedFolders: null,
   firstRunCompleted: false,
-  launchAtLogin: true,
+  launchAtLogin: false,
   welcomeNotificationShown: false,
   knowledgeSourcesEnabled: { ...DEFAULT_KNOWLEDGE_SOURCES_ENABLED },
   recentFolders: [],
   sourceAppearance: {},
+  permissions: normalizePermissionPreferences(null),
 }
 
 function normalizeLocation(location: string): string {
@@ -89,6 +91,7 @@ function normalizeSettings(parsed: Partial<AppSettings> & { favouriteFolders?: s
       ? parsed.recentFolders.filter((item): item is string => typeof item === 'string')
       : [],
     sourceAppearance: normalizeSourceAppearanceStore(parsed.sourceAppearance, settingsPlatform()),
+    permissions: normalizePermissionPreferences(parsed.permissions),
   }
 }
 
@@ -137,9 +140,26 @@ export function saveSettings(settings: AppSettings): AppSettings {
     knowledgeSourcesEnabled: normalizeKnowledgeSourcesEnabled(settings.knowledgeSourcesEnabled),
     recentFolders: [...new Set(settings.recentFolders.map(normalizeLocation))].filter(Boolean).slice(0, 8),
     sourceAppearance: normalizeSourceAppearanceStore(settings.sourceAppearance, settingsPlatform()),
+    permissions: normalizePermissionPreferences(settings.permissions),
   }
   writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf8')
   return next
+}
+
+export function setPermissionPreferences(prefs: Partial<AppPermissionPreferences>): AppSettings {
+  const settings = loadSettings()
+  const current = normalizePermissionPreferences(settings.permissions)
+  return saveSettings({
+    ...settings,
+    permissions: {
+      allowFolderChanges:
+        typeof prefs.allowFolderChanges === 'boolean'
+          ? prefs.allowFolderChanges
+          : current.allowFolderChanges,
+      trashEnabled:
+        typeof prefs.trashEnabled === 'boolean' ? prefs.trashEnabled : current.trashEnabled,
+    },
+  })
 }
 
 export function recordRecentFolder(location: string): AppSettings {

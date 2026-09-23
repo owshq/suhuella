@@ -1,11 +1,12 @@
-import { FolderPlus, Sparkles, Trash2 } from 'lucide-react'
+import { FolderPlus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { HomeIdentityCard } from '../components/HomeIdentityCard'
 import { SuhuellaLogo } from '../components/SuhuellaLogo'
 import { getSuhuellaApi } from '../lib/api'
 import { productCopy } from '../lib/product-copy'
-import type { AppSettings } from '../types'
+import type { AppSettings, LicenseStatusView } from '../types'
 
-const STEPS = 3
+const STEPS = 2
 
 function sourceName(path: string): string {
   const parts = path.split(/[/\\]+/).filter(Boolean)
@@ -15,12 +16,14 @@ function sourceName(path: string): string {
 export function OnboardingWindow() {
   const [step, setStep] = useState(0)
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [license, setLicense] = useState<LicenseStatusView | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     try {
       const api = getSuhuellaApi()
       void api.getSettings().then(setSettings)
+      void api.getLicense().then(setLicense)
     } catch {
       // Preload is only available inside the Electron window.
     }
@@ -44,27 +47,17 @@ export function OnboardingWindow() {
     }
   }
 
-  async function toggleLaunchAtLogin(enabled: boolean) {
-    setSettings(await getSuhuellaApi().setLaunchAtLogin(enabled))
-  }
-
-  async function testAssistant() {
-    setBusy(true)
-    try {
-      await getSuhuellaApi().previewSuggestions()
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function finish() {
     setBusy(true)
     try {
-      await getSuhuellaApi().finishOnboarding()
+      await getSuhuellaApi().finishOnboarding('home')
     } finally {
       setBusy(false)
     }
   }
+
+  const hasSource = (settings?.indexedLocations ?? []).length > 0
+  const canAdvance = step === 0 || hasSource
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-transparent text-[var(--app-fg)]">
@@ -93,7 +86,20 @@ export function OnboardingWindow() {
         <section className="flex flex-1 flex-col rounded-[1.6rem] border border-[var(--sidebar-line)] bg-[var(--app-bg)] p-5 shadow-xl">
           {step === 0 && (
             <>
-              <h2 className="text-base font-semibold text-[var(--app-fg)]">Sources</h2>
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">Your license</h2>
+              <p className="mt-1 mb-4 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
+                {productCopy('SuHuella Free keeps everything on this device. Activate a license later if you need paid features.')}
+              </p>
+              <HomeIdentityCard license={license} />
+              <p className="mt-4 text-xs leading-relaxed text-[var(--app-fg)] opacity-50">
+                {productCopy('Close the window anytime — SuHuella stays in the menu bar.')}
+              </p>
+            </>
+          )}
+
+          {step === 1 && (
+            <>
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">Add your first source</h2>
               <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
                 {productCopy('What can SuHuella see? Add a folder. Your documents stay on this device.')}
               </p>
@@ -105,7 +111,7 @@ export function OnboardingWindow() {
                   className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                 >
                   <FolderPlus className="h-4 w-4" />
-                  Add
+                  Add folder
                 </button>
               ) : (
                 <div className="space-y-2">
@@ -135,58 +141,13 @@ export function OnboardingWindow() {
                     type="button"
                     onClick={() => void addSource()}
                     disabled={busy}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-3.5 py-2 text-sm font-semibold text-[var(--app-fg)] transition hover:opacity-90 disabled:opacity-60"
                   >
                     <FolderPlus className="h-4 w-4" />
-                    Add
+                    Add another
                   </button>
                 </div>
               )}
-            </>
-          )}
-
-          {step === 1 && (
-            <>
-              <h2 className="text-base font-semibold text-[var(--app-fg)]">
-                Enable automatic startup
-              </h2>
-              <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
-                {productCopy('SuHuella opens when you sign in. Close the window to keep it in the menu bar.')}
-              </p>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-4 py-3.5 shadow-sm hover:opacity-90 transition">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--brand-accent)] accent-[var(--brand-accent)]"
-                  checked={settings?.launchAtLogin ?? true}
-                  onChange={(event) => void toggleLaunchAtLogin(event.target.checked)}
-                />
-                <span>
-                  <span className="block text-sm font-medium text-[var(--app-fg)]">
-                    {productCopy('Launch SuHuella when I sign in')}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-[var(--app-fg)] opacity-60">
-                    Enabled by default. You can disable it anytime.
-                  </span>
-                </span>
-              </label>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <h2 className="text-base font-semibold text-[var(--app-fg)]">Preview suggestions</h2>
-              <p className="mt-1 mb-5 text-xs leading-relaxed text-[var(--app-fg)] opacity-60">
-                {productCopy('Optional. See how SuHuella appears when you save. It never saves the file for you.')}
-              </p>
-              <button
-                type="button"
-                onClick={() => void testAssistant()}
-                disabled={busy}
-                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--brand-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-              >
-                <Sparkles className="h-4 w-4" />
-                Preview Suggestions
-              </button>
             </>
           )}
         </section>
@@ -211,10 +172,14 @@ export function OnboardingWindow() {
               if (step < STEPS - 1) setStep((s) => s + 1)
               else void finish()
             }}
-            disabled={busy}
+            disabled={busy || !canAdvance}
             className="rounded-full bg-[var(--brand-accent)] px-5 py-2 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
           >
-            {step < STEPS - 1 ? 'Continue' : busy ? 'Starting…' : productCopy('Start using SuHuella')}
+            {step < STEPS - 1
+              ? 'Continue'
+              : busy
+                ? 'Opening Home…'
+                : productCopy('Go to Home')}
           </button>
         </div>
       </main>

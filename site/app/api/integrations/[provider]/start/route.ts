@@ -1,5 +1,5 @@
 import { startOAuth } from "@/lib/integrations/connections";
-import { isCloudProviderId } from "@/lib/integrations/providers";
+import { parseProviderPathSlug } from "@/lib/integrations/providers";
 import type { CloudOwnerKind } from "@/lib/integrations/types";
 import type { NextRequest } from "next/server";
 
@@ -9,8 +9,9 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ provider: string }> },
 ) {
-  const { provider } = await context.params;
-  if (!isCloudProviderId(provider)) {
+  const { provider: providerSlug } = await context.params;
+  const provider = parseProviderPathSlug(providerSlug);
+  if (!provider) {
     return Response.json(
       { ok: false, error: "provider_unknown" },
       { status: 404, headers: { "Cache-Control": "no-store" } },
@@ -50,7 +51,7 @@ export async function POST(
     ownerKind,
     ownerId,
     origin: request.nextUrl.origin,
-    returnPath: typeof body.returnPath === "string" ? body.returnPath : "/home",
+    returnPath: typeof body.returnPath === "string" ? body.returnPath : "/sources",
   });
 
   if (!result.ok) {

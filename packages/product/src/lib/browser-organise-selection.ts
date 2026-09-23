@@ -2,24 +2,26 @@ import type { KnowledgeSetItem } from '../types.ts'
 import type { IndexedFolderEntry, WebIndexedFile } from '../host/browser/types.ts'
 import { isFolderPickAbort, isProtectedFolderConnectError } from './sources-ui.ts'
 
-export const ORGANISE_DOCUMENTS_TITLE = 'Organise documents'
+export const ORGANISE_DOCUMENTS_TITLE = 'Plan Mode'
 
-export const ORGANISE_SCREEN_SUBTITLE =
-  'Select documents and review a Plan before anything changes.'
+export const ORGANISE_SCREEN_SUBTITLE = 'What should happen?'
 
-export const ORGANISE_EMPTY_BODY =
-  'Select documents from a connected source or choose files from this device. SuHuella will create a Plan before anything changes.'
+export const ORGANISE_EMPTY_BODY = 'Choose a source on Sources, then return here to create a Plan.'
 
-export const ORGANISE_EMPTY_NO_SOURCES =
-  'No connected sources yet. You can connect a folder or choose files directly.'
+export const ORGANISE_EMPTY_NO_SOURCES = 'Connect a source on Sources first.'
 
 export const ORGANISE_SELECT_FROM_SOURCES = 'Select from Sources'
-export const ORGANISE_CHOOSE_FILES = 'Choose files'
-export const ORGANISE_CHOOSE_FOLDER = 'Choose folder'
-export const ORGANISE_CONNECT_FOLDER = 'Connect a folder'
+export const ORGANISE_OPEN_SOURCES = 'Open Sources'
+export const ORGANISE_ADD_SOURCE = 'Add source'
+/** @deprecated Use ORGANISE_OPEN_SOURCES in product UI. File picker remains for scoped browser flows. */
+export const ORGANISE_CHOOSE_FILES = ORGANISE_OPEN_SOURCES
+export const ORGANISE_CHOOSE_FOLDER = ORGANISE_OPEN_SOURCES
+export const ORGANISE_CONNECT_SOURCE = 'Connect a source'
+/** @deprecated Use ORGANISE_CONNECT_SOURCE */
+export const ORGANISE_CONNECT_FOLDER = ORGANISE_CONNECT_SOURCE
 
 export const ORGANISE_FOLDER_UNSUPPORTED =
-  'This browser cannot choose folders. Choose files instead.'
+  'This browser cannot connect a source here. Open Sources instead.'
 
 export const ORGANISE_EXECUTION_LIMIT =
   'This browser can prepare the Plan. Some file changes may require additional permission.'

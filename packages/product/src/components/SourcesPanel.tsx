@@ -42,7 +42,11 @@ import {
   sourceAppearanceDotColor,
 } from '../lib/source-appearance'
 import { FeaturePromoCard } from './FeaturePromoCard'
-import { CloudAccountsSection } from './CloudAccountsSection'
+import {
+  cloudProviderCatalogPath,
+  OAUTH_CLOUD_CATALOG_IDS,
+  useCloudIntegrations,
+} from './CloudAccountsSection'
 import {
   SourceAppearanceMenu,
   SourceIconBadge,
@@ -163,6 +167,7 @@ function SourceCard({
   busy,
   needsAttention,
   removing,
+  removeLabel = 'Remove',
   layout = 'list',
   onAction,
   onOpenSource,
@@ -184,6 +189,7 @@ function SourceCard({
   busy?: boolean
   needsAttention?: boolean
   removing?: boolean
+  removeLabel?: string
   layout?: SourceLayout
   onAction?: () => void
   onOpenSource?: () => void
@@ -257,7 +263,7 @@ function SourceCard({
               }}
               className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition disabled:opacity-50"
             >
-              {sourceWorkingActionLabel('Remove', removing) ?? 'Remove'}
+              {sourceWorkingActionLabel(removeLabel, removing) ?? removeLabel}
             </button>
           ) : null}
         </>
@@ -285,7 +291,7 @@ function SourceCard({
               }}
               className="rounded-full border border-[var(--sidebar-line)] bg-transparent px-3 py-1.5 text-[12px] font-semibold text-[var(--app-fg)] opacity-80 hover:opacity-100 hover:bg-black/5 transition disabled:opacity-50"
             >
-              {sourceWorkingActionLabel('Remove', removing) ?? 'Remove'}
+              {sourceWorkingActionLabel(removeLabel, removing) ?? removeLabel}
             </button>
           ) : null}
         </div>
@@ -370,7 +376,7 @@ function SourceCard({
             className={onOpenSource ? 'cursor-pointer' : ''}
             onPress={onOpenSource ? undefined : canCustomize ? openListAppearanceMenu : undefined}
           />
-          <div className="min-w-0 flex flex-col justify-center">
+          <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
             <h3 className="flex min-w-0 items-center gap-2 text-[15px] font-semibold tracking-tight text-[var(--app-fg)]">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
@@ -379,7 +385,7 @@ function SourceCard({
               />
               <span className="truncate">{title}</span>
             </h3>
-          <p className="mt-0.5 text-[13px] text-[var(--app-fg)] opacity-50 flex items-center gap-2">
+          <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-[13px] text-[var(--app-fg)] opacity-50">
             <span>{statusLine}</span>
             {details.length > 0 && <span className="opacity-40">•</span>}
             {details.map((line, i) => (
@@ -475,6 +481,7 @@ export function SourcesPanel({
   onCancelScan,
   onSourceAppearanceChange,
   onOpenSource,
+  onLimitedSystemFolder,
   developerSources,
 }: {
   settings: AppSettings | null
@@ -496,6 +503,7 @@ export function SourcesPanel({
   onCancelScan: () => void
   onSourceAppearanceChange?: (path: string, update: { color?: string | null; iconId?: SourceIconId | null }) => void
   onOpenSource?: (path: string, title: string) => void
+  onLimitedSystemFolder?: () => void
   developerSources?: ReactNode
 }) {
   const { locale, t } = useAppLocale()
@@ -508,6 +516,7 @@ export function SourcesPanel({
   } | null>(null)
   const wasBusy = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const cloudOAuth = useCloudIntegrations()
   const isScanning = scan.status === 'scanning'
   const progressPercent = scanProgressPercent(scan)
   const documentCount = locations.reduce((sum, location) => sum + location.fileCount, 0)
@@ -581,7 +590,8 @@ export function SourcesPanel({
   const unusedCloudCatalog = cloudCatalog.filter(
     (card) =>
       !connectedKeys.has(card.path.toLowerCase()) &&
-      !locations.some((location) => sameSourceName(location.name, card.label)),
+      !locations.some((location) => sameSourceName(location.name, card.label)) &&
+      !(cloudOAuth.active && OAUTH_CLOUD_CATALOG_IDS.has(card.id)),
   )
 
   function locationCard(location: IndexedLocationSummary, kind?: SuggestedLocation['kind']) {
@@ -706,7 +716,12 @@ export function SourcesPanel({
     computerGrantable.length > 0 ||
     (!searching && locations.length > 0)
   const hasCloudSection =
-    cloudLocations.length > 0 || cloudAvailable.length > 0 || unusedCloudCatalog.length > 0
+    cloudLocations.length > 0 ||
+    cloudAvailable.length > 0 ||
+    unusedCloudCatalog.length > 0 ||
+    cloudOAuth.active
+  const cloudSectionIsLive =
+    cloudOAuth.active || cloudLocations.length > 0 || cloudAvailable.length > 0
 
   useEffect(() => {
     if (!searchOpen) return
@@ -937,7 +952,7 @@ export function SourcesPanel({
                       actionLabel={browserChooseSubfolderLabel(locale)}
                       busy={connectDisabled}
                       layout={viewMode}
-                      onAction={requestAdd}
+                      onAction={onLimitedSystemFolder ?? requestAdd}
                     />
                   </li>
                 ))
@@ -948,10 +963,23 @@ export function SourcesPanel({
       {hasCloudSection ? (
         <SourceGroup
           id="sources-cloud"
-          title={cloudLocations.length > 0 || cloudAvailable.length > 0 ? 'Cloud' : 'Coming later'}
-          hint={access.connectGrant ? browserCloudComingLaterCopy(locale) : undefined}
+          title={cloudSectionIsLive ? 'Cloud' : 'Coming later'}
+          hint={
+            cloudSectionIsLive
+              ? undefined
+              : access.connectGrant
+                ? browserCloudComingLaterCopy(locale)
+                : undefined
+          }
           layout={viewMode}
         >
+          {cloudOAuth.error ? (
+            <li className="col-span-full px-3">
+              <p role="alert" className="text-[13px] text-rose-700">
+                {cloudOAuth.error}
+              </p>
+            </li>
+          ) : null}
           {cloudLocations.map((location) => (
             <li key={location.path}>{locationCard(location, 'cloud_folder')}</li>
           ))}
@@ -973,6 +1001,86 @@ export function SourcesPanel({
               />
             </li>
           ))}
+          {cloudOAuth.active
+            ? cloudOAuth.sources
+                .filter((source) => matchesSourceQuery(source.displayName, searchQuery))
+                .map((source) => {
+                  const needsReauth = source.status !== 'active'
+                  const platformTitle =
+                    source.provider === 'google_drive'
+                      ? 'Google Drive'
+                      : source.provider === 'onedrive'
+                        ? 'OneDrive'
+                        : source.provider === 'dropbox'
+                          ? 'Dropbox'
+                          : source.displayName
+                  const iconPath = cloudProviderCatalogPath(source.provider)
+                  return (
+                    <li key={source.id}>
+                      <SourceCard
+                        path={iconPath}
+                        title={platformTitle}
+                        kind="cloud_folder"
+                        platform={platform}
+                        sourceAppearance={settings?.sourceAppearance}
+                        onAppearanceChange={onSourceAppearanceChange}
+                        sight={needsReauth ? 'unavailable' : 'available'}
+                        detailLines={
+                          source.accountEmail ? [source.accountEmail] : undefined
+                        }
+                        actionLabel={needsReauth ? 'Renew permissions' : null}
+                        busy={
+                          cloudOAuth.busy === `renew:${source.id}` ||
+                          cloudOAuth.busy === source.id
+                        }
+                        needsAttention
+                        removing={cloudOAuth.busy === source.id}
+                        removeLabel="Disconnect"
+                        layout={viewMode}
+                        onAction={
+                          needsReauth ? () => void cloudOAuth.renew(source.id) : undefined
+                        }
+                        onOpenSource={
+                          !needsReauth && onOpenSource
+                            ? () => onOpenSource(source.browseRoot, platformTitle)
+                            : undefined
+                        }
+                        onRescan={
+                          !needsReauth ? () => void cloudOAuth.renew(source.id) : undefined
+                        }
+                        onRemove={() => void cloudOAuth.disconnect(source.id)}
+                      />
+                    </li>
+                  )
+                })
+            : null}
+          {cloudOAuth.active
+            ? cloudOAuth.catalog
+                .filter((item) => {
+                  if (cloudOAuth.connections.some((c) => c.provider === item.provider)) {
+                    return false
+                  }
+                  return matchesSourceQuery(item.displayName, searchQuery)
+                })
+                .map((item) => (
+                  <li key={item.provider}>
+                    <SourceCard
+                      path={cloudProviderCatalogPath(item.provider)}
+                      title={item.displayName}
+                      kind="cloud_folder"
+                      platform={platform}
+                      sourceAppearance={settings?.sourceAppearance}
+                      sight={item.enabled ? 'not_connected' : 'coming_later'}
+                      actionLabel={item.enabled ? 'Connect' : null}
+                      busy={cloudOAuth.busy === item.provider}
+                      layout={viewMode}
+                      onAction={
+                        item.enabled ? () => void cloudOAuth.connect(item.provider) : undefined
+                      }
+                    />
+                  </li>
+                ))
+            : null}
           {unusedCloudCatalog
             .filter((card) => matchesSourceQuery(card.label, searchQuery))
             .map((card) => (
@@ -990,8 +1098,6 @@ export function SourcesPanel({
             ))}
         </SourceGroup>
       ) : null}
-
-      <CloudAccountsSection />
 
       {externalLocations.length > 0 || externalAvailable.length > 0 ? (
         <SourceGroup title="External" layout={viewMode}>

@@ -7,9 +7,12 @@ export type ReleaseChannel = "stable" | "beta";
 export type ReleaseDownloadTarget = {
   available: boolean;
   url: string | null;
+  sha256?: string;
+  filename?: string;
+  size?: number;
 };
 
-export type ReleaseManifest = {
+export type ReleaseArchiveEntry = {
   version: string;
   channel: ReleaseChannel;
   minimumVersion: string;
@@ -23,6 +26,10 @@ export type ReleaseManifest = {
   };
   windows: string;
   mac: string;
+};
+
+export type ReleaseManifest = ReleaseArchiveEntry & {
+  archive?: ReleaseArchiveEntry[];
 };
 
 function downloadTarget(
@@ -39,7 +46,25 @@ function downloadTarget(
           ? urlRaw.trim()
           : null;
     const available = record.available === true || Boolean(url);
-    return { available, url };
+    const sha256 =
+      typeof record.sha256 === "string" && /^[a-f0-9]{64}$/i.test(record.sha256.trim())
+        ? record.sha256.trim().toLowerCase()
+        : undefined;
+    const filename =
+      typeof record.filename === "string" && record.filename.trim()
+        ? record.filename.trim()
+        : undefined;
+    const size =
+      typeof record.size === "number" && Number.isFinite(record.size) && record.size > 0
+        ? Math.trunc(record.size)
+        : undefined;
+    return {
+      available,
+      url,
+      ...(sha256 ? { sha256 } : {}),
+      ...(filename ? { filename } : {}),
+      ...(size ? { size } : {}),
+    };
   }
   const legacy = legacyUrl.trim();
   return { available: Boolean(legacy), url: legacy || null };
@@ -85,7 +110,7 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
   if (windows && !isValidHttpsUrl(windows)) return null;
   if (mac && !isValidHttpsUrl(mac)) return null;
 
-  return {
+  const base: ReleaseManifest = {
     version,
     channel: record.channel === "beta" ? "beta" : "stable",
     minimumVersion,
@@ -96,6 +121,13 @@ export function parseReleaseManifest(data: unknown): ReleaseManifest | null {
     windows,
     mac,
   };
+
+  const archiveRaw = Array.isArray(record.archive) ? record.archive : [];
+  const archive = archiveRaw
+    .map((entry) => parseReleaseManifest(entry))
+    .filter((entry): entry is ReleaseArchiveEntry => entry !== null);
+
+  return archive.length > 0 ? { ...base, archive } : base;
 }
 
 export function manifestToInstallerUrls(

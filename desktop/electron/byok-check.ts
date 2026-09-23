@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { readDesktopSource, readProductSource } from './check-source.ts'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { describeKnowledgeItem } from './descriptors.ts'
@@ -13,21 +13,14 @@ import { runByokContractChecks } from './byok.ts'
 import { recommendFolders } from './recommendations.ts'
 import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
 
-function desktopRoot(): string {
-  const cwd = process.cwd()
-  if (existsSync(path.join(cwd, 'electron/recommendations.ts'))) return cwd
-  if (existsSync(path.join(cwd, 'desktop/electron/recommendations.ts'))) {
-    return path.join(cwd, 'desktop')
-  }
-  return cwd
-}
-
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
 }
 
 function source(relativePath: string): string {
-  return readFileSync(path.join(desktopRoot(), relativePath), 'utf8')
+  return relativePath.startsWith('src/')
+    ? readProductSource(relativePath)
+    : readDesktopSource(relativePath)
 }
 
 function assertNotImported(file: string, needle: string, message: string): void {

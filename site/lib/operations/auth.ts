@@ -1,18 +1,20 @@
 import { brand } from "@suhuella/brand";
 import {
+  getAccessAudience,
+  getAccessTeamDomain,
   getOperationsAccessConfigStatus,
   getSuperadminEmails,
   isOperationsAccessConfigured,
   type OperationsAccessConfigStatus,
-} from "./access-config";
-import { verifyCloudflareAccessJwt } from "./access-jwt";
-import { isProductionRuntime } from "./auth-runtime";
-import { normalizeEmail } from "./catalog";
-import { isLocalhostHost, requestHost } from "./host";
+} from "./access-config.ts";
+import { verifyCloudflareAccessJwt } from "./access-jwt.ts";
+import { isProductionRuntime } from "./auth-runtime.ts";
+import { normalizeEmail } from "./catalog.ts";
+import { isLocalhostHost, requestHost } from "./host.ts";
 import type { OperationsAuthMethod } from "./session";
 import type { OperationsActor } from "./types";
 
-export { isProductionRuntime } from "./auth-runtime";
+export { isProductionRuntime } from "./auth-runtime.ts";
 export {
   getOperationsAccessConfigStatus,
   getSuperadminEmails,
@@ -20,7 +22,7 @@ export {
   missingOperationsAccessConfig,
   type OperationsAccessConfigKey,
   type OperationsAccessConfigStatus,
-} from "./access-config";
+} from "./access-config.ts";
 
 export type OperationsAuthFailure = {
   ok: false;
@@ -99,8 +101,15 @@ async function authenticateProduction(
     );
   }
 
-  const teamDomain = readEnv("CF_ACCESS_TEAM_DOMAIN");
-  const audience = readEnv("CF_ACCESS_AUD");
+  const teamDomain = getAccessTeamDomain();
+  const audience = getAccessAudience();
+  if (!teamDomain || !audience) {
+    return deny(
+      503,
+      "access_unconfigured",
+      "Operations temporarily unavailable. Contact the administrator.",
+    );
+  }
 
   const token = headerJwt(headers);
   if (!token) {
@@ -156,7 +165,7 @@ function authenticateDevelopment(): OperationsAuthResult {
     return deny(
       401,
       "unauthorized",
-      "Operations is only open on localhost during local development. Use http://localhost:3000/_ops or set OPERATIONS_ALLOW_DEV_ACCESS=true with OPERATIONS_DEV_EMAIL.",
+      "Operations is only open on localhost during local development. Use http://localhost:3000/ops or set OPERATIONS_ALLOW_DEV_ACCESS=true with OPERATIONS_DEV_EMAIL.",
     );
   }
 

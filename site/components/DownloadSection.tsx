@@ -8,6 +8,7 @@ import { WindowsIcon } from "@/components/icons/WindowsIcon";
 import { useLocale } from "@/components/providers/LocaleProvider";
 import { GlassCard } from "@/components/ui/GlassCard";
 import type { Dictionary } from "@/lib/i18n/types";
+import { buildDownloadPreparingPath } from "@/lib/desktop-download-flow";
 import { hasDownloadableInstaller, visibleInstallers } from "@/lib/installer-availability";
 import { formatAppVersion } from "@/lib/release";
 
@@ -131,11 +132,11 @@ export function DownloadSection({
     ...(shown.windows
       ? [
           {
-            href: shown.windows,
+            href: buildDownloadPreparingPath("windows"),
             label: windowsLabel ?? t.download.windows,
             ext: ".exe",
             icon: WindowsIcon,
-            external: true,
+            external: false,
             unavailableLabel: t.download.unavailable,
           } satisfies Installer,
         ]
@@ -143,11 +144,11 @@ export function DownloadSection({
     ...(shown.mac
       ? [
           {
-            href: shown.mac,
+            href: buildDownloadPreparingPath("mac"),
             label: macLabel ?? t.download.mac,
             ext: ".dmg",
             icon: AppleIcon,
-            external: true,
+            external: false,
             unavailableLabel: t.download.unavailable,
           } satisfies Installer,
         ]

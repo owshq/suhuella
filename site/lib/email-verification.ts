@@ -1,8 +1,10 @@
 import { isLicenseOtpMailReady, sendVerificationCodeEmail } from "./resend-mail.ts";
 import { isValidEmail, normalizeEmail } from "./license-context.ts";
+import { findBusinessGrantByEmail } from "./business-service.ts";
 import { findGrantByEmail } from "./license-store.ts";
 import {
   productionLicensePersistenceReady,
+  readLicensePersistence,
   withLicensePersistence,
 } from "./license-persistence/store.ts";
 import type {
@@ -33,8 +35,8 @@ function isProductionRuntime(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-function signingSecret(): string | null {
-  const secret = process.env.LICENSE_SIGNING_SECRET?.trim();
+function otpSecret(): string | null {
+  const secret = process.env.LICENSE_EMAIL_OTP_SECRET?.trim();
   if (secret) return secret;
   if (!isProductionRuntime()) return "dev-email-code-secret";
   return null;
@@ -42,7 +44,7 @@ function signingSecret(): string | null {
 
 function productionDeliveryReady(): boolean {
   if (!isProductionRuntime()) return true;
-  return isLicenseOtpMailReady() && Boolean(signingSecret());
+  return isLicenseOtpMailReady() && Boolean(otpSecret());
 }
 
 function randomSixDigitCode(): string {
@@ -51,7 +53,7 @@ function randomSixDigitCode(): string {
 }
 
 async function hashCode(challengeId: string, code: string): Promise<string> {
-  const secret = signingSecret();
+  const secret = otpSecret();
   if (!secret) return "unavailable";
   const payload = new TextEncoder().encode(`${challengeId}:${code}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", payload);
@@ -62,12 +64,24 @@ function isPurpose(value: string): value is EmailVerificationPurpose {
   return (
     value === "LICENSE_ACTIVATION" ||
     value === "LICENSE_RECOVERY" ||
-    value === "BUSINESS_OWNER_VERIFICATION"
+    value === "BUSINESS_OWNER_VERIFICATION" ||
+    value === "BUSINESS_CHECKOUT" ||
+    value === "LIFETIME_UPGRADE" ||
+    value === "PARTNER_ONBOARDING" ||
+    value === "PARTNER_APPLICATION" ||
+    value === "PARTNER_PORTAL"
   );
 }
 
+async function lifetimeUpgradeEligible(email: string): Promise<boolean> {
+  const grant = await findGrantByEmail(email);
+  if (!grant || grant.edition !== "personal_lifetime" || grant.status !== "active") return false;
+  if (!grant.commercialGenerationId?.trim()) return false;
+  return grant.generationAccessMode !== "legacy_unassigned";
+}
+
 async function eligibleEmailExists(email: string): Promise<boolean> {
-  return Boolean(await findGrantByEmail(email));
+  return Boolean((await findGrantByEmail(email)) || findBusinessGrantByEmail(email));
 }
 
 export async function requestEmailVerificationCode(input: {
@@ -77,7 +91,7 @@ export async function requestEmailVerificationCode(input: {
   clientIp?: string;
 }): Promise<
   | { ok: true; challengeId: string; message: string }
-  | { ok: false; error: "invalid_request" | "rate_limited" | "server_error" }
+  | { ok: false; error: "invalid_request" | "rate_limited" | "server_error" | "no_membership" }
 > {
   const email = normalizeEmail(input.email ?? "");
   const purpose = input.purpose?.trim() ?? "";
@@ -100,7 +114,27 @@ export async function requestEmailVerificationCode(input: {
     return { ok: false, error: "rate_limited" };
   }
 
-  const exists = await eligibleEmailExists(email);
+  const exists =
+    purpose === "PARTNER_ONBOARDING"
+      ? await (async () => {
+          const { hasOpenPartnerInviteForEmail } = await import("./partners/service.ts");
+          return hasOpenPartnerInviteForEmail(email);
+        })()
+      : purpose === "LIFETIME_UPGRADE"
+        ? await lifetimeUpgradeEligible(email)
+      : purpose === "PARTNER_APPLICATION" || purpose === "BUSINESS_CHECKOUT"
+        ? true
+        : purpose === "PARTNER_PORTAL"
+          ? await (async () => {
+              const { hasPartnerPortalAccess } = await import("./partners/service.ts");
+              return hasPartnerPortalAccess(email);
+            })()
+          : await eligibleEmailExists(email);
+
+  if (purpose === "PARTNER_PORTAL" && !exists) {
+    return { ok: false, error: "no_membership" };
+  }
+
   const code = randomSixDigitCode();
   const challengeId = createId("evc");
   const now = Date.now();
@@ -142,7 +176,15 @@ export async function requestEmailVerificationCode(input: {
     ok: true,
     challengeId,
     message:
-      "If an eligible license exists for this email, we've sent a verification code.",
+      purpose === "PARTNER_ONBOARDING"
+        ? "If this email has an open partner invite, we've sent a verification code."
+          : purpose === "LIFETIME_UPGRADE"
+            ? "If this Lifetime license is eligible for an upgrade, we've sent a verification code."
+          : purpose === "PARTNER_APPLICATION" || purpose === "BUSINESS_CHECKOUT"
+          ? "If this email is valid, we've sent a verification code."
+          : purpose === "PARTNER_PORTAL"
+            ? "We sent a verification code to this authorized partner email."
+            : "If an eligible license exists for this email, we've sent a verification code.",
   };
 }
 
@@ -206,6 +248,23 @@ export async function verifyEmailVerificationCode(input: {
   if (!proof) return { ok: false, error: "invalid_code" };
   const p = proof as { id: string; expiresAt: string };
   return { ok: true, proofId: p.id, expiresAt: p.expiresAt };
+}
+
+export async function peekVerifiedEmailProof(input: {
+  proofId: string;
+  purpose: EmailVerificationPurpose;
+}): Promise<{ ok: true; email: string } | { ok: false; error: "invalid_proof" | "expired" }> {
+  const proofId = input.proofId?.trim() ?? "";
+  if (!proofId) return { ok: false, error: "invalid_proof" };
+
+  const now = Date.now();
+  const document = await readLicensePersistence();
+  const proof = document.proofs.find((item) => item.id === proofId);
+  if (!proof || proof.consumedAt || proof.purpose !== input.purpose) {
+    return { ok: false, error: "invalid_proof" };
+  }
+  if (Date.parse(proof.expiresAt) <= now) return { ok: false, error: "expired" };
+  return { ok: true, email: proof.normalizedEmail };
 }
 
 export async function consumeVerifiedEmailProof(input: {

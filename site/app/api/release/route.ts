@@ -1,13 +1,13 @@
-import { getReleaseManifest, publicReleasePayload } from "@/lib/release-manifest";
+import { publicReleasePayload } from "@/lib/installer-availability";
+import { getReleaseManifest } from "@/lib/release-manifest";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const release = await getReleaseManifest();
-
   if (!release) {
     return Response.json(
-      { ok: false, error: "manifest_unavailable" },
+      { ok: false, error: "release_unavailable" },
       {
         status: 503,
         headers: { "Cache-Control": "no-store" },
@@ -16,10 +16,12 @@ export async function GET() {
   }
 
   return Response.json(
-    { ok: true, release: publicReleasePayload(release) },
     {
-      status: 200,
-      headers: { "Cache-Control": "public, max-age=60" },
+      ok: true,
+      release: publicReleasePayload(release),
+    },
+    {
+      headers: { "Cache-Control": "no-store" },
     },
   );
 }

@@ -4,7 +4,7 @@ import {
   LICENSE_ORIGINS,
   ORGANISATION_PLANS,
   type OrganisationPlan,
-} from "./types";
+} from "./types.ts";
 
 export const BUSINESS_MIN_SEATS = 20;
 export const REASON_MIN_LENGTH = 8;

@@ -48,7 +48,7 @@ async function readJson(filePath) {
 }
 
 function expectedWindowsName(version) {
-  return `${identity.desktopProductName}-Setup-${version}.exe`
+  return `${identity.desktopProductName}-${version}.exe`
 }
 
 function expectedMacName(version) {
@@ -71,6 +71,18 @@ const version = typeof packageJson.version === 'string' ? packageJson.version.tr
 
 if (!version) {
   fail('desktop/package.json is missing version.')
+}
+
+if (!process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim()) {
+  if (process.env.SUHUELLA_DESKTOP_CI === '1') {
+    console.warn(
+      '[package-check] SUHUELLA_DESKTOP_CI: building without SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS — offline Ed25519 verify will fail in this artifact',
+    )
+  } else {
+    fail(
+      'SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS must be set for release builds (comma-separated Ed25519 SPKI public keys).',
+    )
+  }
 }
 
 if (manifest.brandId && manifest.brandId !== brandId) {
@@ -111,6 +123,9 @@ function checkInstallerUrl(label, url, expectedName) {
 checkInstallerUrl('windows', manifest.windows, expectedWin)
 checkInstallerUrl('mac', manifest.mac, expectedMac)
 
+const { writeElectronBuilderConfig } = await import('./brand-build.mjs')
+await writeElectronBuilderConfig(brandId)
+
 if (await exists(generatedConfigPath)) {
   const generated = await readJson(generatedConfigPath)
   if (generated.appId !== identity.desktopAppId) {
@@ -122,11 +137,14 @@ if (await exists(generatedConfigPath)) {
   if (generated.protocols?.[0]?.schemes?.[0] !== identity.desktopProtocol) {
     fail(`generated electron-builder protocol must be ${identity.desktopProtocol}.`)
   }
-  if (generated.forceCodeSigning !== false) {
-    fail('generated forceCodeSigning must stay false until signing is implemented.')
+  if (generated.mac?.extendInfo?.CFBundleIdentifier !== identity.desktopAppId) {
+    fail(`generated mac.extendInfo.CFBundleIdentifier must be ${identity.desktopAppId}.`)
   }
-  if (generated.mac?.identity !== null) {
-    fail('generated mac.identity must stay null until code signing is implemented.')
+  if (!String(generated.afterPack ?? '').includes('sign-mac-app')) {
+    fail('generated afterPack must sign the Mac app (sign-mac-app.cjs).')
+  }
+  if (!String(generated.afterSign ?? '').includes('notarize')) {
+    fail('generated afterSign must notarize when Developer ID credentials exist.')
   }
 } else {
   note(`generated ${path.relative(desktopRoot, generatedConfigPath)} missing — run npm run build before package.`)

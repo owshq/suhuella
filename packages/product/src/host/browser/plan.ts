@@ -1,7 +1,7 @@
-import { describeLocalFile } from "./descriptors";
-import { ensurePermission, loadHandle, moveOrRenameFile } from "./fs";
-import { recommendFolders } from "./recommendations";
-import { proposeSafeRename, renameNameConflicts, validateSafeFileName } from "./rename";
+import { describeLocalFile } from "./descriptors.ts";
+import { dedupeIndexedFiles, executeGuardedPlan, foldersForSource, type GuardedPlanDeps } from "./organise-integrity.ts";
+import { recommendFolders } from "./recommendations.ts";
+import { proposeSafeRename, renameNameConflicts, validateSafeFileName } from "./rename.ts";
 import type { IndexedFolderEntry, WebIndexedFile, WebPlanItem } from "./types";
 
 const MIN_MOVE_SCORE = 30;
@@ -21,14 +21,15 @@ function parentPath(filePath: string): string {
   return parts.slice(0, -1).join("/") || ".";
 }
 
-function folderAt(folders: IndexedFolderEntry[], locator: string): IndexedFolderEntry | undefined {
-  return folders.find((folder) => sameFolder(folder.absolutePath, locator) || sameFolder(folder.relativePath, locator));
+function foldersAt(folders: IndexedFolderEntry[], locator: string): IndexedFolderEntry[] {
+  return folders.filter((folder) => sameFolder(folder.absolutePath, locator) || sameFolder(folder.relativePath, locator));
 }
 
 export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry[]): WebPlanItem[] {
-  return files.map((file) => {
+  return dedupeIndexedFiles(files).map((file) => {
+    const scoped = foldersForSource(folders, file.sourceId);
     const descriptor = describeLocalFile(file.name, file.relativePath);
-    const recommendations = recommendFolders({ descriptor, folders });
+    const recommendations = recommendFolders({ descriptor, folders: scoped });
     const top = recommendations[0];
     const currentDir = file.parentRelative || ".";
 
@@ -39,6 +40,7 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
         proposedPath: null,
         fileName: file.name,
         sourceId: file.sourceId,
+        destSourceId: file.sourceId,
         explanation: "No confident destination found.",
         reviewGroup: "skipped",
         selected: false,
@@ -48,8 +50,25 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
       });
     }
 
-    if (sameFolder(currentDir, top.folder) || sameFolder(currentDir, folderAt(folders, top.folder)?.relativePath ?? "")) {
-      const destination = folderAt(folders, top.folder);
+    const matched = foldersAt(scoped, top.folder);
+    if (matched.length !== 1) {
+      return item({
+        action: "none",
+        currentPath: file.relativePath,
+        proposedPath: null,
+        fileName: file.name,
+        sourceId: file.sourceId,
+        destSourceId: file.sourceId,
+        explanation: "The destination folder is ambiguous.",
+        reviewGroup: "skipped",
+        selected: false,
+        score: top.score,
+        confidenceLabel: top.confidenceLabel,
+        skipReason: "The destination folder is ambiguous.",
+      });
+    }
+    const destination = matched[0];
+    if (sameFolder(currentDir, top.folder) || sameFolder(currentDir, destination.relativePath)) {
       const proposal = proposeSafeRename(file.name, destination?.fileNames ?? []);
       if (!proposal) {
         return item({
@@ -57,8 +76,9 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
           currentPath: file.relativePath,
           proposedPath: null,
           fileName: file.name,
-          sourceId: file.sourceId,
-          explanation: `Already in ${top.label}.`,
+        sourceId: file.sourceId,
+        destSourceId: file.sourceId,
+        explanation: `Already in ${top.label}.`,
           reviewGroup: "skipped",
           selected: false,
           score: top.score,
@@ -75,6 +95,7 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
           proposedPath,
           fileName: file.name,
           sourceId: file.sourceId,
+          destSourceId: file.sourceId,
           explanation: `A file named ${proposal.name} already exists.`,
           renameReasons: proposal.reasons,
           reviewGroup: "skipped",
@@ -91,6 +112,7 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
         proposedPath,
         fileName: file.name,
         sourceId: file.sourceId,
+        destSourceId: file.sourceId,
         explanation: proposal.explanation,
         renameReasons: proposal.reasons,
         reviewGroup: ready ? "ready" : "review",
@@ -101,9 +123,9 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
       });
     }
 
-    const destRelative = folderAt(folders, top.folder)?.relativePath ?? top.folder;
+    const destRelative = destination.relativePath;
     const proposedPath = joinPath(destRelative === "." ? "" : destRelative, file.name);
-    const destFolder = folderAt(folders, destRelative);
+    const destFolder = destination;
     if (destFolder?.fileNames.some((name) => name.toLowerCase() === file.name.toLowerCase())) {
       return item({
         action: "none",
@@ -111,6 +133,7 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
         proposedPath,
         fileName: file.name,
         sourceId: file.sourceId,
+        destSourceId: file.sourceId,
         explanation: top.reasons.join(" · ") || top.label,
         reviewGroup: "skipped",
         selected: false,
@@ -127,6 +150,7 @@ export function previewPlan(files: WebIndexedFile[], folders: IndexedFolderEntry
       proposedPath,
       fileName: file.name,
       sourceId: file.sourceId,
+      destSourceId: file.sourceId,
       explanation: top.reasons.join(" · ") || `Move to ${top.label}.`,
       reviewGroup: ready ? "ready" : "review",
       selected: ready,
@@ -192,34 +216,24 @@ export function inverseItem(item: WebPlanItem): WebPlanItem | null {
   };
 }
 
-export async function executePlanItems(items: WebPlanItem[]): Promise<WebPlanItem[]> {
-  const results: WebPlanItem[] = [];
-  for (const item of items) {
-    if (!canConfirm(item) || !item.proposedPath) {
-      results.push({ ...item, status: "skipped", skipReason: item.skipReason ?? "Not selected" });
-      continue;
-    }
-    const handle = await loadHandle(item.sourceId);
-    if (!handle) {
-      results.push({ ...item, status: "failed", skipReason: "This folder is no longer available." });
-      continue;
-    }
-    if (!(await ensurePermission(handle, "readwrite"))) {
-      results.push({ ...item, status: "failed", skipReason: "This folder needs permission." });
-      continue;
-    }
-    try {
-      await moveOrRenameFile(handle, item.currentPath, item.proposedPath);
-      results.push({ ...item, status: "applied" });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not apply this action.";
-      results.push({
-        ...item,
-        status: message.includes("overwrite") ? "skipped" : "failed",
-        skipReason: message,
-        warnings: [...item.warnings, message],
-      });
-    }
+export async function executePlanItems(
+  items: WebPlanItem[],
+  deps?: Pick<GuardedPlanDeps, "loadHandle" | "ensurePermission" | "transfer" | "onJournal" | "canWrite">,
+): Promise<WebPlanItem[]> {
+  const result = await executeGuardedPlan(items, {
+    canWrite: deps?.canWrite ?? true,
+    loadHandle: deps?.loadHandle ?? (async () => null),
+    ensurePermission: deps?.ensurePermission ?? (async () => false),
+    transfer: deps?.transfer ?? (async () => ({ outcome: "failed", reason: "File transfer is not available.", createdFolders: [] })),
+    onJournal: deps?.onJournal,
+  });
+  if (!result.ok) {
+    return items.map((item) => ({
+      ...item,
+      status: "failed",
+      skipReason: result.error.message,
+      warnings: [...item.warnings, result.error.message],
+    }));
   }
-  return results;
+  return result.items;
 }

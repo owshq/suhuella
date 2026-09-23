@@ -11,6 +11,7 @@ import {
   overlayHomePath,
   type RouteOverlay,
 } from "@/lib/route-overlay";
+import { releaseChannelLabel } from "@/lib/download-catalog";
 import type { ReleaseManifest } from "@/lib/release-manifest";
 
 const LandingContent = dynamic(
@@ -32,6 +33,13 @@ const SuccessContent = dynamic(
   () => import("@/components/SuccessContent").then((mod) => ({ default: mod.SuccessContent })),
   { ssr: false },
 );
+const DownloadPreparingContent = dynamic(
+  () =>
+    import("@/components/DownloadPreparingContent").then((mod) => ({
+      default: mod.DownloadPreparingContent,
+    })),
+  { ssr: false },
+);
 
 type RouteOverlayShellProps = {
   children: ReactNode;
@@ -48,6 +56,9 @@ function overlayLabel(overlay: RouteOverlay, locale: "es" | "en"): string {
   if (overlay === "download") {
     return locale === "es" ? `Descargas de ${brand.displayName}` : `${brand.displayName} downloads`;
   }
+  if (overlay === "downloadPreparing") {
+    return locale === "es" ? "Preparando descarga" : "Preparing download";
+  }
   return locale === "es" ? "Estado de la compra" : "Purchase status";
 }
 
@@ -60,8 +71,16 @@ export function RouteOverlayShell({
   desktopDownloadAvailable,
 }: RouteOverlayShellProps) {
   const pathname = usePathname();
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const overlay = overlayFromPathname(pathname) ?? initialOverlay;
+  const downloadBadgeChannel =
+    overlay === "download"
+      ? releaseChannelLabel(release, {
+          preRc: t.download.channelPreRc,
+          stable: t.download.channelStable,
+          beta: t.download.channelBeta,
+        })
+      : undefined;
 
   const closeOverlay = useCallback(() => {
     window.location.assign(overlayHomePath());
@@ -83,7 +102,11 @@ export function RouteOverlayShell({
     <>
       {children}
       {overlay ? (
-        <RouteOverlayFrame ariaLabel={overlayLabel(overlay, locale)} onClose={closeOverlay}>
+        <RouteOverlayFrame
+          ariaLabel={overlayLabel(overlay, locale)}
+          onClose={closeOverlay}
+          badgeChannel={downloadBadgeChannel}
+        >
           {overlay === "landing" ? (
             <LandingContent embedded installerUrls={installerUrls} onClose={closeOverlay} />
           ) : null}
@@ -99,6 +122,11 @@ export function RouteOverlayShell({
           ) : null}
           {overlay === "download" ? (
             <DownloadCatalogContent embedded release={release} onClose={closeOverlay} />
+          ) : null}
+          {overlay === "downloadPreparing" ? (
+            <Suspense fallback={null}>
+              <DownloadPreparingContent embedded onClose={closeOverlay} />
+            </Suspense>
           ) : null}
           {overlay === "success" ? (
             <Suspense fallback={null}>

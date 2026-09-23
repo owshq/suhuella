@@ -6,6 +6,8 @@ export type BusinessSeatRole = "owner" | "admin" | "member";
 
 export type BusinessSeatStatus = "invited" | "active" | "suspended" | "removed";
 
+export type BusinessBillingInterval = "month" | "year";
+
 export type BusinessAccount = {
   organisationId: string;
   name: string;
@@ -17,8 +19,46 @@ export type BusinessAccount = {
   currency: string;
   status: BusinessAccountStatus;
   trialEndsAt: string | null;
+  stripeSubscriptionId: string | null;
+  stripeSubscriptionItemId: string | null;
+  stripeStatus: string | null;
+  currentPeriodEnd: string | null;
+  recurringAmountCents: number | null;
+  billingInterval: BusinessBillingInterval | null;
+  billingNeedsReconciliation: boolean;
+  lastStripeEventId: string | null;
+  lastStripeEventCreated: number | null;
+  stripeCheckoutSessionId: string | null;
+  /** Active devices allowed per assigned seat. Superadmin-configurable; default 3. */
+  deviceLimitPerSeat?: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type BusinessSeatChangeSource = "desktop" | "ops" | "webhook";
+
+export type BusinessSeatChangeResult = "success" | "rejected" | "failed";
+
+export type BusinessSeatChangeRecord = {
+  id: string;
+  organisationId: string;
+  actorEmail: string;
+  actorKind: "superadmin" | "business_admin";
+  actorRole: string | null;
+  source: BusinessSeatChangeSource;
+  reason: string | null;
+  previousQuantity: number;
+  requestedQuantity: number;
+  confirmedQuantity: number | null;
+  stripeSubscriptionId: string | null;
+  result: BusinessSeatChangeResult;
+  error: string | null;
+  timestamp: string;
+};
+
+export type ProcessedStripeEvent = {
+  id: string;
+  receivedAt: string;
 };
 
 export type BusinessBranding = {
@@ -59,7 +99,15 @@ export type BusinessError =
   | "cannot_modify_recommendation_engine"
   | "cannot_modify_user_files"
   | "cannot_revoke_paid_license"
-  | "invalid_branding_asset";
+  | "invalid_branding_asset"
+  | "subscription_missing"
+  | "subscription_item_missing"
+  | "stale_stripe_reference"
+  | "stripe_unavailable"
+  | "stripe_timeout"
+  | "billing_mismatch"
+  | "needs_reconciliation"
+  | "not_business";
 
 export const OCCUPIED_SEAT_STATUSES: readonly BusinessSeatStatus[] = [
   "invited",

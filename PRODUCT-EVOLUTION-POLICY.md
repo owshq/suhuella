@@ -30,7 +30,7 @@ Constitutional index: **[docs/governance/README.md](docs/governance/README.md)**
 
 | Area | Status | Rule |
 | --- | --- | --- |
-| Release architecture | **FROZEN** | [RELEASE-ARCHITECTURE-FROZEN.md](RELEASE-ARCHITECTURE-FROZEN.md) |
+| Release architecture | **FROZEN** | [release-architecture.md](docs/architecture/constitution/release-architecture.md) |
 | Brand identity hierarchy | **FROZEN** | [ADR-003](docs/architecture/decisions/ADR-003-brand-identity-hierarchy.md) |
 | Product architecture | **FROZEN** | Architecture Freeze v1.1 — FINAL |
 | Navigation structure | **FROZEN** | Screen order and names — until UX evidence says otherwise |
@@ -45,8 +45,15 @@ Implementation (e.g. [DESKTOP-RELEASE-HOSTING-001](DESKTOP-RELEASE-HOSTING-001.m
 ## Navigation (frozen until evidence)
 
 ```text
-Landing → Home → Sources → Search → Organise → Activity → Settings
+Landing → Home → Sources → Search → Plan Mode → Activity → Settings
 ```
+
+The fifth screen is **Plan Mode** ([ADR-004](docs/architecture/decisions/ADR-004-plan-mode-screen.md)). Route `/plan-mode`. Internal section id `organise` stays.
+
+Plan execution splits into two axes that must not be conflated ([ADR-005](docs/architecture/decisions/ADR-005-plan-execution-axes.md)):
+
+- **How** (system): filesystem moves/renames use direct API — never simulated cursor for files.
+- **Visibility** (user): `background` vs `watch` — same executor; watch is a text log only until Fase 5 `input`.
 
 Until **UX evidence** shows the same navigation problem (see evidence bar below):
 

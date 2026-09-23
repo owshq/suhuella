@@ -1,11 +1,15 @@
 import { siteOrigin } from '@suhuella/brand'
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
+import { validateSignedLicensePayload } from '@suhuella/product/lib/signed-license-contract.ts'
 import { toLicenseStatusView } from '@suhuella/product/lib/license-status.ts'
 import type { LicenseContext, LicenseEdition, LicenseStatusView } from '@suhuella/product/types.ts'
 import { getOsComputerName } from './device-identity.ts'
+import { verifyLicenseSignature } from './license-signature-verify.ts'
+
+export { verifyLicenseSignature } from './license-signature-verify.ts'
 
 const LICENSE_FILE = 'license.json'
 const DEVICE_FILE = 'device.json'
@@ -122,6 +126,32 @@ function parseLicenseContext(value: unknown): LicenseContext | null {
       typeof value.offlineUntil === 'string' ? value.offlineUntil : new Date().toISOString(),
     channel: value.channel === 'beta' ? 'beta' : 'stable',
     licenseToken: typeof value.licenseToken === 'string' ? value.licenseToken : '',
+    commercialGenerationId:
+      value.commercialGenerationId === null
+        ? null
+        : typeof value.commercialGenerationId === 'string'
+          ? value.commercialGenerationId
+          : undefined,
+    generationAccessMode:
+      value.generationAccessMode === 'legacy_unassigned' ||
+      value.generationAccessMode === 'purchased_generation' ||
+      value.generationAccessMode === 'active_subscription' ||
+      value.generationAccessMode === 'version_binding_required'
+        ? value.generationAccessMode
+        : undefined,
+    acquiredCommercialGenerationIds: Array.isArray(value.acquiredCommercialGenerationIds)
+      ? value.acquiredCommercialGenerationIds.filter((item): item is string => typeof item === 'string')
+      : undefined,
+    generationEnforcementActive:
+      value.generationEnforcementActive === true ? true : undefined,
+    policyRevision:
+      value.policyRevision === null
+        ? null
+        : typeof value.policyRevision === 'string'
+          ? value.policyRevision
+          : undefined,
+    signedContractVersion:
+      typeof value.signedContractVersion === 'number' ? value.signedContractVersion : undefined,
   }
 }
 
@@ -179,23 +209,6 @@ export function createFreeLicenseContext(): LicenseContext {
   }
 }
 
-function verifySecret(): string {
-  return process.env.SUHUELLA_LICENSE_VERIFY_SECRET?.trim() || ''
-}
-
-export function verifyLicenseSignature(context: LicenseContext): boolean {
-  if (context.edition === 'free' && context.licenseToken === 'local') return true
-  if (!context.licenseToken.includes('.')) return false
-  const secret = verifySecret()
-  if (!secret) return true
-  const [body, signature] = context.licenseToken.split('.')
-  if (!body || !signature) return false
-  const expected = createHmac('sha256', secret).update(body).digest('base64url')
-  const left = Buffer.from(expected)
-  const right = Buffer.from(signature)
-  return left.length === right.length && timingSafeEqual(left, right)
-}
-
 function writeRecord(record: LicenseRecord): LicenseRecord {
   const filePath = licenseFilePath()
   mkdirSync(path.dirname(filePath), { recursive: true })
@@ -212,6 +225,12 @@ function readRecord(): LicenseRecord {
     const parsed = parseLicenseRecord(JSON.parse(readFileSync(filePath, 'utf8')))
     if (!parsed) return writeRecord({ context: createFreeLicenseContext(), lastSeenOffline: false })
     if (parsed.context.edition !== 'free' && !verifyLicenseSignature(parsed.context)) {
+      return writeRecord({ context: createFreeLicenseContext(), lastSeenOffline: false })
+    }
+    if (
+      parsed.context.edition !== 'free' &&
+      !validateSignedLicensePayload(parsed.context).ok
+    ) {
       return writeRecord({ context: createFreeLicenseContext(), lastSeenOffline: false })
     }
     return parsed
@@ -232,6 +251,13 @@ export function saveLicenseContext(
   context: LicenseContext,
   extras: { lastSeenOffline?: boolean; devices?: ApiDevice[] } = {},
 ): LicenseContext {
+  if (
+    context.edition !== 'free' &&
+    context.licenseToken !== 'local' &&
+    (!verifyLicenseSignature(context) || !validateSignedLicensePayload(context).ok)
+  ) {
+    return loadLicenseContext()
+  }
   const previous: LicenseRecord = existsSync(licenseFilePath())
     ? readRecord()
     : { context: createFreeLicenseContext(), lastSeenOffline: false }

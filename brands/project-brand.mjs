@@ -1,13 +1,19 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { repoRoot, resolveBrandId } from "./select.mjs";
 
 /** Write brands/.build/entry.ts — required for @suhuella/brand. No native deps. */
 export async function projectBrandEntry(brandId = resolveBrandId()) {
   const packageEntry = path.join(repoRoot, "brands/.build/entry.ts");
+  const next = `export * from "../${brandId}/entry.ts";\n`;
   await mkdir(path.dirname(packageEntry), { recursive: true });
-  await writeFile(packageEntry, `export * from "../${brandId}/entry.ts";\n`);
+  try {
+    if ((await readFile(packageEntry, "utf8")) === next) return packageEntry;
+  } catch {
+    // first projection
+  }
+  await writeFile(packageEntry, next);
   return packageEntry;
 }
 

@@ -2,17 +2,34 @@ import { brand, siteOrigin, siteUrl } from '@suhuella/brand'
 import { useEffect, useState, type ReactNode } from 'react'
 import { getSuhuellaApi, invokeSuhuella } from '../lib/api'
 import { settingsPrefsFromLocation, writeProductLocation } from '../lib/app-routes'
+import {
+  DEFAULT_SETTINGS_TAB,
+  SETTINGS_TAB_IDS,
+  resolveSettingsTab,
+  type SettingsTab,
+} from '../lib/settings-tabs'
 import { capabilitiesOf } from '../host/capabilities'
-import { displayComputerName } from '../lib/folders-ui'
 import { BYOK_ASSISTANTS } from '../lib/byok-assistants'
+import {
+  BUILT_IN_RULES_BADGE,
+  BUILT_IN_RULES_BODY,
+  BUILT_IN_RULES_TITLE,
+  BYOK_OPTIONAL_NOTE,
+  CLOUD_AI_SECTION_TITLE,
+  byokConnectAvailable,
+  byokKeyStorageNote,
+} from '../lib/byok-storage-copy'
+import { LocalAiSettingsSection } from './LocalAiSettingsSection'
+import { PermissionsSection } from './PermissionsSection'
+import { SOURCES_PRIVACY_LINES } from '../lib/sources-ui'
 import type {
+  AppHost,
   AppInfo,
   AppSettings,
   ByokAssistantId,
   ByokStatus,
   CompatibilityDiagnostics,
   DeviceMetrics,
-  LicenseStatusView,
   StorageUsage,
 } from '../types'
 import {
@@ -31,18 +48,19 @@ import { productCopy } from '../lib/product-copy'
 import { HOST_ACTION_COPY, isHostCapabilityError } from '../lib/host-action-copy'
 import { deriveDisplayVersion } from '../lib/display-version'
 import type { ReleaseDecision } from '../lib/release-lifecycle'
+import { releaseCheckUserMessage } from '../lib/release-generation-policy'
 
 type PreferencesPanelProps = {
   appInfo: AppInfo
   settings: AppSettings | null
   saveAsActive: boolean
-  license?: LicenseStatusView | null
   metrics?: DeviceMetrics | null
   metricsLoading?: boolean
   onLaunchAtLoginChange: (enabled: boolean) => void
   onRebuildFolders: () => void
   onActivityCleared?: () => void
   onRefreshMetrics?: () => void
+  onSettingsChange?: (settings: AppSettings) => void
 }
 
 const WEBSITE = siteOrigin()
@@ -60,17 +78,17 @@ function fileNameFromPath(filePath: string): string {
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-[1.6rem] border border-white/60 bg-white/55 p-5 shadow-xl shadow-blue-900/5 backdrop-blur-xl">
+    <div className="rounded-2xl border border-[var(--sidebar-line)] bg-[var(--app-bg)] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
       {children}
     </div>
   )
 }
 
-function QuietCard({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-[1.6rem] border border-white/60 bg-white/45 p-5 backdrop-blur-xl">{children}</div>
-  )
-}
+const settingsPrimaryButtonClass =
+  'rounded-full bg-[var(--app-fg)] px-3.5 py-2 text-sm font-semibold text-[var(--app-bg)] transition hover:opacity-90 disabled:opacity-60'
+
+const settingsSecondaryButtonClass =
+  'rounded-full border border-[var(--sidebar-line)] bg-[var(--overlay-row)] px-3.5 py-2 text-sm font-semibold text-[var(--app-fg)] transition hover:bg-[var(--overlay-line)] disabled:opacity-60'
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -117,8 +135,8 @@ function compatibilitySummary(
 function SettingsRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-semibold text-slate-900">{value}</dd>
+      <dt className="text-[var(--app-fg)] opacity-60">{label}</dt>
+      <dd className="font-semibold text-[var(--app-fg)]">{value}</dd>
     </div>
   )
 }
@@ -126,65 +144,42 @@ function SettingsRow({ label, value }: { label: string; value: string }) {
 function GeneralSection({
   settings,
   appInfo,
-  license,
+  saveAsActive,
   onLaunchAtLoginChange,
 }: {
   settings: AppSettings | null
   appInfo: AppInfo
-  license?: LicenseStatusView | null
+  saveAsActive: boolean
   onLaunchAtLoginChange: (enabled: boolean) => void
 }) {
   const caps = capabilitiesOf(appInfo)
   const { locale, setLocale, t } = useAppLocale()
-  const computerName = displayComputerName({
-    osName: appInfo.computerName,
-    licenseName: license?.computerName,
-    platform: appInfo.platform,
-  })
-  const saveAsLabel = caps.saveAs
-    ? 'Available'
-    : appInfo.platform === 'darwin' && caps.nativeDialogs
-      ? 'Preview available'
-      : null
 
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="text-base font-semibold text-slate-900">{t.computer}</h2>
-        <dl className="mt-3">
-          <SettingsRow label={t.name} value={computerName} />
-          <SettingsRow
-            label={t.operatingSystem}
-            value={
-              appInfo.osVersion ||
-              (appInfo.platform === 'darwin' ? 'macOS' : appInfo.platform === 'win32' ? 'Windows' : 'Linux')
-            }
-          />
-        </dl>
-        <div className="mt-4 border-t border-slate-200/70 pt-4">
-          <p className="text-sm font-medium text-slate-800">{t.language}</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">{t.languageHint}</p>
-          <div className="mt-3 flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-1">
-            {(['es', 'en'] as const).map((option) => {
-              const active = locale === option
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setLocale(option)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide uppercase transition-all duration-200 ${
-                    active
-                      ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-fg)] shadow-sm'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                  aria-pressed={active}
-                  aria-label={option === 'es' ? 'Español' : 'English'}
-                >
-                  {option}
-                </button>
-              )
-            })}
-          </div>
+        <h2 className="text-base font-semibold text-slate-900">{t.language}</h2>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">{t.languageHint}</p>
+        <div className="mt-3 flex items-center gap-0.5 rounded-full border border-slate-200 bg-white p-1">
+          {(['es', 'en'] as const).map((option) => {
+            const active = locale === option
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setLocale(option)}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide uppercase transition-all duration-200 ${
+                  active
+                    ? 'bg-[var(--nav-active-bg)] text-[var(--nav-active-fg)] shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                aria-pressed={active}
+                aria-label={option === 'es' ? 'Español' : 'English'}
+              >
+                {option}
+              </button>
+            )
+          })}
         </div>
       </Card>
 
@@ -205,20 +200,16 @@ function GeneralSection({
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[var(--brand-accent)] accent-[var(--brand-accent)]"
-              checked={settings?.launchAtLogin ?? true}
+              checked={settings?.launchAtLogin ?? false}
               onChange={(event) => onLaunchAtLoginChange(event.target.checked)}
             />
           </label>
         </Card>
       ) : null}
 
-      {saveAsLabel ? (
-        <Card>
-          <h2 className="text-base font-semibold text-slate-900">Save As</h2>
-          <dl className="mt-3">
-            <SettingsRow label="On this computer" value={saveAsLabel} />
-          </dl>
-        </Card>
+      <PrivacySection host={appInfo.host} />
+      {caps.notifications ? (
+        <NotificationsSection saveAsActive={saveAsActive} />
       ) : null}
     </div>
   )
@@ -232,7 +223,9 @@ function AssistantLogo({ id }: { id: ByokAssistantId | 'local_intelligence' }) {
   return <LocalIntelligenceLogo />
 }
 
-function AiSection() {
+const CLOUD_BYOK_ASSISTANTS = BYOK_ASSISTANTS.filter((assistant) => assistant.id !== 'local_server')
+
+function AiSection({ host }: { host: AppHost }) {
   const [status, setStatus] = useState<ByokStatus | null>(null)
   const [connecting, setConnecting] = useState<ByokAssistantId | null>(null)
   const [apiKey, setApiKey] = useState('')
@@ -300,31 +293,43 @@ function AiSection() {
 
   const connectedAssistant = status?.connected ? status.assistant : null
 
+  const cloudConnectAllowed = byokConnectAvailable(host)
+  const keyStorageNote = byokKeyStorageNote(host)
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <p className="text-sm leading-relaxed text-[var(--app-fg)] opacity-70">{BYOK_OPTIONAL_NOTE}</p>
       <Card>
         <div className="flex items-start gap-3">
           <LocalIntelligenceLogo />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold text-slate-900">On-device intelligence</h2>
-              <span className="text-sm font-medium text-emerald-700">Always available</span>
+              <h2 className="text-base font-semibold text-[var(--app-fg)]">{BUILT_IN_RULES_TITLE}</h2>
+              <span className="text-sm font-medium text-emerald-700">{BUILT_IN_RULES_BADGE}</span>
             </div>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-              Private. Runs on this computer. Does not change the Recommendation Engine.
-            </p>
+            <p className="mt-1.5 text-sm leading-relaxed text-[var(--app-fg)] opacity-60">{BUILT_IN_RULES_BODY}</p>
           </div>
         </div>
       </Card>
 
-      <p className="text-sm font-medium text-slate-800">Your own AI</p>
-      <p className="text-sm leading-relaxed text-slate-500">
-        Optional. You pay your provider. The assistant may use it to explain a Plan. It never
-        {productCopy('teaches SuHuella and never ranks folders.')}
-      </p>
+      <LocalAiSettingsSection
+        host={host}
+        status={status}
+        loading={loading}
+        onStatusChange={setStatus}
+      />
+
+      <div>
+        <p className="text-sm font-medium text-[var(--app-fg)]">{CLOUD_AI_SECTION_TITLE}</p>
+        <p className="mt-1 text-sm leading-relaxed text-[var(--app-fg)] opacity-60">
+          {productCopy(
+            'Optional. You pay your provider. SuHuella applies changes only after you confirm a Plan.',
+          )}
+        </p>
+      </div>
 
       <ul className="space-y-2">
-        {BYOK_ASSISTANTS.map((assistant) => {
+        {CLOUD_BYOK_ASSISTANTS.map((assistant) => {
           const isConnected = connectedAssistant === assistant.id
           const isOpen = connecting === assistant.id
           return (
@@ -408,9 +413,7 @@ function AiSection() {
                           />
                         </label>
                       ) : null}
-                      <p className="text-xs leading-relaxed text-slate-500">
-                        {productCopy('Your AI key stays on this computer. SuHuella never stores it in the cloud.')}
-                      </p>
+                      <p className="text-xs leading-relaxed text-[var(--app-fg)] opacity-55">{keyStorageNote}</p>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -430,7 +433,7 @@ function AiSection() {
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  ) : cloudConnectAllowed ? (
                     <button
                       type="button"
                       disabled={busy || Boolean(connectedAssistant) || loading}
@@ -439,6 +442,8 @@ function AiSection() {
                     >
                       Connect
                     </button>
+                  ) : (
+                    <p className="mt-3 text-xs leading-relaxed text-[var(--app-fg)] opacity-55">{keyStorageNote}</p>
                   )}
                 </div>
               </div>
@@ -452,14 +457,19 @@ function AiSection() {
   )
 }
 
-function PrivacySection() {
+function PrivacySection({ host }: { host?: AppHost | null }) {
+  const knowledgeIndexCopy =
+    host === 'browser'
+      ? 'The Knowledge Index stays in this browser.'
+      : 'The Knowledge Index stays on this device.'
+
   return (
     <Card>
       <h2 className="text-base font-semibold text-slate-900">Everything stays on your device</h2>
       <ul className="mt-3 space-y-3 text-sm leading-relaxed text-slate-600">
-        <li>Your documents stay on this device or in the provider you choose.</li>
+        <li>{SOURCES_PRIVACY_LINES[0]}</li>
         <li>{productCopy('SuHuella does not upload your documents.')}</li>
-        <li>The Knowledge Index stays on this device.</li>
+        <li>{knowledgeIndexCopy}</li>
       </ul>
       <p className="mt-4 text-sm">
         <ExternalLink href={PRIVACY_URL}>Privacy policy</ExternalLink>
@@ -498,152 +508,129 @@ export function StorageManageSection({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200/60 bg-slate-50/80 p-5">
-      <QuietCard>
-        <h2 className="text-base font-semibold text-slate-900">Manage</h2>
-        <p className="mt-1.5 mb-4 text-sm leading-relaxed text-slate-500">
-          Use a specific action. There is no button that deletes everything at once.
-        </p>
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => void runAction('cache', () => getSuhuellaApi().clearCache(), 'Cache cleared.')}
-            className="rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-          >
-            {busy === 'cache' ? 'Clearing…' : 'Clear cache'}
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={onRebuildFolders}
-            className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            Rebuild index
-          </button>
-          {confirmClearActivity ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-3">
-              <p className="text-sm font-semibold text-rose-900">Clear activity history?</p>
-              <p className="mt-1 text-sm leading-relaxed text-rose-800">
-                This removes what happened from this computer. It does not undo documents.
-              </p>
-              <div className="mt-3 flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => {
-                    void runAction(
-                      'activity',
-                      () => getSuhuellaApi().clearActivityHistory(),
-                      'Activity history cleared.',
-                    ).then(() => {
-                      setConfirmClearActivity(false)
-                      onActivityCleared?.()
-                    })
-                  }}
-                  className="rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {busy === 'activity' ? 'Clearing…' : 'Clear activity history'}
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => setConfirmClearActivity(false)}
-                  className="rounded-full border border-white bg-white px-3.5 py-2 text-sm font-semibold text-slate-700"
-                >
-                  Back
-                </button>
-              </div>
+    <Card>
+      <h2 className="text-base font-semibold text-[var(--app-fg)]">Manage</h2>
+      <p className="mt-1.5 mb-4 text-sm leading-relaxed text-[var(--app-fg)] opacity-70">
+        Use a specific action. There is no button that deletes everything at once.
+      </p>
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => void runAction('cache', () => getSuhuellaApi().clearCache(), 'Cache cleared.')}
+          className={settingsPrimaryButtonClass}
+        >
+          {busy === 'cache' ? 'Clearing…' : 'Clear cache'}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={onRebuildFolders}
+          className={settingsSecondaryButtonClass}
+        >
+          Rebuild index
+        </button>
+        {confirmClearActivity ? (
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
+            <p className="text-sm font-semibold text-rose-700">Clear activity history?</p>
+            <p className="mt-1 text-sm leading-relaxed text-rose-800/90">
+              This removes what happened from this computer. It does not undo documents.
+            </p>
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => {
+                  void runAction(
+                    'activity',
+                    () => getSuhuellaApi().clearActivityHistory(),
+                    'Activity history cleared.',
+                  ).then(() => {
+                    setConfirmClearActivity(false)
+                    onActivityCleared?.()
+                  })
+                }}
+                className={settingsPrimaryButtonClass}
+              >
+                {busy === 'activity' ? 'Clearing…' : 'Clear activity history'}
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => setConfirmClearActivity(false)}
+                className={settingsSecondaryButtonClass}
+              >
+                Back
+              </button>
             </div>
-          ) : (
-            <button
-              type="button"
-              disabled={Boolean(busy)}
-              onClick={() => setConfirmClearActivity(true)}
-              className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-            >
-              Clear activity history
-            </button>
-          )}
+          </div>
+        ) : (
           <button
             type="button"
             disabled={Boolean(busy)}
-            onClick={() => void runAction('logs', () => getSuhuellaApi().clearLogs(), 'Logs cleared.')}
-            className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            onClick={() => setConfirmClearActivity(true)}
+            className={settingsSecondaryButtonClass}
           >
-            {busy === 'logs' ? 'Clearing…' : 'Clear logs'}
+            Clear activity history
           </button>
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => {
-              setBusy('export')
-              setError(null)
-              setMessage(null)
-              void getSuhuellaApi()
-                .exportActivity()
-                .then((filePath) => {
-                  setMessage(filePath ? `Activity exported as ${fileNameFromPath(filePath)}.` : null)
-                })
-                .catch((error: unknown) => {
-                  setError(
-                    isHostCapabilityError(error)
-                      ? HOST_ACTION_COPY.exportUnavailable
-                      : 'Could not export activity.',
-                  )
-                })
-                .finally(() => setBusy(null))
-            }}
-            className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {busy === 'export' ? 'Exporting…' : 'Export activity'}
-          </button>
-        </div>
-        {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
-        {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
-      </QuietCard>
-    </div>
+        )}
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => void runAction('logs', () => getSuhuellaApi().clearLogs(), 'Logs cleared.')}
+          className={settingsSecondaryButtonClass}
+        >
+          {busy === 'logs' ? 'Clearing…' : 'Clear logs'}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => {
+            setBusy('export')
+            setError(null)
+            setMessage(null)
+            void getSuhuellaApi()
+              .exportActivity()
+              .then((filePath) => {
+                setMessage(filePath ? `Activity exported as ${fileNameFromPath(filePath)}.` : null)
+              })
+              .catch((error: unknown) => {
+                setError(
+                  isHostCapabilityError(error)
+                    ? HOST_ACTION_COPY.exportUnavailable
+                    : 'Could not export activity.',
+                )
+              })
+              .finally(() => setBusy(null))
+          }}
+          className={settingsSecondaryButtonClass}
+        >
+          {busy === 'export' ? 'Exporting…' : 'Export activity'}
+        </button>
+      </div>
+      {message ? <p className="mt-3 text-sm text-emerald-700">{message}</p> : null}
+      {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
+    </Card>
   )
 }
 
-const SETTINGS_TAB_IDS = [
-  'general',
-  'ai',
-  'license',
-  'privacy',
-  'notifications',
-  'diagnostics',
-  'about',
-] as const
-
-export type SettingsTab = (typeof SETTINGS_TAB_IDS)[number]
-
-const LEGACY_SETTINGS_TABS: Record<string, SettingsTab> = {
-  folders: 'general',
-  connections: 'general',
-  storage: 'diagnostics',
-}
-
-function resolveSettingsTab(requested: string): SettingsTab {
-  if (SETTINGS_TAB_IDS.includes(requested as SettingsTab)) return requested as SettingsTab
-  return LEGACY_SETTINGS_TABS[requested] ?? 'general'
-}
+export type { SettingsTab }
 
 function initialSettingsTab(): SettingsTab {
-  return resolveSettingsTab(settingsPrefsFromLocation(window.location))
+  return resolveSettingsTab(settingsPrefsFromLocation(window.location) || DEFAULT_SETTINGS_TAB)
 }
 
 export function SettingsPanel({
   appInfo,
   settings,
   saveAsActive,
-  license,
   metrics,
   metricsLoading,
   onLaunchAtLoginChange,
   onRebuildFolders,
   onActivityCleared,
   onRefreshMetrics,
+  onSettingsChange,
 }: PreferencesPanelProps) {
   const { t } = useAppLocale()
   const [tab, setTab] = useState<SettingsTab>(initialSettingsTab)
@@ -669,7 +656,7 @@ export function SettingsPanel({
         <h1 className="text-[28px] font-bold tracking-tight text-[var(--app-fg)]">{t.settings}</h1>
         <p className="mt-2 text-[15px] text-[var(--app-fg)] opacity-70">{t.settingsIntro}</p>
       </header>
-      <nav className="flex flex-wrap gap-1.5">
+      <nav className="flex flex-wrap gap-1.5" aria-label={t.settings}>
         {SETTINGS_TAB_IDS.map((item) => (
           <button
             key={item}
@@ -690,17 +677,20 @@ export function SettingsPanel({
         <GeneralSection
           settings={settings}
           appInfo={appInfo}
-          license={license}
+          saveAsActive={saveAsActive}
           onLaunchAtLoginChange={onLaunchAtLoginChange}
         />
       ) : null}
-      {tab === 'ai' ? <AiSection /> : null}
-      {tab === 'license' ? <LicenseStatusPanel /> : null}
-      {tab === 'privacy' ? <PrivacySection /> : null}
-      {tab === 'notifications' ? (
-        <NotificationsSection saveAsActive={saveAsActive} notifyWhenSave={capabilitiesOf(appInfo).notifications} />
+      {tab === 'permissions' ? (
+        <PermissionsSection
+          appInfo={appInfo}
+          settings={settings}
+          onSettingsChange={onSettingsChange}
+        />
       ) : null}
-      {tab === 'diagnostics' ? (
+      {tab === 'ai' ? <AiSection host={appInfo.host ?? 'browser'} /> : null}
+      {tab === 'license' ? <LicenseStatusPanel /> : null}
+      {tab === 'support' ? (
         <div className="space-y-4">
           <DeviceMetricsPanel
             metrics={metrics ?? null}
@@ -713,9 +703,9 @@ export function SettingsPanel({
             onActivityCleared={onActivityCleared}
             onStorageChanged={onRefreshMetrics}
           />
+          <AboutSection appInfo={appInfo} />
         </div>
       ) : null}
-      {tab === 'about' ? <AboutSection appInfo={appInfo} /> : null}
     </div>
   )
 }
@@ -726,46 +716,36 @@ type NotificationEntry = {
   detail: string
 }
 
-function NotificationsSection({ saveAsActive, notifyWhenSave }: { saveAsActive: boolean; notifyWhenSave?: boolean }) {
-  const items: NotificationEntry[] = []
-  if (notifyWhenSave) {
-    items.push({
+function NotificationsSection({ saveAsActive }: { saveAsActive: boolean }) {
+  const items: NotificationEntry[] = [
+    {
       label: 'Save As recommendation',
       status: saveAsActive ? 'Available' : 'Preview available',
       detail: '',
-    })
-  }
+    },
+  ]
 
   return (
     <Card>
       <h2 className="text-base font-semibold text-slate-900">Notifications</h2>
-      {items.length > 0 ? (
-        <>
-        <ul className="mt-3 space-y-2">
-          {items.map((item) => (
-            <li
-              key={item.label}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-sm"
+      <ul className="mt-3 space-y-2">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-sm"
+          >
+            <span className="font-medium text-slate-800">{item.label}</span>
+            <span
+              className={`font-medium ${item.status === 'Available' ? 'text-emerald-700' : 'text-slate-500'}`}
             >
-              <span className="font-medium text-slate-800">{item.label}</span>
-              <span
-                className={`font-medium ${item.status === 'Available' ? 'text-emerald-700' : 'text-slate-500'}`}
-              >
-                {item.status}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-sm leading-relaxed text-slate-500">
-          Activity records confirmed Plans. Save As prepares the folder; you press Save in the other app.
-        </p>
-        </>
-      ) : (
-        <p className="mt-3 text-sm leading-relaxed text-slate-500">
-          Save As recommendations appear on the desktop app. This browser does not show those
-          notifications.
-        </p>
-      )}
+              {item.status}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-sm leading-relaxed text-slate-500">
+        Activity records confirmed Plans. Save As prepares the folder; you press Save in the other app.
+      </p>
     </Card>
   )
 }
@@ -785,32 +765,14 @@ function DiagnosticsSection({ appInfo }: { appInfo: AppInfo }) {
       .finally(() => setLoading(false))
   }, [])
 
-  const platformLabel =
-    appInfo.osVersion ||
-    (appInfo.platform === 'darwin' ? 'macOS' : appInfo.platform === 'win32' ? 'Windows' : 'Linux')
-
   return (
     <div className="space-y-4">
       <Card>
-        <h2 className="text-base font-semibold text-slate-900">Support diagnostics</h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+        <h2 className="text-base font-semibold text-[var(--app-fg)]">Support diagnostics</h2>
+        <p className="mt-1.5 text-sm leading-relaxed text-[var(--app-fg)] opacity-70">
           If Save As suggestions are not working, export a file for support. It describes how
           {productCopy('SuHuella detected Save As dialogs — not your documents.')}
         </p>
-        <dl className="mt-4 grid gap-2 rounded-2xl border border-white/80 bg-white/70 px-4 py-3 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-slate-500">Version</dt>
-            <dd className="font-semibold text-slate-900">{shownVersion(appInfo.version)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-slate-500">Build</dt>
-            <dd className="font-semibold text-slate-900">{shownVersion(appInfo.buildVersion)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-slate-500">Platform</dt>
-            <dd className="font-semibold text-slate-900">{platformLabel}</dd>
-          </div>
-        </dl>
         {loading ? (
           <p className="mt-3 text-sm text-slate-500">Checking Save As…</p>
         ) : (
@@ -843,7 +805,7 @@ function DiagnosticsSection({ appInfo }: { appInfo: AppInfo }) {
                 })
                 .finally(() => setExporting(false))
             }}
-            className="rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            className={settingsPrimaryButtonClass}
           >
             {exporting ? 'Exporting…' : 'Export diagnostics for support'}
           </button>
@@ -944,8 +906,8 @@ function AboutSection({ appInfo }: { appInfo: AppInfo }) {
         <div className="flex items-center gap-3">
           <BrandMark identity={productIdentity} size={32} />
           <div>
-            <h2 className="text-base font-semibold text-slate-900">{appInfo.name}</h2>
-            <p className="text-sm text-slate-500">Suggests the right folder when you save.</p>
+            <h2 className="text-base font-semibold text-[var(--app-fg)]">{appInfo.name}</h2>
+            <p className="text-sm text-[var(--app-fg)] opacity-70">Suggests the right folder when you save.</p>
           </div>
         </div>
         <dl className="mt-3">
@@ -953,17 +915,22 @@ function AboutSection({ appInfo }: { appInfo: AppInfo }) {
           <SettingsRow label="Build" value={shownVersion(appInfo.buildVersion)} />
         </dl>
         {desktop ? (
-          <div className="mt-4 border-t border-slate-200 pt-4">
-            <p className="text-sm font-semibold text-slate-900">Updates</p>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="mt-4 border-t border-[var(--sidebar-line)] pt-4">
+            <p className="text-sm font-semibold text-[var(--app-fg)]">Updates</p>
+            <p className="mt-1 text-sm text-[var(--app-fg)] opacity-80">
               {checking ? 'Checking…' : decision ? releaseStatusCopy(decision) : 'Check when you want to.'}
             </p>
-            {decision?.notes ? <p className="mt-1 text-sm text-slate-500">{decision.notes}</p> : null}
+            {decision?.notes ? <p className="mt-1 text-sm text-[var(--app-fg)] opacity-60">{decision.notes}</p> : null}
+            {decision && !checking ? (
+              <p className="mt-1 text-sm text-[var(--app-fg)] opacity-60">
+                {releaseCheckUserMessage(decision, 'en')}
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void checkForUpdates()}
-                className="rounded-full border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-800"
+                className={settingsSecondaryButtonClass}
               >
                 Check for updates
               </button>
@@ -979,29 +946,29 @@ function AboutSection({ appInfo }: { appInfo: AppInfo }) {
             </div>
           </div>
         ) : null}
+        <div className="mt-4 border-t border-[var(--sidebar-line)] pt-4">
+          <dl className="space-y-3 text-sm">
+            <div>
+              <dt className="text-[var(--app-fg)] opacity-60">Website</dt>
+              <dd className="mt-1">
+                <ExternalLink href={WEBSITE}>{brand.primaryDomain}</ExternalLink>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[var(--app-fg)] opacity-60">Support</dt>
+              <dd className="mt-1">
+                <ExternalLink href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</ExternalLink>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[var(--app-fg)] opacity-60">Privacy policy</dt>
+              <dd className="mt-1">
+                <ExternalLink href={PRIVACY_URL}>{`${brand.primaryDomain}/privacidad`}</ExternalLink>
+              </dd>
+            </div>
+          </dl>
+        </div>
       </Card>
-      <QuietCard>
-        <dl className="space-y-3 text-sm">
-          <div>
-            <dt className="text-slate-500">Website</dt>
-            <dd className="mt-1">
-              <ExternalLink href={WEBSITE}>{brand.primaryDomain}</ExternalLink>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Support</dt>
-            <dd className="mt-1">
-              <ExternalLink href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</ExternalLink>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Privacy policy</dt>
-            <dd className="mt-1">
-              <ExternalLink href={PRIVACY_URL}>{`${brand.primaryDomain}/privacidad`}</ExternalLink>
-            </dd>
-          </div>
-        </dl>
-      </QuietCard>
     </div>
   )
 }

@@ -1,4 +1,15 @@
+import {
+  DEST_EXISTS_REASON,
+  DEST_MISSING_REASON,
+  DEST_PROBE_REASON,
+  MOVE_UNCERTAIN_REASON,
+  isNotFoundError,
+  isSafeRelativePath,
+  runCopyFallback,
+  type TransferEffect,
+} from "./organise-integrity.ts";
 import { productCopy } from '../../lib/product-copy'
+import { resolveSourceDisplayName } from "../../lib/source-display-name.ts";
 import type { IndexedFolderEntry, WebIndexedFile, WebKnowledgeSource } from "./types";
 import { idbDelete, idbGet, idbSet, STORE } from "./idb";
 
@@ -395,8 +406,9 @@ export async function scanDirectory(
 }
 
 function rootNameFromFiles(files: File[]): string {
-  const first = files[0]?.webkitRelativePath || files[0]?.name || "Folder";
-  return first.split(/[/\\]/).filter(Boolean)[0] ?? "Folder";
+  const first = files[0]?.webkitRelativePath || files[0]?.name;
+  const segment = first?.split(/[/\\]/).filter(Boolean)[0];
+  return resolveSourceDisplayName(segment, files[0]?.name);
 }
 
 function relativeFromWebkitPath(file: File, rootName: string): string {
@@ -499,50 +511,142 @@ async function directoryAt(
   root: FileSystemDirectoryHandle,
   relativePath: string,
   create = false,
-): Promise<FileSystemDirectoryHandle> {
-  if (!relativePath || relativePath === ".") return root;
-  let current = root;
-  for (const part of relativePath.split("/").filter(Boolean)) {
-    current = await current.getDirectoryHandle(part, { create });
+): Promise<{ handle: FileSystemDirectoryHandle; createdFolders: string[] }> {
+  if (!relativePath || relativePath === ".") return { handle: root, createdFolders: [] };
+  if (!isSafeRelativePath(relativePath)) {
+    throw new Error("Invalid file path.");
   }
-  return current;
+  let current = root;
+  const createdFolders: string[] = [];
+  let walked = "";
+  for (const part of relativePath.split("/").filter(Boolean)) {
+    walked = walked ? `${walked}/${part}` : part;
+    try {
+      current = await current.getDirectoryHandle(part);
+    } catch (error) {
+      if (!isNotFoundError(error)) throw error;
+      if (!create) throw new Error(DEST_MISSING_REASON);
+      current = await current.getDirectoryHandle(part, { create: true });
+      createdFolders.push(walked);
+    }
+  }
+  return { handle: current, createdFolders };
+}
+
+async function probeFile(dir: FileSystemDirectoryHandle, name: string): Promise<"missing" | "exists"> {
+  try {
+    await dir.getFileHandle(name);
+    return "exists";
+  } catch (error) {
+    if (isNotFoundError(error)) return "missing";
+    const message = error instanceof Error ? error.message : DEST_PROBE_REASON;
+    throw new Error(message || DEST_PROBE_REASON);
+  }
 }
 
 export async function moveOrRenameFile(
   root: FileSystemDirectoryHandle,
   fromRelative: string,
   toRelative: string,
-): Promise<void> {
+  allowCreateFolders = false,
+): Promise<TransferEffect> {
+  if (!isSafeRelativePath(fromRelative) || !isSafeRelativePath(toRelative)) {
+    return { outcome: "failed", reason: "Invalid file path.", createdFolders: [] };
+  }
   const fromParts = fromRelative.split("/").filter(Boolean);
   const toParts = toRelative.split("/").filter(Boolean);
   const fromName = fromParts.at(-1);
   const toName = toParts.at(-1);
-  if (!fromName || !toName) throw new Error("Invalid file path.");
+  if (!fromName || !toName) {
+    return { outcome: "failed", reason: "Invalid file path.", createdFolders: [] };
+  }
 
-  const fromDir = await directoryAt(root, fromParts.slice(0, -1).join("/"));
-  const toDir = await directoryAt(root, toParts.slice(0, -1).join("/"), true);
-  const fileHandle = (await fromDir.getFileHandle(fromName)) as MovableFileHandle;
+  let fromDir: FileSystemDirectoryHandle;
+  try {
+    fromDir = (await directoryAt(root, fromParts.slice(0, -1).join("/"), false)).handle;
+  } catch (error) {
+    return {
+      outcome: "failed",
+      reason: error instanceof Error ? error.message : "Could not open the source folder.",
+      createdFolders: [],
+    };
+  }
+
+  let toDir: FileSystemDirectoryHandle;
+  let createdFolders: string[] = [];
+  try {
+    const opened = await directoryAt(root, toParts.slice(0, -1).join("/"), allowCreateFolders);
+    toDir = opened.handle;
+    createdFolders = opened.createdFolders;
+  } catch (error) {
+    return {
+      outcome: "failed",
+      reason: error instanceof Error ? error.message : DEST_MISSING_REASON,
+      createdFolders: [],
+    };
+  }
+
+  let fileHandle: MovableFileHandle;
+  try {
+    fileHandle = (await fromDir.getFileHandle(fromName)) as MovableFileHandle;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return { outcome: "failed", reason: "Source file is missing.", createdFolders };
+    }
+    return {
+      outcome: "failed",
+      reason: error instanceof Error ? error.message : "Could not open the source file.",
+      createdFolders,
+    };
+  }
 
   try {
-    const existing = await toDir.getFileHandle(toName);
-    if (existing && (fromDir !== toDir || fromName !== toName)) {
-      throw new Error("Skipped to avoid overwrite.");
+    const existing = await probeFile(toDir, toName);
+    if (existing === "exists" && (fromDir !== toDir || fromName !== toName)) {
+      return { outcome: "skipped", reason: DEST_EXISTS_REASON, createdFolders };
     }
   } catch (error) {
-    if (error instanceof Error && error.message === "Skipped to avoid overwrite.") throw error;
+    return {
+      outcome: "failed",
+      reason: error instanceof Error ? error.message : DEST_PROBE_REASON,
+      createdFolders,
+    };
   }
 
   if (typeof fileHandle.move === "function") {
-    await fileHandle.move(toDir, toName);
-    return;
+    try {
+      await fileHandle.move(toDir, toName);
+      return { outcome: "applied", reason: null, createdFolders };
+    } catch {
+      return { outcome: "uncertain", reason: MOVE_UNCERTAIN_REASON, createdFolders };
+    }
   }
 
-  const file = await fileHandle.getFile();
-  const dest = await toDir.getFileHandle(toName, { create: true });
-  const writable = await dest.createWritable();
-  await writable.write(file);
-  await writable.close();
-  await fromDir.removeEntry(fromName);
+  const copied = await runCopyFallback({
+    readOrigin: async () => fileHandle.getFile(),
+    writeDest: async () => {
+      const dest = await toDir.getFileHandle(toName, { create: true });
+      const writable = await dest.createWritable();
+      try {
+        await writable.write(await fileHandle.getFile());
+        await writable.close();
+      } catch (error) {
+        if (typeof writable.abort === "function") {
+          try {
+            await writable.abort();
+          } catch {
+            /* leave the partial destination; identity is not verified */
+          }
+        }
+        throw error;
+      }
+    },
+    readDestSize: async () => (await (await toDir.getFileHandle(toName)).getFile()).size,
+    removeOrigin: async () => {
+      await fromDir.removeEntry(fromName);
+    },
+  });
+  return { ...copied, createdFolders };
 }
 
 export const BrowserFileSystem = {

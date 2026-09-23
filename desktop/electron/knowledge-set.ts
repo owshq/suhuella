@@ -19,6 +19,9 @@ import { recommendFolders } from './recommendations.ts'
 import { proposeSafeRename, renameNameConflicts, validateSafeFileName } from './rename-proposal.ts'
 import { applyBrandPresentation } from '@suhuella/brand'
 import type { IndexedFolderEntry } from '@suhuella/product/types.ts'
+import { organisationPlanCapability } from '@suhuella/product/lib/generation-capabilities.ts'
+import { assertExecutorGenerationRights } from './license-rights.ts'
+import type { LicenseContext } from '@suhuella/product/types.ts'
 import type {
   KnowledgeSet,
   KnowledgeSetItem,
@@ -31,7 +34,13 @@ import type {
   OrganisationPlanItem,
   OrganisationPlanPreview,
   OrganisationReviewGroup,
+  PlanExecutionProgressEvent,
 } from '@suhuella/product/types.ts'
+import { PLAN_SOURCE_UNAVAILABLE } from '@suhuella/product/lib/plan-source.ts'
+import {
+  refreshDesktopPlanItemAvailability,
+  withDesktopPlanSourceFields,
+} from './plan-source-check.ts'
 
 export const ORGANISATION_PREVIEW_MESSAGE = applyBrandPresentation(
   'Review the plan. Confirm selected actions only. SuHuella may create folders. Existing files are never overwritten or deleted.',
@@ -330,9 +339,9 @@ function buildPlanItem(
   folders: IndexedFolderEntry[],
 ): OrganisationPlanItem {
   if (item.kind === 'folder') {
-    return buildFolderPlanItem(item)
+    return withDesktopPlanSourceFields(buildFolderPlanItem(item), folders)
   }
-  return buildFilePlanItem(item, folders)
+  return withDesktopPlanSourceFields(buildFilePlanItem(item, folders), folders)
 }
 
 const MAX_EXPANDED_PLAN_FILES = 200
@@ -388,7 +397,7 @@ export function previewOrganisationPlanForFolders(
   if (!validated.ok) return validated
 
   const expanded = expandKnowledgeSetForPlan(validated.data)
-  const items = expanded.items.map((item) => buildPlanItem(item, folders))
+  const items = expanded.items.map((item) => refreshDesktopPlanItemAvailability(buildPlanItem(item, folders), folders))
 
   return {
     ok: true,
@@ -471,6 +480,12 @@ export function validateOrganisationPlan(input: unknown): KnowledgeSetOperationR
           }
         : {}),
       ...(createdFolders ? { createdFolders } : {}),
+      ...(typeof planItem.sourceId === 'string' && planItem.sourceId.trim()
+        ? { sourceId: planItem.sourceId.trim() }
+        : {}),
+      ...(typeof planItem.sourceName === 'string' && planItem.sourceName.trim()
+        ? { sourceName: planItem.sourceName.trim() }
+        : {}),
     })
   }
 
@@ -676,27 +691,36 @@ function applyConfirmedPlanItem(
   folders: IndexedFolderEntry[],
   inverse = false,
 ): OrganisationPlanItem {
-  if (item.selected !== true) {
+  const working = refreshDesktopPlanItemAvailability(item, folders)
+  if (working.status === 'source_unavailable') {
     return {
-      ...item,
+      ...working,
       status: 'skipped',
-      skipReason: item.skipReason ?? 'Not selected',
+      skipReason: working.skipReason ?? PLAN_SOURCE_UNAVAILABLE,
     }
   }
 
-  if (item.action === 'none' || item.action === 'ignore') {
-    return { ...item, status: 'skipped' }
+  if (working.selected !== true) {
+    return {
+      ...working,
+      status: 'skipped',
+      skipReason: working.skipReason ?? 'Not selected',
+    }
   }
 
-  if (!isExecutablePlanAction(item.action) || !item.proposedPath) {
-    return skipItem(item, 'Only confirmed plan actions are supported in this version.')
+  if (working.action === 'none' || working.action === 'ignore') {
+    return { ...working, status: 'skipped' }
   }
 
-  if (item.action === 'rename') {
-    return applyConfirmedRename(item, folders, inverse)
+  if (!isExecutablePlanAction(working.action) || !working.proposedPath) {
+    return skipItem(working, 'Only confirmed plan actions are supported in this version.')
   }
 
-  return applyConfirmedFileTransfer(item, folders, inverse)
+  if (working.action === 'rename') {
+    return applyConfirmedRename(working, folders, inverse)
+  }
+
+  return applyConfirmedFileTransfer(working, folders, inverse)
 }
 
 function applyConfirmedRename(
@@ -886,10 +910,41 @@ function applyConfirmedFileTransfer(
   }
 }
 
+export type ExecuteOrganisationPlanHooks = {
+  onItemApplied?: (event: PlanExecutionProgressEvent) => void
+}
+
 export function executeOrganisationPlan(
   input: unknown,
   folders: IndexedFolderEntry[],
-  options: { inverse?: boolean } = {},
+  hooks?: ExecuteOrganisationPlanHooks,
+): KnowledgeSetOperationResult<OrganisationExecutionResult> {
+  return executeOrganisationPlanInternal(input, folders, {
+    inverse: false,
+    enforceGenerationRights: true,
+    onItemApplied: hooks?.onItemApplied,
+  })
+}
+
+/**
+ * Host-only inverse execution after Activity validates the recorded run and inverse plan.
+ * Not exposed on IPC — callers must not accept client-supplied recovery flags.
+ */
+export function executeOrganisationPlanForVerifiedUndo(
+  input: unknown,
+  folders: IndexedFolderEntry[],
+): KnowledgeSetOperationResult<OrganisationExecutionResult> {
+  return executeOrganisationPlanInternal(input, folders, { inverse: true, enforceGenerationRights: false })
+}
+
+function executeOrganisationPlanInternal(
+  input: unknown,
+  folders: IndexedFolderEntry[],
+  options: {
+    inverse: boolean
+    enforceGenerationRights: boolean
+    onItemApplied?: (event: PlanExecutionProgressEvent) => void
+  },
 ): KnowledgeSetOperationResult<OrganisationExecutionResult> {
   if (!input || typeof input !== 'object') {
     return validationError('invalid_request', 'Execution request is required.')
@@ -902,12 +957,27 @@ export function executeOrganisationPlan(
     return validationError('confirmation_required', 'Confirm changes before executing.')
   }
 
+  if (options.enforceGenerationRights) {
+    const rights = assertExecutorGenerationRights(undefined, organisationPlanCapability())
+    if (!rights.ok) {
+      if (rights.error.code === 'generation_required') {
+        return validationError('generation_required', rights.error.message)
+      }
+      return validationError('invalid_request', rights.error.message)
+    }
+  }
+
   const planResult = validateOrganisationPlan(record.plan)
   if (!planResult.ok) return planResult
 
-  const items = planResult.data.items.map((item) =>
-    applyConfirmedPlanItem(item, folders, options.inverse === true),
-  )
+  const plannedItems = planResult.data.items
+  const total = plannedItems.length
+  const items: OrganisationPlanItem[] = []
+  for (let index = 0; index < total; index += 1) {
+    const applied = applyConfirmedPlanItem(plannedItems[index], folders, options.inverse === true)
+    items.push(applied)
+    options.onItemApplied?.({ item: applied, index, total })
+  }
   const appliedCount = items.filter((item) => item.status === 'applied').length
   const skippedCount = items.filter((item) => item.status === 'skipped').length
   const failedCount = items.filter((item) => item.status === 'failed').length
@@ -995,6 +1065,36 @@ function realFolder(absolutePath: string, fileNames: string[]): IndexedFolderEnt
     fileCount: fileNames.length,
     fileNames,
     lastModified: null,
+  }
+}
+
+export function knowledgeSetCheckLicenseContext(): LicenseContext {
+  return {
+    licenseId: 'lic_knowledge_set_check',
+    customerId: 'cust_knowledge_set_check',
+    email: 'knowledge-set-check@test.local',
+    edition: 'personal_lifetime',
+    status: 'active',
+    capabilities: [
+      'recommend_folder',
+      'explain_recommendation',
+      'navigate_save_dialog',
+      'copy_path',
+      'open_folder',
+      'refresh_index',
+      'create_folder',
+      'rename_file',
+      'move_file',
+      'apply_bulk_organisation',
+    ],
+    enabledKnowledgeSources: ['local_folder'],
+    deviceLimit: 1,
+    activatedDevices: 0,
+    validUntil: null,
+    lastCheckedAt: '2026-09-18T00:00:00.000Z',
+    offlineUntil: '2026-12-01T00:00:00.000Z',
+    channel: 'stable',
+    licenseToken: 'hidden',
   }
 }
 

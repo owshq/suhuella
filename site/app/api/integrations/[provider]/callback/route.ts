@@ -1,5 +1,5 @@
 import { handleOAuthCallback } from "@/lib/integrations/connections";
-import { isCloudProviderId } from "@/lib/integrations/providers";
+import { parseProviderPathSlug, providerPathSlug } from "@/lib/integrations/providers";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -8,8 +8,9 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ provider: string }> },
 ) {
-  const { provider } = await context.params;
-  if (!isCloudProviderId(provider)) {
+  const { provider: providerSlug } = await context.params;
+  const provider = parseProviderPathSlug(providerSlug);
+  if (!provider) {
     return Response.redirect(new URL("/home?integration=error&code=provider_unknown", request.url), 302);
   }
 
@@ -35,6 +36,6 @@ export async function GET(
 
   const url = new URL(result.returnPath, request.url);
   url.searchParams.set("integration", "connected");
-  url.searchParams.set("provider", provider);
+  url.searchParams.set("provider", providerPathSlug(provider));
   return Response.redirect(url, 302);
 }

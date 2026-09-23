@@ -82,6 +82,14 @@ export async function runRouteOverlayCheck(): Promise<void> {
   assert(overlayFromPathname("/") === "landing", "/ opens landing overlay");
   assert(overlayFromPathname("/license") === "license", "/license opens plans overlay");
   assert(overlayFromPathname("/download") === "download", "/download opens downloads overlay");
+  assert(
+    overlayFromPathname("/download/preparing") === "downloadPreparing",
+    "/download/preparing opens download preparing overlay",
+  );
+  assert(
+    overlayFromPathname("/download/success") === "downloadPreparing",
+    "/download/success legacy path opens download preparing overlay",
+  );
   assert(overlayFromPathname("/license/success") === "success", "/license/success opens success overlay");
   assert(overlayFromPathname("/success") === "success", "/success opens success overlay");
   assert(overlayHomePath() === "/home", "closing overlay returns to /home");
@@ -89,6 +97,10 @@ export async function runRouteOverlayCheck(): Promise<void> {
   assert(ROUTE_OVERLAY_PATHS.landing === "/", "landing path is /");
   assert(ROUTE_OVERLAY_PATHS.license === "/license", "license path is /license");
   assert(ROUTE_OVERLAY_PATHS.download === "/download", "download path is /download");
+  assert(
+    ROUTE_OVERLAY_PATHS.downloadPreparing === "/download/preparing",
+    "download preparing path is /download/preparing",
+  );
 
   const rows = buildDownloadCatalogRows(preRcManifest);
   assert(rows[0]?.action.kind === "link" && rows[0].action.href === "/home", "web opens home");
@@ -114,7 +126,7 @@ export async function runRouteOverlayCheck(): Promise<void> {
   const settingsWindow = readFileSync(join(process.cwd(), "../packages/product/src/windows/SettingsWindow.tsx"), "utf8");
   assert(settingsWindow.includes("openSettings('general')"), "IdentityCard opens Settings General");
   assert(!settingsWindow.includes("openSettings(isFree"), "IdentityCard does not open License by default");
-  assert(settingsWindow.includes("SuhuellaWordmark"), "app sidebar shows brand name and logo");
+  assert(!settingsWindow.includes("SuhuellaWordmark"), "app sidebar does not repeat the brand wordmark");
 
   const licensePanel = readFileSync(join(process.cwd(), "../packages/product/src/components/LicenseStatusPanel.tsx"), "utf8");
   assert(licensePanel.includes("t.revokeAction"), "paid license can be revoked on this computer");
@@ -127,14 +139,37 @@ export async function runRouteOverlayCheck(): Promise<void> {
   assert(overlayFrame.includes("landing-surface"), "overlay uses landing surface color");
   assert(overlayFrame.includes("<LanguageSwitcher inline />"), "language switcher lives inside overlay content");
   assert(overlayFrame.includes('aria-label="Close"'), "close sits beside the language switcher");
-  assert(overlayFrame.includes("SuhuellaWordmark"), "overlay chrome shows brand name and logo");
+  assert(!overlayFrame.includes("SuhuellaWordmark"), "overlay chrome uses the version badge, not a second wordmark");
   assert(!overlayFrame.includes("fixed top-5 right-5"), "close is not viewport-fixed away from the island");
   assert(!overlayFrame.includes("border-b border-slate-200 bg-white px-4 py-3"), "no white chrome header bar");
-  assert(overlayFrame.includes("h-[min(50dvh,28rem)]"), "overlay is compact half-height");
-  assert(overlayFrame.includes("w-[min(36rem,calc(100vw-1.5rem))]"), "overlay is compact half-width");
+  assert(overlayFrame.includes("h-[min(56dvh,32rem)]"), "overlay is a little taller than half the screen");
+  assert(overlayFrame.includes("w-[min(40rem,calc(100vw-1.5rem))]"), "overlay is a little wider than the compact island");
 
   const overlayShell = readFileSync(join(process.cwd(), "components/web/RouteOverlayShell.tsx"), "utf8");
   assert(overlayShell.includes("brand.displayName"), "overlay labels use BrandConfig name");
+
+  const overlayPages = readFileSync(join(process.cwd(), "lib/suhuella-overlay-pages.tsx"), "utf8");
+  assert(overlayPages.includes("SuhuellaOverlayApp"), "overlay routes share the app-backed popup shell");
+  assert(!overlayPages.includes("suhuella-shell\""), "overlay pages do not import the shell module directly");
+  assert(
+    !overlayPages.includes("@/components/web/SuhuellaApp"),
+    "overlay pages mount the browser app through SuhuellaOverlayApp",
+  );
+  assert(!overlayPages.includes("SettingsWindow"), "overlay routes do not import SettingsWindow");
+
+  const productApp = readFileSync(join(process.cwd(), "components/web/SuhuellaApp.tsx"), "utf8");
+  assert(productApp.includes("SettingsWindow"), "product app mounts SettingsWindow");
+  assert(!productApp.includes("RouteOverlayShell"), "product app does not mount overlay catalog");
+
+  const overlayApp = readFileSync(join(process.cwd(), "components/web/SuhuellaOverlayApp.tsx"), "utf8");
+  assert(overlayApp.includes("RouteOverlayShell"), "overlay app mounts route overlay");
+  assert(overlayApp.includes("<SuhuellaApp />"), "welcome, download, and success popups sit on the browser app");
+  assert(
+    !overlayApp.includes('className="h-dvh w-full bg-[var(--app-bg)]"'),
+    "overlay routes do not use an empty grey backdrop",
+  );
+  assert(!overlayApp.includes("SettingsWindow"), "overlay app reaches the product window through SuhuellaApp");
+  assert(!overlayApp.includes("install-browser-host"), "overlay app boots the product host through SuhuellaApp");
 }
 
 void runRouteOverlayCheck()

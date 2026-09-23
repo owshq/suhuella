@@ -66,8 +66,9 @@ export function businessErrorStatus(error: string): number {
   ) {
     return 403;
   }
-  if (error === "duplicate_email" || error === "seat_limit" || error === "seat_in_use") {
+  if (error === "duplicate_email" || error === "seat_limit" || error === "seat_in_use" || error === "min_seats") {
     return 409;
   }
+  if (error === "stripe_unavailable" || error === "stripe_timeout") return 503;
   return 400;
 }

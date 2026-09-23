@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runBuildHealthGate } from "../scripts/build-health.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -20,4 +21,4 @@ if (process.env.SUHUELLA_DESKTOP_CI === "1") {
   console.log("[release] desktop CI — skipping site/wrangler version matrix check");
   process.exit(0);
 }
-run("brands/release-version-check.mjs");
+runBuildHealthGate({ ids: ["release-version"] });

@@ -21,8 +21,8 @@ import type {
 } from '@suhuella/product/types.ts'
 
 /**
- * One Plan Assistant — no selector.
- * Today: On-device intelligence (rules). Later: Local AI (ONNX). Optional: BYOK.
+ * Default is one assistant. Plan Mode may pass assistantPreference:
+ * on_device stays on rules; local uses a connected local server only.
  * SuHuella never pays for AI and never ranks folders here.
  * Simple tasks may fall back on-device; complex BYOK failures fail honestly.
  */
@@ -68,7 +68,27 @@ export async function runPlanAssistant(
   const workflowNames = Array.isArray(record?.workflowNames)
     ? record.workflowNames.filter((item): item is string => typeof item === 'string')
     : []
-  const preferred = planAssistantUsingFromByok(userDataDir)
+  const preference =
+    record?.assistantPreference === 'on_device' || record?.assistantPreference === 'local'
+      ? record.assistantPreference
+      : null
+  const byokStatus = getByokStatus(userDataDir)
+  let preferred = planAssistantUsingFromByok(userDataDir)
+  if (preference === 'on_device') {
+    preferred = ON_DEVICE_PLAN_ASSISTANT_USING
+  } else if (preference === 'local') {
+    if (byokStatus.connected && byokStatus.assistant === 'local_server' && byokStatus.assistantLabel) {
+      preferred = {
+        backend: 'byok',
+        label: byokStatus.model ? `${byokStatus.assistantLabel} · ${byokStatus.model}` : byokStatus.assistantLabel,
+      }
+    } else {
+      return failed({
+        code: 'assistant_unavailable',
+        message: 'Connect a local model first.',
+      })
+    }
+  }
   const simple = isSimplePlanAssistantTask(note)
   const question = isPlanAssistantQuestion(note)
 
@@ -88,7 +108,7 @@ export async function runPlanAssistant(
       }
       return failed({
         code: 'assistant_unavailable',
-        message: 'On-device intelligence can answer simple questions. Connect your own AI for more.',
+        message: 'Built-in rules can answer simple questions. Connect your own AI for more.',
       })
     }
     return fromLocalResult(local)

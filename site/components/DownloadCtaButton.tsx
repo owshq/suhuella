@@ -1,7 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 import { DownloadIcon } from "@/components/icons/DownloadIcon";
+import { buildPrimaryDownloadHref } from "@/lib/desktop-download-flow";
 import { getHeroDownloadCta } from "@/lib/release";
 import type { Locale } from "@/lib/i18n/types";
 
@@ -18,13 +20,14 @@ const iconClassName =
 
 export function DownloadCtaButton({
   locale,
-  href = "/#descarga",
+  href,
 }: DownloadCtaButtonProps) {
   const label = getHeroDownloadCta(locale);
+  const resolvedHref = useMemo(() => href ?? buildPrimaryDownloadHref(), [href]);
 
   return (
     <motion.a
-      href={href}
+      href={resolvedHref}
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.98 }}
       className={buttonClassName}

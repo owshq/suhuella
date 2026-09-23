@@ -22,9 +22,16 @@ desktop/native/**/publish/
 
 # testing
 coverage/
+playwright-report/
+test-results/
+trace/
+videos/
+screenshots/
+tmp/
 
 # misc
 .cursor/
+.cursor-health.json
 .DS_Store
 *.pem
 

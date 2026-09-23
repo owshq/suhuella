@@ -1,6 +1,12 @@
 import { readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
-import type { FolderIndex, IndexedFolderEntry, IndexScanProgress, KnowledgeSource } from '@suhuella/product/types.ts'
+import type {
+  FolderIndex,
+  IndexedFolderEntry,
+  IndexRefreshMode,
+  IndexScanProgress,
+  KnowledgeSource,
+} from '@suhuella/product/types.ts'
 import { createLocalKnowledgeSource } from './knowledge-sources.ts'
 import { tokenize } from './recommendations.ts'
 
@@ -24,6 +30,8 @@ const SKIP_DIR_NAMES = new Set([
 
 const MAX_FILENAMES_PER_FOLDER = 50
 const YIELD_EVERY_FOLDERS = 40
+/** Yield inside one folder so a huge flat directory cannot freeze progress or cancel. */
+export const INDEX_YIELD_EVERY_FILES = 80
 
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
@@ -56,9 +64,53 @@ type ScanContext = {
   folders: IndexedFolderEntry[]
   foldersScanned: number
   filesSeen: number
+  foldersReused: number
+  locationsDone: number
   currentPath: string
+  currentRoot: string
   cancelled: () => boolean
   onProgress: (progress: Partial<IndexScanProgress>) => void
+}
+
+function normalizeRoot(location: string): string {
+  return path.normalize(location.trim())
+}
+
+function sameRoot(left: string, right: string): boolean {
+  return normalizeRoot(left).toLowerCase() === normalizeRoot(right).toLowerCase()
+}
+
+function isPathUnderRoot(root: string, target: string): boolean {
+  const normalizedRoot = normalizeRoot(root)
+  const normalizedTarget = normalizeRoot(target)
+  return (
+    normalizedTarget === normalizedRoot ||
+    normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+  )
+}
+
+function previousSourceFor(previous: FolderIndex | undefined, location: string): KnowledgeSource | undefined {
+  return previous?.sources.find((source) => sameRoot(source.rootLocator, location))
+}
+
+function previousFoldersFor(previous: FolderIndex, location: string): IndexedFolderEntry[] {
+  const source = previousSourceFor(previous, location)
+  return previous.folders.filter((folder) => {
+    if (source && folder.sourceId === source.id) return true
+    return isPathUnderRoot(location, folder.absolutePath)
+  })
+}
+
+/** A location is reused when the previous index already learned it successfully. */
+export function locationNeedsScan(
+  location: string,
+  previous: FolderIndex | undefined,
+  refresh: IndexRefreshMode = 'all',
+): boolean {
+  if (refresh === 'all' || !previous) return true
+  const source = previousSourceFor(previous, location)
+  if (!source || source.status === 'error' || !source.lastIndexed) return true
+  return previousFoldersFor(previous, location).length === 0
 }
 
 async function scanDirectory(
@@ -100,6 +152,12 @@ async function scanDirectory(
       } catch {
         // Ignore unreadable files.
       }
+      if (context.filesSeen % INDEX_YIELD_EVERY_FILES === 0) {
+        context.currentPath = entryPath
+        emitLocationProgress(context)
+        await yieldToEventLoop()
+        if (context.cancelled()) return
+      }
       continue
     }
 
@@ -137,10 +195,46 @@ async function scanDirectory(
     context.onProgress({
       foldersScanned: context.foldersScanned,
       filesSeen: context.filesSeen,
+      foldersReused: context.foldersReused,
+      locationsDone: context.locationsDone,
       currentPath: context.currentPath,
+      currentRoot: context.currentRoot,
     })
     await yieldToEventLoop()
   }
+}
+
+function emitLocationProgress(context: ScanContext): void {
+  context.onProgress({
+    foldersScanned: context.foldersScanned,
+    filesSeen: context.filesSeen,
+    foldersReused: context.foldersReused,
+    locationsDone: context.locationsDone,
+    currentPath: context.currentPath,
+    currentRoot: context.currentRoot,
+  })
+}
+
+function adoptPreviousLocation(
+  location: string,
+  previous: FolderIndex,
+  context: ScanContext,
+): void {
+  const source = previousSourceFor(previous, location)
+  const folders = previousFoldersFor(previous, location)
+  if (source) {
+    const index = context.sources.findIndex((item) => sameRoot(item.rootLocator, location))
+    if (index >= 0) context.sources[index] = { ...source }
+  }
+  context.folders.push(...folders)
+  const reusedFiles = folders.reduce((total, folder) => total + (folder.fileCount ?? 0), 0)
+  context.foldersScanned += folders.length
+  context.filesSeen += reusedFiles
+  context.foldersReused += folders.length
+  context.currentPath = location
+  context.currentRoot = location
+  context.locationsDone += 1
+  emitLocationProgress(context)
 }
 
 export async function buildFolderIndex(
@@ -148,8 +242,11 @@ export async function buildFolderIndex(
   options: {
     cancelled: () => boolean
     onProgress: (progress: Partial<IndexScanProgress>) => void
+    previous?: FolderIndex
+    refresh?: IndexRefreshMode
   },
 ): Promise<FolderIndex> {
+  const refresh = options.refresh ?? 'all'
   const normalizedLocations = [...new Set(locations.map((location) => path.normalize(location.trim())))]
     .filter(Boolean)
 
@@ -174,39 +271,79 @@ export async function buildFolderIndex(
     folders: [],
     foldersScanned: 0,
     filesSeen: 0,
+    foldersReused: 0,
+    locationsDone: 0,
     currentPath: '',
+    currentRoot: '',
     cancelled: options.cancelled,
     onProgress: options.onProgress,
   }
 
+  options.onProgress({
+    foldersScanned: 0,
+    filesSeen: 0,
+    foldersReused: 0,
+    locationsDone: 0,
+    locationsTotal: normalizedLocations.length,
+    currentPath: '',
+    currentRoot: '',
+  })
+
   for (const location of normalizedLocations) {
     if (options.cancelled()) break
+
+    if (!locationNeedsScan(location, options.previous, refresh) && options.previous) {
+      adoptPreviousLocation(location, options.previous, context)
+      continue
+    }
 
     let stat
     try {
       stat = statSync(location)
     } catch {
+      context.locationsDone += 1
       continue
     }
 
-    if (!stat.isDirectory()) continue
+    if (!stat.isDirectory()) {
+      context.locationsDone += 1
+      continue
+    }
 
     context.currentPath = location
-    options.onProgress({
-      currentPath: location,
-      foldersScanned: context.foldersScanned,
-      filesSeen: context.filesSeen,
-    })
+    context.currentRoot = location
+    emitLocationProgress(context)
 
     await scanDirectory(location, location, context)
+    if (options.cancelled()) break
+    context.locationsDone += 1
+    emitLocationProgress(context)
   }
 
-  const indexedAt = options.cancelled() ? null : new Date().toISOString()
-  const withCounts = sources.map((source) => ({
-    ...source,
-    itemCount: context.folders.filter((folder) => folder.sourceId === source.id).length,
-    lastIndexed: source.status === 'error' ? source.lastIndexed : indexedAt,
-  }))
+  const scannedAt = options.cancelled() ? null : new Date().toISOString()
+  const withCounts = sources.map((source) => {
+    const reused = options.previous
+      ? previousSourceFor(options.previous, source.rootLocator)
+      : undefined
+    const scanned = locationNeedsScan(source.rootLocator, options.previous, refresh)
+    const lastIndexed = source.status === 'error'
+      ? source.lastIndexed
+      : scanned
+        ? scannedAt
+        : reused?.lastIndexed ?? scannedAt
+    return {
+      ...source,
+      itemCount: context.folders.filter((folder) => folder.sourceId === source.id).length,
+      lastIndexed,
+    }
+  })
+
+  const indexedAt =
+    withCounts
+      .map((source) => source.lastIndexed)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? scannedAt
 
   return {
     version: 2,

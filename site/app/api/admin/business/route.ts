@@ -1,7 +1,8 @@
-import { actorFromRequest, businessErrorStatus } from "@/lib/business-auth";
+import { businessErrorStatus } from "@/lib/business-auth";
 import { getBusinessPricingConfig } from "@/lib/business-config";
 import { businessService } from "@/lib/business-service";
 import type { BusinessSeatRole } from "@/lib/business-types";
+import { requireOperationsActor } from "../../operations/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,9 @@ function json(body: unknown, status = 200) {
 }
 
 export async function GET(request: Request) {
-  const actor = actorFromRequest(request);
-  if (!actor || actor.kind !== "superadmin") {
-    return json({ ok: false, error: "forbidden" }, 403);
-  }
+  const auth = await requireOperationsActor(request);
+  if (!auth.ok) return auth.response;
+  const actor = { kind: "superadmin" as const };
 
   const listed = businessService.listAccounts(actor);
   if (!listed.ok) return json({ ok: false, error: listed.error }, businessErrorStatus(listed.error));
@@ -26,6 +26,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireOperationsActor(request);
+  if (!auth.ok) return auth.response;
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -39,10 +42,7 @@ export async function POST(request: Request) {
   const seatId = typeof body.seatId === "string" ? body.seatId : "";
   const email = typeof body.email === "string" ? body.email : "";
   const role = (typeof body.role === "string" ? body.role : "member") as BusinessSeatRole;
-
-  const actor = actorFromRequest(request, organisationId);
-  if (!actor) return json({ ok: false, error: "forbidden" }, 403);
-  const scopedActor = actor;
+  const scopedActor = { kind: "superadmin" as const };
 
   switch (action) {
     case "create_account": {
@@ -60,10 +60,14 @@ export async function POST(request: Request) {
         : json({ ok: false, error: result.error }, businessErrorStatus(result.error));
     }
     case "set_seat_count": {
-      const result = businessService.setSeatCount(
+      const result = await businessService.changeSeatQuantity(
         scopedActor,
         organisationId,
         typeof body.seatLimit === "number" ? body.seatLimit : 0,
+        {
+          source: "ops",
+          reason: typeof body.reason === "string" ? body.reason : "Admin seat quantity change",
+        },
       );
       return result.ok
         ? json({ ok: true, account: result.value })

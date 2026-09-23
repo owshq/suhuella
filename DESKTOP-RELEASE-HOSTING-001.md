@@ -3,7 +3,7 @@
 ```text
 STATUS = CLOSED · PASS
 TYPE = Release hosting + operator automation
-DEPENDS = RELEASE-ARCHITECTURE-FROZEN.md (architecture closed)
+DEPENDS = docs/architecture/constitution/release-architecture.md (architecture closed)
 DATE = 2026-09-19
 WORKER = suhuella-download · download.suhuella.com
 WORKER_VERSION = d34c0b1f-71bf-4778-afdb-8f3b13d85aff

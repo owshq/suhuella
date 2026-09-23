@@ -395,7 +395,7 @@ function buildWorkflows(items: OrganisationPlanItem[], hints: Set<PlanAssistantH
     workflows.push({
       id: 'workflow-archive',
       title: `Archive ${archives.length} finished files`,
-      explanation: 'A later workflow could sweep screenshots and downloads after you have used them.',
+      explanation: 'Later, you could sweep screenshots and downloads after you have used them.',
       relatedPaths: archives.map((item) => item.currentPath),
     })
   }
@@ -425,8 +425,8 @@ function buildWorkflows(items: OrganisationPlanItem[], hints: Set<PlanAssistantH
     if (suggested.length > 0) {
       workflows.push({
         id: 'workflow-review',
-        title: 'Review this plan before anything runs',
-        explanation: 'AI grouped the suggested actions. Confirm only the ones you want.',
+        title: 'Review this Plan before anything changes',
+        explanation: 'Suggested actions are grouped. Confirm only the ones you want.',
         relatedPaths: suggested.map((item) => item.currentPath),
       })
     }
@@ -626,8 +626,8 @@ export function runPlanAssistantChecks(): void {
   if (!/ignor/i.test(hints) || !/renam/i.test(hints)) {
     throw new Error('on-device assistant must read simple planning instructions')
   }
-  if (ON_DEVICE_PLAN_ASSISTANT_USING.label !== 'On-device intelligence') {
-    throw new Error('today’s assistant must not be labelled Local AI')
+  if (ON_DEVICE_PLAN_ASSISTANT_USING.label !== 'Built-in rules') {
+    throw new Error('on-device assistant must stay labelled Built-in rules')
   }
   if (PLAN_ASSISTANT_ALLOWED_HINTS.length !== 6) {
     throw new Error('plan assistant capability hints must stay frozen')

@@ -1,16 +1,19 @@
 import { clientIpFromRequest } from "@/lib/client-ip";
-import { fulfillLicenseFromCheckout } from "@/lib/license-fulfillment";
+import { rawCardRejection } from "@/lib/raw-card-guard";
+import { reconcilePaidCheckoutSession } from "@/lib/checkout-reconciliation";
 import {
   getReleaseManifest,
   manifestToInstallerUrls,
 } from "@/lib/release-manifest";
 import { rejectIfDurableLicenseStateUnavailable, rejectIfRateLimited } from "@/lib/service-capability-guard";
-import { verifyStripeCheckoutSession } from "@/lib/verify-stripe-session";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const cardRejected = rawCardRejection({ searchParams: request.nextUrl.searchParams });
+  if (cardRejected) return cardRejected;
+
   const durable = await rejectIfDurableLicenseStateUnavailable("checkout");
   if (durable) return durable;
 
@@ -34,7 +37,11 @@ export async function GET(request: NextRequest) {
 
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
 
-  const result = await verifyStripeCheckoutSession(sessionId, secretKey, request.nextUrl.origin);
+  const result = await reconcilePaidCheckoutSession({
+    sessionId,
+    secretKey,
+    origin: request.nextUrl.origin,
+  });
 
   if (!result.ok) {
     const status =
@@ -53,7 +60,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const license = await fulfillLicenseFromCheckout(result.session);
+  const license = result.license;
 
   const release = await getReleaseManifest();
   const installers = release ? manifestToInstallerUrls(release) : { windows: "", mac: "" };

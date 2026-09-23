@@ -10,18 +10,21 @@ import {
 } from '../lib/source-appearance'
 import { capabilitiesFor } from './capabilities'
 import { hostAccessFor } from '../lib/platform-capabilities'
+import { mergeSuggestedCatalog } from '../lib/plan-source-candidate.ts'
 import { toLicenseStatusView } from '../lib/license-status'
 import type { SuhuellaAPI } from '../vite-env'
 import type {
   ActivityItem,
   ActivityRun,
   AppInfo,
+  AppPermissionPreferences,
   AppSettings,
   IndexScanProgress,
   KnowledgeSet,
   KnowledgeSetItem,
   LicenseContext,
   OrganisationExecutionResult,
+  PlanExecutionProgressEvent,
   OrganisationPlanItem,
   OrganisationPlanPreview,
   SearchMatchField,
@@ -39,11 +42,15 @@ import { projectBrowserSource } from './browser/source-adapter'
 import { sourceAccessState } from '../lib/source-host-vocabulary'
 import { availabilityReasonForStatus } from './handle-lifecycle-bridge'
 import { sourceCapabilities } from '../lib/source-capabilities'
+import { markPlanItemSourceUnavailable } from '../lib/plan-source.ts'
 import { buildSourcePresentation } from '../lib/source-presentation'
 import {
   FolderAccessError,
+  ensurePermission,
   fileWriteSupported,
   folderAccessKind,
+  loadHandle,
+  moveOrRenameFile,
   formatBytes,
   isAbortError,
   isProtectedFolderError,
@@ -71,14 +78,23 @@ import {
   renameDevice,
 } from './browser/license'
 import {
+  browseCloudSourceChildren,
   disconnectCloudIntegration,
   getCloudIntegrationStatus,
   listCloudIntegrations,
+  parseCloudBrowsePath,
   reconnectCloudIntegration,
   startCloudIntegration,
 } from './browser/cloud-integrations'
 import { fetchPublicServiceHealth, NORMAL_SERVICE_HEALTH } from '../lib/service-health'
-import { executePlanItems, previewPlan } from './browser/plan'
+import {
+  executeGuardedPlan,
+  INTENT_NOTE,
+  UNCERTAIN_NOTE,
+} from './browser/organise-integrity.ts'
+import { normalizePermissionPreferences } from '../lib/permissions-preferences.ts'
+import { assertHostExecutorGenerationRights } from './generation-executor-gate.ts'
+import { previewPlan } from './browser/plan'
 import { documentFilterForName, searchKnowledge } from './browser/search'
 import { isBrowserDevHost, isDevDemoHint } from './browser/dev-host'
 import {
@@ -87,6 +103,10 @@ import {
   connectLocalFolder,
   clearLocalKnowledge,
   deleteWorkflow,
+  deleteSavedPlanRecord,
+  duplicateSavedPlanRecord,
+  listSavedPlans,
+  saveSavedPlanRecord,
   clearActivityRuns,
   listActivityRuns,
   listFiles,
@@ -157,10 +177,28 @@ function emptySettings(sources: WebKnowledgeSource[] = []): AppSettings {
     },
     recentFolders: sources.map((source) => source.id),
     sourceAppearance: loadBrowserSourceAppearance(),
+    permissions: loadBrowserPermissions(),
   }
 }
 
 const BROWSER_SOURCE_APPEARANCE_KEY = 'suhuella-source-appearance'
+const BROWSER_PERMISSIONS_KEY = 'suhuella-permissions'
+
+function loadBrowserPermissions(): AppPermissionPreferences {
+  if (typeof localStorage === 'undefined') {
+    return normalizePermissionPreferences(null)
+  }
+  try {
+    return normalizePermissionPreferences(JSON.parse(localStorage.getItem(BROWSER_PERMISSIONS_KEY) ?? 'null'))
+  } catch {
+    return normalizePermissionPreferences(null)
+  }
+}
+
+function saveBrowserPermissions(prefs: AppPermissionPreferences): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(BROWSER_PERMISSIONS_KEY, JSON.stringify(prefs))
+}
 
 function loadBrowserSourceAppearance(): AppSettings['sourceAppearance'] {
   if (typeof localStorage === 'undefined') return {}
@@ -235,15 +273,16 @@ function parseKnowledgePath(path: string): { sourceId: string; relativePath: str
   return { sourceId: path.slice(0, slash), relativePath: path.slice(slash + 1) }
 }
 
-function toPlanItem(item: WebPlanItem): OrganisationPlanItem {
+function toPlanItem(item: WebPlanItem, sourceName?: string): OrganisationPlanItem {
   return {
     action: item.action === 'create_folder' || item.action === 'create_structure' ? item.action : item.action,
-    currentPath: item.currentPath.includes('/') ? item.currentPath : knowledgePath(item.sourceId, item.currentPath),
+    currentPath: item.currentPath.startsWith(`${item.sourceId}/`)
+      ? item.currentPath
+      : knowledgePath(item.sourceId, item.currentPath),
     proposedPath: item.proposedPath
-      ? item.proposedPath.includes('/')
-        ? `${item.sourceId}/${item.proposedPath}`
-        : knowledgePath(item.sourceId, item.proposedPath)
+      ? knowledgePath(item.destSourceId || item.sourceId, item.proposedPath)
       : null,
+    createdFolders: item.createdFolders,
     explanation: item.explanation,
     status: item.status,
     warnings: item.warnings,
@@ -256,18 +295,21 @@ function toPlanItem(item: WebPlanItem): OrganisationPlanItem {
     skipReason: item.skipReason,
     renameStrategy: item.action === 'rename' ? 'normalize' : null,
     renameReasons: item.renameReasons,
+    sourceId: item.sourceId,
+    ...(sourceName ? { sourceName } : {}),
   }
 }
 
 function fromPlanItem(item: OrganisationPlanItem): WebPlanItem {
   const current = parseKnowledgePath(item.currentPath)
-  const proposed = item.proposedPath ? parseKnowledgePath(item.proposedPath).relativePath : null
+  const proposed = item.proposedPath ? parseKnowledgePath(item.proposedPath) : null
   return {
     action: item.action === 'archive' || item.action === 'ignore' ? 'none' : item.action,
     currentPath: current.relativePath || item.fileName,
-    proposedPath: proposed,
+    proposedPath: proposed?.relativePath || null,
     fileName: item.fileName,
     sourceId: current.sourceId,
+    destSourceId: proposed?.sourceId || current.sourceId,
     explanation: item.explanation,
     renameReasons: item.renameReasons ?? [],
     warnings: item.warnings,
@@ -276,7 +318,13 @@ function fromPlanItem(item: OrganisationPlanItem): WebPlanItem {
     score: item.score,
     confidenceLabel: item.confidenceLabel,
     skipReason: item.skipReason,
-    status: item.status,
+    status:
+      item.status === 'preview' ||
+      item.status === 'applied' ||
+      item.status === 'skipped' ||
+      item.status === 'failed'
+        ? item.status
+        : 'skipped',
   }
 }
 
@@ -442,6 +490,7 @@ export function installBrowserHost(): void {
   void getDevice()
 
   const progressListeners = new Set<(progress: IndexScanProgress) => void>()
+  const planProgressListeners = new Set<(event: PlanExecutionProgressEvent) => void>()
   const emitIndexProgress = (sources: WebKnowledgeSource[]) => {
     const indexing = sources.some((source) => source.status === 'indexing')
     const progress: IndexScanProgress = {
@@ -473,6 +522,50 @@ export function installBrowserHost(): void {
         entries: [],
       }
       if (!requested) return empty
+
+      const cloud = parseCloudBrowsePath(rootPath.trim().startsWith('cloud:') ? rootPath.trim() : requested)
+      if (cloud) {
+        const page = await browseCloudSourceChildren({
+          connectionId: cloud.connectionId,
+          parentId: cloud.itemId,
+        })
+        if (!page.ok) {
+          return {
+            path: rootPath.trim(),
+            name: lastSegment,
+            parentPath: cloud.itemId ? `cloud:${cloud.connectionId}` : null,
+            entries: [],
+          }
+        }
+        const itemId = cloud.itemId
+        const parentOfParent = page.page.parentOfParentId
+        let parentPath: string | null = null
+        if (itemId) {
+          if (itemId === 'root' || itemId === 'sharedWithMe') {
+            parentPath = `cloud:${cloud.connectionId}`
+          } else if (parentOfParent) {
+            parentPath = `cloud:${cloud.connectionId}/${parentOfParent}`
+          } else {
+            parentPath = `cloud:${cloud.connectionId}/root`
+          }
+        }
+        return {
+          path: rootPath.trim(),
+          name: page.page.parentName,
+          parentPath,
+          entries: page.page.items.map((item) => ({
+            path: `cloud:${cloud.connectionId}/${item.id}`,
+            name: item.name,
+            kind: item.kind,
+            extension: item.kind === 'file' && item.name.includes('.')
+              ? item.name.split('.').pop()
+              : undefined,
+            size: item.size ?? null,
+            lastModified: item.modifiedAt ?? null,
+          })),
+        }
+      }
+
       const { sourceId, relativePath } = parseKnowledgePath(requested)
       const [files, folders, sources] = await Promise.all([listFiles(), listFolders(), listSources()])
       const source = sources.find((item) => item.id === sourceId)
@@ -573,7 +666,15 @@ export function installBrowserHost(): void {
                     : 'activity' as const,
           title: hit.title,
           subtitle: hit.subtitle,
-          path: hit.id,
+          path:
+            file != null
+              ? knowledgePath(file.sourceId, file.relativePath)
+              : hit.kind === 'folder'
+                ? (() => {
+                    const folder = folders.find((entry) => entry.id === hit.id)
+                    return folder ? knowledgePath(folder.sourceId, folder.relativePath) : hit.id
+                  })()
+                : hit.id,
           folderPath: hit.kind === 'folder' || hit.kind === 'source' ? hit.id : null,
           extension,
           documentFilter,
@@ -619,7 +720,10 @@ export function installBrowserHost(): void {
       }
     },
     getSuggestedLocations: async (): Promise<SuggestedLocation[]> => {
-      return []
+      return mergeSuggestedCatalog('browser', detectPlatform(), []).map((place) => ({
+        ...place,
+        exists: true,
+      }))
     },
     // Chrome picker in production. Localhost Dev Host can seed /dev-data without a picker.
     addIndexedLocation: async (hint?: string) => {
@@ -682,9 +786,28 @@ export function installBrowserHost(): void {
         progressListeners.delete(listener)
       }
     },
+    onPlanExecutionProgress: (listener) => {
+      planProgressListeners.add(listener)
+      return () => {
+        planProgressListeners.delete(listener)
+      }
+    },
     droppedFilePath: () => null,
     matchFoldersForFile: async () => null,
     setLaunchAtLogin: async () => emptySettings(await listSources()),
+    setPermissionPreferences: async (prefs) => {
+      const current = loadBrowserPermissions()
+      const next = normalizePermissionPreferences({
+        allowFolderChanges:
+          typeof prefs.allowFolderChanges === 'boolean'
+            ? prefs.allowFolderChanges
+            : current.allowFolderChanges,
+        trashEnabled:
+          typeof prefs.trashEnabled === 'boolean' ? prefs.trashEnabled : current.trashEnabled,
+      })
+      saveBrowserPermissions(next)
+      return { ...emptySettings(await listSources()), permissions: next }
+    },
     setSourceAppearanceColor: async (path: string, color: string | null) =>
       applyBrowserSourceAppearance(path, { color }),
     setSourceAppearance: applyBrowserSourceAppearance,
@@ -909,13 +1032,25 @@ export function installBrowserHost(): void {
           return file.relativePath === parsed.relativePath || file.relativePath.startsWith(`${parsed.relativePath}/`)
         })
       })
-      const items = previewPlan(selected, folders).map((item) =>
-        toPlanItem({
-          ...item,
-          currentPath: knowledgePath(item.sourceId, item.currentPath),
-          proposedPath: item.proposedPath ? knowledgePath(item.sourceId, item.proposedPath) : null,
-        }),
-      )
+      const sources = await listSources()
+      const items = previewPlan(selected, folders).map((item) => {
+        const source = sources.find((entry) => entry.id === item.sourceId)
+        const sourceName = source?.name
+        const openable = !source || sourceCapabilities(sourceAccessState(source.status)).openable
+        const planItem = toPlanItem(
+          {
+            ...item,
+            currentPath: knowledgePath(item.sourceId, item.currentPath),
+            proposedPath: item.proposedPath ? knowledgePath(item.sourceId, item.proposedPath) : null,
+          },
+          sourceName,
+        )
+        if (source && !openable) {
+          const reason = source.status === 'needs_permission' ? 'permission' : 'disconnected'
+          return markPlanItemSourceUnavailable(planItem, sourceName, reason)
+        }
+        return planItem
+      })
       const preview: OrganisationPlanPreview = {
         simulated: true,
         message: 'Review the plan. Confirm selected actions only.',
@@ -939,12 +1074,12 @@ export function installBrowserHost(): void {
           preview: preview.preview,
           workflows: [],
           note: null,
-          using: { backend: 'on_device' as const, label: 'On this device' },
+          using: { backend: 'on_device' as const, label: 'Built-in rules' },
         },
       }
     },
     getPlanAssistantStatus: async () => ({
-      using: { backend: 'on_device' as const, label: 'On this device' },
+      using: { backend: 'on_device' as const, label: 'Built-in rules' },
     }),
     executeOrganisationPlan: async (request) => {
       if (!request.confirmed) {
@@ -953,62 +1088,140 @@ export function installBrowserHost(): void {
           error: { code: 'confirmation_required' as const, message: 'Confirm changes before executing.' },
         }
       }
-      if (folderAccessKind() !== 'directory-picker' || !fileWriteSupported()) {
+      if (loadBrowserPermissions().allowFolderChanges === false) {
         return {
           ok: false as const,
           error: {
             code: 'invalid_request' as const,
-            message: ORGANISE_EXECUTION_LIMIT,
+            message:
+              'Folder changes are turned off in Settings → Permissions. Turn them on to Confirm Plan.',
           },
         }
       }
-      const executed = await executePlanItems(request.plan.items.map(fromPlanItem))
-      const items = executed.map((item) => toPlanItem(item))
-      const appliedCount = items.filter((item) => item.status === 'applied').length
-      const skippedCount = items.filter((item) => item.status === 'skipped').length
-      const failedCount = items.filter((item) => item.status === 'failed').length
-      const completedAt = new Date().toISOString()
+      const rights = assertHostExecutorGenerationRights(await loadLicense())
+      if (!rights.ok) {
+        return {
+          ok: false as const,
+          error: {
+            code: rights.error.code === 'generation_required' ? ('generation_required' as const) : ('invalid_request' as const),
+            message: rights.error.message,
+          },
+        }
+      }
+      const canWrite = folderAccessKind() === 'directory-picker' && fileWriteSupported()
+      if (!canWrite) {
+        return {
+          ok: false as const,
+          error: { code: 'invalid_request' as const, message: ORGANISE_EXECUTION_LIMIT },
+        }
+      }
+      const runId = `web-${Date.now().toString(36)}`
+      const runNumber = request.runNumber ?? 1
+      const startedAt = new Date().toISOString()
+      const publish = async (webItems: WebPlanItem[], completedAt: string) => {
+        const items = webItems.map((item) => toPlanItem(item))
+        const appliedCount = items.filter((item) => item.status === 'applied').length
+        const skippedCount = items.filter((item) => item.status === 'skipped').length
+        const failedCount = items.filter((item) => item.status === 'failed').length
+        const run: ActivityRun = {
+          runId,
+          runNumber,
+          startedAt,
+          completedAt,
+          trigger: request.trigger ?? 'organise_documents',
+          plan: { knowledgeSet: request.plan.knowledgeSet, items },
+          inversePlan: {
+            knowledgeSet: request.plan.knowledgeSet,
+            items: items
+              .filter((item) => item.status === 'applied')
+              .map((item) => ({
+                ...item,
+                currentPath: item.proposedPath ?? item.currentPath,
+                proposedPath: item.currentPath,
+                status: 'preview' as const,
+                selected: true,
+              })),
+          },
+          summary: { moved: appliedCount, skipped: skippedCount, failed: failedCount },
+          items: toActivityItems(items),
+        }
+        await recordActivityRun(run)
+        const existing = activityCache.findIndex((entry) => entry.runId === runId)
+        if (existing >= 0) activityCache[existing] = run
+        else activityCache.unshift(run)
+        return { items, appliedCount, skippedCount, failedCount }
+      }
+      const watchExecution = request.executionMode === 'watch'
+      let progressCursor = 0
+      const executed = await executeGuardedPlan(request.plan.items.map(fromPlanItem), {
+        canWrite,
+        loadHandle,
+        ensurePermission: (handle) => ensurePermission(handle as FileSystemDirectoryHandle, 'readwrite'),
+        transfer: (handle, fromRelative, toRelative, allowCreateFolders) =>
+          moveOrRenameFile(handle as FileSystemDirectoryHandle, fromRelative, toRelative, allowCreateFolders),
+        onJournal: async (snapshot) => {
+          if (watchExecution && snapshot.phase === 'settled') {
+            for (let index = progressCursor; index < snapshot.items.length; index += 1) {
+              const webItem = snapshot.items[index]
+              if (webItem.skipReason === INTENT_NOTE || webItem.skipReason === UNCERTAIN_NOTE) continue
+              const settled =
+                webItem.status === 'applied' ||
+                webItem.status === 'failed' ||
+                (webItem.status === 'skipped' && webItem.skipReason !== INTENT_NOTE)
+              if (!settled) continue
+              const event: PlanExecutionProgressEvent = {
+                item: toPlanItem(webItem),
+                index,
+                total: snapshot.items.length,
+              }
+              for (const listener of planProgressListeners) listener(event)
+              progressCursor = index + 1
+            }
+          }
+          await publish(snapshot.items, new Date().toISOString())
+        },
+      })
+      if (!executed.ok) {
+        return { ok: false as const, error: executed.error }
+      }
+      const published = await publish(executed.items, new Date().toISOString())
+      const indexFailures: string[] = []
+      for (const sourceId of executed.affectedSourceIds) {
+        try {
+          const refreshed = await refreshSource(sourceId)
+          if (!refreshed) indexFailures.push(sourceId)
+        } catch {
+          indexFailures.push(sourceId)
+        }
+      }
+      const indexMessage =
+        indexFailures.length > 0
+          ? `File changes were kept. Index update failed for ${indexFailures.join(', ')}.`
+          : null
       const result: OrganisationExecutionResult = {
         simulated: false,
-        runId: `web-${Date.now().toString(36)}`,
-        runNumber: request.runNumber ?? 1,
-        completedAt,
-        message:
-          appliedCount > 0
-            ? `Confirmed ${appliedCount} action${appliedCount === 1 ? '' : 's'}`
+        runId,
+        runNumber,
+        completedAt: new Date().toISOString(),
+        message: [
+          published.appliedCount > 0
+            ? `Confirmed ${published.appliedCount} action${published.appliedCount === 1 ? '' : 's'}`
             : 'No actions applied',
+          indexMessage,
+        ]
+          .filter(Boolean)
+          .join(' '),
         knowledgeSet: request.plan.knowledgeSet,
-        appliedCount,
-        skippedCount,
-        failedCount,
-        items,
+        appliedCount: published.appliedCount,
+        skippedCount: published.skippedCount,
+        failedCount: published.failedCount,
+        items: published.items,
       }
-      const run: ActivityRun = {
-        runId: result.runId,
-        runNumber: result.runNumber,
-        startedAt: completedAt,
-        completedAt,
-        trigger: request.trigger ?? 'organise_documents',
-        plan: { knowledgeSet: request.plan.knowledgeSet, items },
-        inversePlan: {
-          knowledgeSet: request.plan.knowledgeSet,
-          items: items
-            .filter((item) => item.status === 'applied')
-            .map((item) => ({
-              ...item,
-              currentPath: item.proposedPath ?? item.currentPath,
-              proposedPath: item.currentPath,
-              status: 'preview',
-              selected: true,
-            })),
-        },
-        summary: { moved: appliedCount, skipped: skippedCount, failed: failedCount },
-        items: toActivityItems(items),
-      }
-      await recordActivityRun(run)
-      activityCache.unshift(run)
-      for (const source of await listSources()) await refreshSource(source.id)
       return { ok: true as const, result }
+    },
+    probeLocalModels: async () => {
+      const { probeLocalModelsBrowser } = await import('../lib/local-model-discovery.ts')
+      return probeLocalModelsBrowser()
     },
     getByokStatus: async () => ({
       connected: false,
@@ -1179,6 +1392,27 @@ export function installBrowserHost(): void {
     },
     exportActivity: async () => {
       throw new HostCapabilityError(HOST_ACTION_COPY.exportUnavailable)
+    },
+    listSavedPlans: async () => listSavedPlans(),
+    saveSavedPlan: async (draft) => {
+      if (draft.id) {
+        const existing = (await listSavedPlans()).find((plan) => plan.id === draft.id)
+        if (!existing) return { ok: false as const, error: { code: 'invalid_plan' as const, message: 'Saved Plan not found.' } }
+      }
+      const plan = await saveSavedPlanRecord(draft)
+      if (!plan) return { ok: false as const, error: { code: 'invalid_plan' as const, message: 'A saved Plan needs documents and plan items.' } }
+      return { ok: true as const, plan }
+    },
+    deleteSavedPlan: async (planId) => {
+      const existing = (await listSavedPlans()).some((plan) => plan.id === planId)
+      if (!existing) return { ok: false as const, error: { code: 'invalid_plan' as const, message: 'Saved Plan not found.' } }
+      await deleteSavedPlanRecord(planId)
+      return { ok: true as const, plans: await listSavedPlans() }
+    },
+    duplicateSavedPlan: async (planId) => {
+      const plan = await duplicateSavedPlanRecord(planId)
+      if (!plan) return { ok: false as const, error: { code: 'invalid_plan' as const, message: 'Saved Plan not found.' } }
+      return { ok: true as const, plan }
     },
     listWorkflows: async () => (await listWorkflows()).map(toWorkflow),
     saveWorkflow: async (draft) => {

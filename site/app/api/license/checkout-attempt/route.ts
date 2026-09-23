@@ -1,15 +1,13 @@
 import { isCheckoutPlan } from "@/lib/checkout";
 import { createActivationAttempt } from "@/lib/activation-attempt";
 import { clientIpFromRequest } from "@/lib/client-ip";
+import { rawCardRejection } from "@/lib/raw-card-guard";
 import { rejectIfCapabilityLimited, rejectIfRateLimited } from "@/lib/service-capability-guard";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const limited = await rejectIfCapabilityLimited("checkout");
-  if (limited) return limited;
-
   let body: Record<string, unknown> = {};
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -19,6 +17,12 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
+
+  const cardRejected = rawCardRejection({ body });
+  if (cardRejected) return cardRejected;
+
+  const limited = await rejectIfCapabilityLimited("checkout");
+  if (limited) return limited;
 
   const deviceId = typeof body.deviceId === "string" ? body.deviceId : "";
   const clientIp = clientIpFromRequest(request);

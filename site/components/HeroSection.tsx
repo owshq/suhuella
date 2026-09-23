@@ -22,45 +22,44 @@ type HeroSectionProps = {
   downloadHref?: string;
   downloadAvailable?: boolean;
   embedded?: boolean;
-  onClose?: () => void;
 };
 
 export function HeroSection({
-  downloadHref = "/download",
+  downloadHref,
   downloadAvailable = false,
   embedded = false,
-  onClose,
 }: HeroSectionProps) {
   const { locale, t } = useLocale();
   const { badge } = t.hero;
   const version = formatAppVersion();
+  const openLabel = getHeroOpenCta(locale);
 
   return (
     <section className="relative z-10 flex w-full flex-col items-start text-left">
-      <motion.div
-        custom={0}
-        initial={embedded ? false : "hidden"}
-        animate="visible"
-        variants={fadeUp}
-        className={embedded ? "mb-3" : "mb-6"}
-      >
-        <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full border border-white/60 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
-            <SuhuellaLogo className="h-5 w-5 text-slate-900" />
-            {badge.name}
+      {!embedded ? (
+        <motion.div
+          custom={0}
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          className="mb-6"
+        >
+          <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-full border border-white/60 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+              <SuhuellaLogo className="h-5 w-5 text-slate-900" />
+              {badge.name}
+            </span>
+            <span className="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden />
+            <span className="rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--brand-accent)]">
+              {version}
+            </span>
           </span>
-
-          <span className="hidden h-3 w-px bg-slate-300 sm:block" aria-hidden />
-
-          <span className="rounded-full bg-[color-mix(in_srgb,var(--brand-accent)_10%,transparent)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--brand-accent)]">
-            {version}
-          </span>
-        </span>
-      </motion.div>
+        </motion.div>
+      ) : null}
 
       <motion.h1
         custom={0.1}
-        initial="hidden"
+        initial={embedded ? false : "hidden"}
         animate="visible"
         variants={fadeUp}
         className={
@@ -74,40 +73,27 @@ export function HeroSection({
 
       <motion.p
         custom={0.2}
-        initial="hidden"
+        initial={embedded ? false : "hidden"}
         animate="visible"
         variants={fadeUp}
         className={
           embedded
-            ? "mt-3 max-w-lg text-sm font-normal leading-relaxed text-slate-600"
+            ? "mt-2 max-w-lg text-sm font-normal leading-relaxed text-slate-600"
             : "mt-6 max-w-lg text-base font-normal leading-relaxed text-slate-600 md:text-lg"
         }
       >
         {t.hero.subtitle}
       </motion.p>
 
-      <motion.div
-        custom={0.35}
-        initial="hidden"
-        animate="visible"
-        variants={fadeUp}
-        className={embedded ? "mt-5 flex flex-wrap items-center gap-2" : "mt-10 flex flex-wrap items-center gap-3"}
-      >
-        {downloadAvailable ? <DownloadCtaButton locale={locale} href={downloadHref} /> : null}
-        {embedded && onClose ? (
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex flex-col items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(15,23,42,0.55)] hover:bg-black"
-          >
-            <span>{getHeroOpenCta(locale)}</span>
-            <span className="text-[11px] font-medium text-white/70">
-              {locale === "es"
-                ? `La misma ${brand.displayName}, en el navegador.`
-                : `The same ${brand.displayName}, in the browser.`}
-            </span>
-          </button>
-        ) : (
+      {!embedded ? (
+        <motion.div
+          custom={0.35}
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          className="mt-10 flex flex-wrap items-center gap-3"
+        >
+          {downloadAvailable ? <DownloadCtaButton locale={locale} href={downloadHref} /> : null}
           <Link
             href="/home"
             className={
@@ -116,7 +102,7 @@ export function HeroSection({
                 : "inline-flex flex-col items-center justify-center rounded-full bg-slate-900 px-7 py-3.5 text-base font-bold text-white shadow-[0_10px_24px_-12px_rgba(15,23,42,0.55)] hover:bg-black md:px-9 md:py-4 md:text-lg"
             }
           >
-            <span>{getHeroOpenCta(locale)}</span>
+            <span>{openLabel}</span>
             <span
               className={
                 downloadAvailable
@@ -129,15 +115,15 @@ export function HeroSection({
                 : `The same ${brand.displayName}, in the browser.`}
             </span>
           </Link>
-        )}
-        <Link
-          href="/license"
-          className="inline-flex items-center justify-center rounded-full border border-white/70 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm backdrop-blur-sm hover:bg-white"
-        >
-          {locale === "es" ? "Ver planes" : "View plans"}
-        </Link>
-        {!embedded ? <LanguageSwitcher inline /> : null}
-      </motion.div>
+          <Link
+            href="/license"
+            className="inline-flex items-center justify-center rounded-full border border-white/70 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-sm backdrop-blur-sm hover:bg-white"
+          >
+            {locale === "es" ? "Ver planes" : "View plans"}
+          </Link>
+          <LanguageSwitcher inline />
+        </motion.div>
+      ) : null}
     </section>
   );
 }

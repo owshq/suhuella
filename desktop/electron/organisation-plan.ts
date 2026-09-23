@@ -134,13 +134,37 @@ function inversePlanFromActivityItems(items: ActivityItem[]): OrganisationPlan {
 }
 
 export function inversePlanFromActivityRun(run: ActivityRun): OrganisationPlan {
-  if (run.inversePlan && run.inversePlan.items.length > 0) {
-    return run.inversePlan
-  }
   if (run.plan && run.plan.items.some((item) => item.status === 'applied')) {
     return buildInverseOrganisationPlan(run.plan)
   }
   return inversePlanFromActivityItems(run.items)
+}
+
+/** Host undo must derive the inverse from recorded items — stored inversePlan is advisory only. */
+export function verifiedInversePlanFromMovedItems(items: ActivityItem[]): OrganisationPlan {
+  return inversePlanFromActivityItems(items.filter((item) => item.status === 'moved'))
+}
+
+export function inversePlanMatchesMovedItems(
+  plan: OrganisationPlan,
+  movedItems: ActivityItem[],
+): boolean {
+  const expected = verifiedInversePlanFromMovedItems(movedItems)
+  if (plan.items.length !== expected.items.length) return false
+  for (let index = 0; index < plan.items.length; index += 1) {
+    const actual = plan.items[index]!
+    const wanted = expected.items[index]!
+    if (actual.action !== wanted.action) return false
+    if (!samePath(actual.currentPath, wanted.currentPath)) return false
+    if (
+      !actual.proposedPath ||
+      !wanted.proposedPath ||
+      !samePath(actual.proposedPath, wanted.proposedPath)
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 export function filterInversePlan(

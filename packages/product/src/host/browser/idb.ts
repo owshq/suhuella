@@ -1,5 +1,5 @@
 const DB_NAME = "suhuella-web";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORE = {
   meta: "meta",
@@ -8,6 +8,7 @@ export const STORE = {
   files: "files",
   activity: "activity",
   workflows: "workflows",
+  plans: "plans",
   handles: "handles",
 } as const;
 
