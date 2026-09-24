@@ -1,7 +1,7 @@
 {
   "version": "0.1.0-pre-rc",
   "channel": "stable",
-  "mandatory": false,
+  "mandatory": true,
   "downloads": {
     "web": {
       "available": true,
@@ -10,19 +10,19 @@
     "mac": {
       "available": true,
       "url": "https://download.suhuella.com/latest/mac",
-      "sha256": "749c4c39642fd5decf83727d77bb3fbfc3356daa0b9040e9de0a104188480412",
-      "filename": "SuHuella-0.1.0-pre-rc-749c4c39642f.dmg",
-      "size": 145764768
+      "sha256": "3e29308155745cd51c3ef5b176a577685308b58f94fdb4644c312f6edecc2504",
+      "filename": "SuHuella-0.1.0-pre-rc-3e2930815574.dmg",
+      "size": 146272363
     },
     "windows": {
       "available": true,
       "url": "https://download.suhuella.com/latest/win",
-      "sha256": "15f27916c4d2fa7bdb408931fc6538806f15114594fe5c19a4c54e9772761106",
+      "sha256": "82ce7a66660901ce65799cd7048bfa4aafaaaed8c74e8e19cef97bf153a97dc0",
       "filename": "SuHuella-0.1.0-pre-rc.exe",
-      "size": 233207713
+      "size": 233215513
     }
   },
   "minimumVersion": "0.1.0-pre-rc",
   "releaseDate": "2026-09-19",
-  "notes": ""
+  "notes": "Improved offline license verification. Install over your current version — your license is unchanged."
 }

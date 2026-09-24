@@ -1,6 +1,9 @@
 const GENERIC_DEVICE_NAME =
   /^(this mac|this pc|this computer|this browser|device|mac|pc|computer)$/i
 
+/** Legacy duplicate of IDB meta.device — read once for migration, never write. */
+export const LEGACY_BROWSER_COMPUTER_NAME_KEY = 'suhuella-browser-computer-name'
+
 export function isGenericDeviceName(name: string | null | undefined): boolean {
   if (!name?.trim()) return true
   return GENERIC_DEVICE_NAME.test(name.trim())
@@ -25,15 +28,25 @@ function platformKind(): 'Mac' | 'Windows' | 'Linux' | 'Device' {
   return 'Device'
 }
 
+export function readLegacyBrowserComputerName(): string | null {
+  if (typeof localStorage === 'undefined') return null
+  const persisted = localStorage.getItem(LEGACY_BROWSER_COMPUTER_NAME_KEY)?.trim()
+  if (!persisted || isGenericDeviceName(persisted)) return null
+  return persisted
+}
+
+export function clearLegacyBrowserComputerName(): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.removeItem(LEGACY_BROWSER_COMPUTER_NAME_KEY)
+}
+
 /** Browser cannot read the OS computer name — use a stable, human label instead of "This Mac". */
 export function getBrowserComputerName(storedName?: string | null): string {
   const custom = storedName?.trim()
   if (custom && !isGenericDeviceName(custom)) return custom
 
-  if (typeof localStorage !== 'undefined') {
-    const persisted = localStorage.getItem('suhuella-browser-computer-name')?.trim()
-    if (persisted && !isGenericDeviceName(persisted)) return persisted
-  }
+  const legacy = readLegacyBrowserComputerName()
+  if (legacy) return legacy
 
   const platform = platformKind()
   if (platform === 'Mac') return `${browserKind()} on Mac`
@@ -42,10 +55,9 @@ export function getBrowserComputerName(storedName?: string | null): string {
   return `${browserKind()} preview`
 }
 
-export function persistBrowserComputerName(name: string): void {
-  const trimmed = name.trim()
-  if (!trimmed || typeof localStorage === 'undefined') return
-  localStorage.setItem('suhuella-browser-computer-name', trimmed)
+/** Device name lives in IndexedDB meta.device — drop legacy localStorage duplicate. */
+export function persistBrowserComputerName(_name: string): void {
+  clearLegacyBrowserComputerName()
 }
 
 export function upgradeGenericDeviceName(name: string | null | undefined): string {

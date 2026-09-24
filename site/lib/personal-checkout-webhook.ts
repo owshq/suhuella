@@ -1,6 +1,11 @@
 import { businessService } from "./business-service.ts";
 import type { StripeWebhookEvent } from "./business-webhooks.ts";
-import { reconcilePaidCheckoutSession, rememberStripeEvent, stripeEventAlreadyHandled } from "./checkout-reconciliation.ts";
+import { reconcilePaidCheckoutSession } from "./checkout-reconciliation.ts";
+import {
+  beginStripeEventProcessing,
+  completeStripeEventProcessing,
+  failStripeEventProcessing,
+} from "./stripe-event-processing.ts";
 import { normalizeLicenseGrant } from "./license-entitlement.ts";
 import { listDurableGrants, upsertStoredGrant } from "./license-store.ts";
 
@@ -240,13 +245,19 @@ export async function applyPersonalStripeWebhook(
   input: { secretKey: string; origin?: string },
 ): Promise<PersonalWebhookResult> {
   const eventId = event.id?.trim() ?? "";
-  if (eventId && (await stripeEventAlreadyHandled(eventId))) {
-    return { ok: true, fulfilled: false };
-  }
+  if (!eventId) return { ok: false, error: "server_error" };
+
+  const begun = await beginStripeEventProcessing(eventId, "personal");
+  if (begun.action === "duplicate") return { ok: true, fulfilled: false };
+  if (begun.action === "busy") return { ok: true, fulfilled: false };
+
   const result = isPersonalCheckoutEvent(event)
     ? await applyPersonalCheckoutWebhook(event, input)
     : await applyPersonalSubscriptionWebhook(event, input);
-  if (!result.ok) return result;
-  if (eventId) await rememberStripeEvent(eventId);
+  if (!result.ok) {
+    await failStripeEventProcessing(eventId, result.error);
+    return result;
+  }
+  await completeStripeEventProcessing(eventId);
   return result;
 }

@@ -4,6 +4,7 @@ import {
 } from "@/lib/partners/applicant-session";
 import { createPartnerCheckoutSession } from "@/lib/partners/checkout";
 import { rejectClientAuthorityFields } from "@/lib/partners/http-actor";
+import { rawCardRejection } from "@/lib/raw-card-guard";
 import {
   isPlatformPublicPartnerApiHost,
   platformPublicPartnerApiDeniedResponse,
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
   } catch {
     body = {};
   }
+  const cardRejected = rawCardRejection({ body });
+  if (cardRejected) return cardRejected;
   if (rejectClientAuthorityFields(body) || body.origin != null || body.price != null || body.amount != null || body.priceId != null) {
     return json({ ok: false, error: "invalid_request" }, 400);
   }

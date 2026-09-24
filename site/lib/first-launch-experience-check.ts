@@ -45,8 +45,11 @@ export function runFirstLaunchExperienceCheck(): void {
     path.join(root, "packages/product/src/components/OrganisePanel.tsx"),
     "utf8",
   );
-  assert(organise.includes("PLAN_PROMPT_EXAMPLES"), "empty Plan Mode offers prompt examples instead of a Connect banner");
-  assert(organise.includes("ORGANISE_EMPTY_PLAN_PROMISE"), "empty Organise states the Plan-before-confirm promise");
+  assert(organise.includes("PLAN_PROMPT_ACTIONS"), "empty Plan Mode offers Prepare Plan actions instead of a Connect banner");
+  assert(
+    organise.includes("PLAN_COMPOSER_PLACEHOLDER") || organise.includes("ORGANISE_EMPTY_PLAN_PROMISE"),
+    "empty Organise states the Plan-before-confirm promise",
+  );
   assert(organise.includes("useSourceScope"), "source selection can organise a whole source without per-file clicks");
   assert(organise.includes("ORGANISE_TRUST_LINE"), "selected scope says nothing moves until confirm");
   assert(organise.includes("workflows.length > 0"), "Use workflow stays behind saved workflows");

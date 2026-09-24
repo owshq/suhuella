@@ -12,7 +12,11 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function runSettingsTabsCheck(): void {
   assert(DEFAULT_SETTINGS_TAB === "general", "Settings opens on General");
-  assert(SETTINGS_TAB_IDS.join(",") === "general,ai,license,support", "Settings has four tabs");
+  assert(
+    SETTINGS_TAB_IDS.join(",") === "general,permissions,ai,license,support",
+    "Settings has general, permissions, ai, license, support",
+  );
+  assert(resolveSettingsTab("permissions") === "permissions", "Permissions stays a current tab");
   assert(resolveSettingsTab("") === "general", "empty prefs falls back to General");
   assert(resolveSettingsTab("unknown") === "general", "unknown prefs falls back to General");
   assert(resolveSettingsTab("license") === "license", "License stays a current tab");
@@ -39,7 +43,7 @@ function runSettingsTabsCheck(): void {
     join(process.cwd(), "../packages/product/src/components/PreferencesPanel.tsx"),
     "utf8",
   );
-  assert(panel.includes("SETTINGS_TAB_IDS.map"), "Settings nav renders the four current tabs");
+  assert(panel.includes("SETTINGS_TAB_IDS.map"), "Settings nav renders the current tabs");
   assert(panel.includes("<PrivacySection"), "Privacy lives in General");
   assert(panel.includes("caps.notifications"), "Notifications are desktop-only in General");
   assert(panel.includes("<NotificationsSection"), "Notifications live in General");

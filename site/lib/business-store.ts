@@ -40,6 +40,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
 
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 function storePath(): string | null {
   const configured = process.env.BUSINESS_STORE_PATH?.trim();
   if (configured) return configured;
@@ -200,6 +204,9 @@ function emptyStore(): BusinessStoreShape {
 }
 
 function defaultLoad(): BusinessStoreShape {
+  if (isProductionRuntime()) {
+    return emptyBusinessStoreShape();
+  }
   const filePath = storePath();
   const fs = nodeFs();
   if (!filePath || !fs?.existsSync(filePath)) {

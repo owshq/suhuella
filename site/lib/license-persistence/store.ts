@@ -409,6 +409,130 @@ async function createD1Store(db: any): Promise<LicensePersistenceStore> {
 
       return document;
     },
+    claimStripeEvent: async (eventId: string) => {
+      const id = eventId.trim();
+      if (!id) return false;
+      try {
+        const result = await db
+          .prepare(`INSERT OR IGNORE INTO stripe_event (event_id, processed_at) VALUES (?, ?)`)
+          .bind(id, new Date().toISOString())
+          .run();
+        return (result.meta?.changes ?? 0) > 0;
+      } catch {
+        return false;
+      }
+    },
+    isStripeEventHandlerReady: async () => {
+      try {
+        const row = await db
+          .prepare(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'stripe_event_handler' LIMIT 1`,
+          )
+          .first();
+        return Boolean(row);
+      } catch {
+        return false;
+      }
+    },
+    readStripeEventHandlerStatus: async (eventId: string) => {
+      try {
+        const row = (await db
+          .prepare(`SELECT status FROM stripe_event_handler WHERE event_id = ?`)
+          .bind(eventId.trim())
+          .first()) as { status?: string } | null;
+        if (
+          row?.status === "processing" ||
+          row?.status === "completed" ||
+          row?.status === "retryable"
+        ) {
+          return row.status;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    },
+    beginStripeEventHandler: async (eventId: string, handler: string, leaseMs: number) => {
+      const id = eventId.trim();
+      if (!id) return { action: "busy" as const };
+      const now = new Date().toISOString();
+      const leaseExpiresAt = new Date(Date.now() + leaseMs).toISOString();
+      try {
+        const inserted = await db
+          .prepare(
+            `INSERT OR IGNORE INTO stripe_event_handler
+             (event_id, handler, status, lease_expires_at, last_error, processed_at, updated_at)
+             VALUES (?, ?, 'processing', ?, NULL, NULL, ?)`,
+          )
+          .bind(id, handler, leaseExpiresAt, now)
+          .run();
+        if ((inserted.meta?.changes ?? 0) > 0) return { action: "process" as const };
+
+        const row = (await db
+          .prepare(
+            `SELECT status, lease_expires_at FROM stripe_event_handler WHERE event_id = ?`,
+          )
+          .bind(id)
+          .first()) as { status?: string; lease_expires_at?: string | null } | null;
+        if (!row) return { action: "busy" as const };
+        if (row.status === "completed") return { action: "duplicate" as const };
+        const leaseAlive =
+          row.status === "processing" &&
+          row.lease_expires_at &&
+          Date.parse(row.lease_expires_at) > Date.now();
+        if (leaseAlive) return { action: "busy" as const };
+
+        await db
+          .prepare(
+            `UPDATE stripe_event_handler
+             SET handler = ?, status = 'processing', lease_expires_at = ?, last_error = NULL, updated_at = ?
+             WHERE event_id = ?`,
+          )
+          .bind(handler, leaseExpiresAt, now, id)
+          .run();
+        return { action: "process" as const };
+      } catch {
+        return { action: "busy" as const };
+      }
+    },
+    completeStripeEventHandler: async (eventId: string) => {
+      const id = eventId.trim();
+      if (!id) return;
+      const now = new Date().toISOString();
+      try {
+        await db
+          .prepare(
+            `UPDATE stripe_event_handler
+             SET status = 'completed', lease_expires_at = NULL, processed_at = ?, updated_at = ?
+             WHERE event_id = ?`,
+          )
+          .bind(now, now, id)
+          .run();
+        await db
+          .prepare(`INSERT OR IGNORE INTO stripe_event (event_id, processed_at) VALUES (?, ?)`)
+          .bind(id, now)
+          .run();
+      } catch {
+        /* table may be absent on older deployments */
+      }
+    },
+    failStripeEventHandler: async (eventId: string, error: string) => {
+      const id = eventId.trim();
+      if (!id) return;
+      const now = new Date().toISOString();
+      try {
+        await db
+          .prepare(
+            `UPDATE stripe_event_handler
+             SET status = 'retryable', lease_expires_at = NULL, last_error = ?, updated_at = ?
+             WHERE event_id = ?`,
+          )
+          .bind(error.slice(0, 500), now, id)
+          .run();
+      } catch {
+        /* table may be absent */
+      }
+    },
     write: async (next) => {
       await db.batch([
         db.prepare(`DELETE FROM license_activation`),

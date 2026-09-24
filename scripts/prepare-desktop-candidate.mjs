@@ -15,6 +15,10 @@ import { sha256File, formatSha256Sidecar } from "./release-artifact-sha256.mjs";
 import { detectMacCodesignState } from "./mac-codesign-detect.mjs";
 import { buildDistributionRecord } from "./commercial-signing.mjs";
 import { assertLicenseVerifyPublicKeysEnv } from "../desktop/scripts/license-verify-public-keys.mjs";
+import {
+  describeLicenseKeyProvenance,
+  formatLicenseKeyProvenanceSummary,
+} from "../desktop/scripts/license-key-provenance.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const desktopRoot = path.join(root, "desktop");
@@ -38,8 +42,8 @@ function run(cmd, args, cwd = root) {
   if (result.status !== 0) fail(`${cmd} ${args.join(" ")} failed (${result.status})`);
 }
 
-function loadVerifyKeysFromDevVars() {
-  if (process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim()) return;
+function loadVerifyKeysFromDevVars(force = false) {
+  if (!force && process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS?.trim()) return;
   const devVarsPath = path.join(root, "site/.dev.vars");
   let content = "";
   try {
@@ -63,7 +67,19 @@ function loadVerifyKeysFromDevVars() {
 async function prepareMac() {
   if (process.platform !== "darwin") fail("Mac candidate must be built on macOS (npm run package:mac --prefix desktop).");
 
-  if (fromDevVars) loadVerifyKeysFromDevVars();
+  if (fromDevVars) loadVerifyKeysFromDevVars(true);
+  else {
+    const keypairPath = path.join(desktopRoot, ".build", brandId, "LICENSE-PRODUCTION-KEYPAIR.json");
+    try {
+      const keypair = JSON.parse(readFileSync(keypairPath, "utf8"));
+      if (keypair.publicKeySpkiBase64?.trim()) {
+        process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS = keypair.publicKeySpkiBase64.trim();
+        console.log(`[candidate] SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS loaded from ${keypairPath}`);
+      }
+    } catch {
+      // optional — operator may set env explicitly
+    }
+  }
   assertLicenseVerifyPublicKeysEnv({ requireDesktop: true });
 
   if (!skipPackage) {
@@ -93,6 +109,7 @@ async function prepareMac() {
   const sidecarPath = `${dmgPath}.sha256`;
   writeFileSync(sidecarPath, formatSha256Sidecar(sha256, path.basename(dmgPath)), "utf8");
 
+  const licenseKeys = describeLicenseKeyProvenance();
   const report = {
     status: "candidate-ready-not-published",
     platform: "mac",
@@ -103,11 +120,19 @@ async function prepareMac() {
     sha256,
     sidecar: sidecarPath,
     distribution: buildDistributionRecord(version, { mac: macSigning }),
-    validation: "PreRcReleaseValidation PASS — publish allowed on pre-rc channel",
+    licenseKeys,
+    validation: licenseKeys.productionCompatible
+      ? "PreRcReleaseValidation PASS — partial technical validation (production SPKI)"
+      : "PreRcReleaseValidation PASS — partial technical validation only (not production license compatible)",
     notes: [
       "Not published — release.json / download aliases unchanged",
+      "PreRcReleaseValidation PASS = integrity + embed, not install/launch/Plan Mode approval",
+      licenseKeys.ephemeral
+        ? "Ephemeral license keys — cannot activate against production Worker"
+        : licenseKeys.productionCompatible
+          ? "Production SPKI embedded — ready for gift/test activation smoke before publish"
+          : "License keys present but not confirmed production-compatible",
       "Gatekeeper/SmartScreen warnings are expected and do not block pre-rc publish",
-      "Optional operator smoke: install path, launch, license, Plan Mode on any test machine",
     ],
   };
 
@@ -126,7 +151,8 @@ async function prepareWindowsValidateOnly() {
   run(process.execPath, ["scripts/validate-release.mjs", "--platform", "windows"], root);
   console.log("");
   console.log("Windows candidate validation complete (artifact must come from windows-latest CI package:win).");
-  console.log("Pre-rc publish allowed — SmartScreen warning expected, not a gate");
+  console.log(formatLicenseKeyProvenanceSummary(describeLicenseKeyProvenance()));
+  console.log("PreRcReleaseValidation = partial technical validation — SmartScreen warning expected, not a gate");
 }
 
 async function main() {

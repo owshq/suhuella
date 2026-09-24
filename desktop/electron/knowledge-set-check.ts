@@ -73,6 +73,12 @@ function runOrganiseUxSourceChecks(): void {
   if (!/PlanLocalModelPicker/.test(organise) || !/PLAN_MODEL_MANUAL_TOGGLE/.test(planLocalModelPicker)) {
     throw new Error('Plan Mode composes local model discovery inline')
   }
+  if (!/PLAN_MODEL_HELP_LABEL/.test(planLocalModelPicker) || !/role=\"menu\"/.test(planLocalModelPicker)) {
+    throw new Error('Plan Mode keeps local model help in a compact context menu')
+  }
+  if (!/PLAN_PROMPT_PLACEHOLDER/.test(organise)) {
+    throw new Error('Plan Mode composer placeholder includes Plan-before-confirm')
+  }
   if (!/resolvePlanComposerScope/.test(organise) || !/planCandidateInlineAction/.test(editor)) {
     throw new Error('Plan Mode wires candidate sources without sourceId')
   }

@@ -240,7 +240,7 @@ async function run(): Promise<void> {
 
   const wrangler = readFileSync(path.join(siteRoot, "wrangler.jsonc"), "utf8");
   assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout flag stays false");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout flag is enabled in wrangler");
   assert(isPartnerCheckoutPubliclyEnabled() === false, "partner checkout is not public");
 
   const checkoutRoute = readFileSync(path.join(siteRoot, "app/api/partners/checkout/route.ts"), "utf8");

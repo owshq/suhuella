@@ -1,5 +1,6 @@
 import { createLifetimeUpgradeCheckoutSession } from "@/lib/lifetime-upgrade/checkout-session";
 import { isCheckoutReturnTo } from "@/lib/checkout";
+import { rawCardRejection } from "@/lib/raw-card-guard";
 import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ export async function POST(request: NextRequest) {
   } catch {
     body = {};
   }
+  const cardRejected = rawCardRejection({ body });
+  if (cardRejected) return cardRejected;
 
   if (
     body.origin != null ||

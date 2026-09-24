@@ -1,5 +1,8 @@
 import type { KnowledgeSetItem, SearchHit } from '../types.ts'
+import { PLAN_COMPOSER_PLACEHOLDER as PLAN_PROMPT_PLACEHOLDER } from './organise-copy.ts'
 import { knowledgePathFromHitPath, sourceNameFromHit } from './plan-source.ts'
+
+export { PLAN_PROMPT_PLACEHOLDER }
 
 const STOP_WORDS = new Set([
   'the',
@@ -55,8 +58,6 @@ const STOP_WORDS = new Set([
 export const PLAN_SCOPE_UNRESOLVED =
   'Nothing matched in the sources SuHuella can see. Open Sources to choose scope.'
 
-export const PLAN_PROMPT_PLACEHOLDER = 'What should happen?'
-
 export const PLAN_VOICE_LABEL = 'Record voice'
 export const PLAN_VOICE_STOP_LABEL = 'Stop voice'
 export const PLAN_VOICE_UNAVAILABLE = 'Voice is not available here.'
@@ -76,6 +77,7 @@ export const PLAN_MODEL_LOCAL_REQUIRED = 'Connect a local model in Settings → 
 export const PLAN_MODEL_DESKTOP_ONLY = 'Local models connect in the desktop app (Settings → AI).'
 export const PLAN_MODEL_SETTINGS_HINT = 'Add or scan local models in Settings → AI.'
 export const PLAN_MODEL_MANUAL_TOGGLE = 'Connect manually'
+export const PLAN_MODEL_HELP_LABEL = 'Local model help'
 
 export type PlanAssistantPreference = 'on_device' | 'local'
 
@@ -85,11 +87,6 @@ export const PLAN_DUPLICATE_LABEL = 'Duplicate'
 export const PLAN_DELETE_RECORD_LABEL = 'Delete plan'
 export const PLAN_RUN_LABEL = 'Run'
 export const PLAN_PREPARE_LABEL = 'Prepare Plan'
-
-export const PLAN_PROMPT_EXAMPLES = [
-  'Move invoices in dev-data',
-  'Create a folder for project X',
-] as const
 
 function quotedScopeParts(note: string): string[] {
   return [...note.matchAll(/"([^"]+)"|'([^']+)'/g)]
@@ -220,6 +217,9 @@ export function runPlanScopeChecks(): void {
   }
   if (planScopeSearchText('move the files') !== '') {
     throw new Error('a prompt with only verbs does not invent a scope')
+  }
+  if (!PLAN_PROMPT_PLACEHOLDER.includes('What should happen') || !/confirm/i.test(PLAN_PROMPT_PLACEHOLDER)) {
+    throw new Error('composer placeholder states Plan-before-confirm')
   }
   const quoted = planScopeSearchText('plan "Facturas 2024"')
   if (quoted !== 'Facturas 2024') throw new Error('quoted scope is used as written')

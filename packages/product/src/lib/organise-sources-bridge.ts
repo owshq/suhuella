@@ -2,6 +2,7 @@ import { normalizeBrowsePath } from './source-browse.ts'
 import type { KnowledgeSetItem } from '../types.ts'
 
 export const PENDING_ORGANISE_KEY = 'suhuella-pending-organise'
+export const PENDING_ORGANISE_MAX_AGE_MS = 30 * 60 * 1000
 
 export const ORGANISE_THIS_FOLDER = 'Plan this folder'
 export const ORGANISE_THESE_FILES = 'Plan these files'
@@ -71,14 +72,34 @@ export function writePendingOrganiseContext(context: PendingOrganiseContext): vo
   }
 }
 
+function clearPendingOrganiseContext(): void {
+  try {
+    sessionStorage.removeItem(PENDING_ORGANISE_KEY)
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function isPendingOrganiseContextExpired(context: PendingOrganiseContext, now = Date.now()): boolean {
+  return now - context.createdAt > PENDING_ORGANISE_MAX_AGE_MS
+}
+
 export function readPendingOrganiseContext(): PendingOrganiseContext | null {
   try {
     const raw = sessionStorage.getItem(PENDING_ORGANISE_KEY)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
-    if (!isPendingOrganiseContext(parsed)) return null
+    if (!isPendingOrganiseContext(parsed)) {
+      clearPendingOrganiseContext()
+      return null
+    }
+    if (isPendingOrganiseContextExpired(parsed)) {
+      clearPendingOrganiseContext()
+      return null
+    }
     return parsed
   } catch {
+    clearPendingOrganiseContext()
     return null
   }
 }
@@ -86,11 +107,7 @@ export function readPendingOrganiseContext(): PendingOrganiseContext | null {
 export function consumePendingOrganiseContext(): PendingOrganiseContext | null {
   const pending = readPendingOrganiseContext()
   if (!pending) return null
-  try {
-    sessionStorage.removeItem(PENDING_ORGANISE_KEY)
-  } catch {
-    // ignore storage failures
-  }
+  clearPendingOrganiseContext()
   return pending
 }
 

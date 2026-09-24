@@ -105,8 +105,8 @@ export function printCommercialSigningSkipped(platformLabel) {
 export function assertCommercialSigningEnabledForPublish() {
   if (!isCommercialSigningDeferred()) return;
   if (isPreRcUnsignedPublishChannel()) {
-    console.log("Pre-RC unsigned publish channel — commercial code signing not required.");
-    console.log("License Ed25519 public keys are still required at desktop build time.");
+    console.log("Pre-RC unsigned publish channel — commercial code signing not required (no Developer ID / Authenticode purchase).");
+    console.log("License Ed25519 public keys are still required at desktop build time — separate from Apple/Microsoft signing.");
     console.log("Artifacts are adhoc/unsigned; Gatekeeper and SmartScreen warnings are expected and do not block pre-rc publish.");
     console.log("See docs/governance/PRE-RC-RELEASE-SEMANTICS.md");
     return;

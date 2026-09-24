@@ -47,6 +47,7 @@ type RouteOverlayShellProps = {
   release: ReleaseManifest | null;
   installerUrls: { windows: string; mac: string };
   paidCheckoutEnabled: boolean;
+  businessCheckoutEnabled: boolean;
   desktopDownloadAvailable: boolean;
 };
 
@@ -68,6 +69,7 @@ export function RouteOverlayShell({
   release,
   installerUrls,
   paidCheckoutEnabled,
+  businessCheckoutEnabled,
   desktopDownloadAvailable,
 }: RouteOverlayShellProps) {
   const pathname = usePathname();
@@ -116,6 +118,7 @@ export function RouteOverlayShell({
                 embedded
                 desktopDownloadAvailable={desktopDownloadAvailable}
                 paidCheckoutEnabled={paidCheckoutEnabled}
+                businessCheckoutEnabled={businessCheckoutEnabled}
                 onClose={closeOverlay}
               />
             </Suspense>

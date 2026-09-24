@@ -1,7 +1,10 @@
 import { getBusinessPricingConfig, monthlyAmountCents } from "../business-config.ts";
 import { businessService } from "../business-service.ts";
-import { isPaidCheckoutPubliclyEnabled, stripeSecretAllowedForOrigin } from "../paid-checkout.ts";
-import { configuredPriceId, loadCatalogPrice, STRIPE_CATALOG } from "../stripe-catalog.ts";
+import { isBusinessCheckoutPubliclyEnabled } from "./checkout-gate.ts";
+import { stripeSecretAllowedForOrigin } from "../paid-checkout.ts";
+import { configuredPriceId, loadCatalogPrice } from "../stripe-catalog.ts";
+
+export { isBusinessCheckoutPubliclyEnabled, isBusinessCheckoutGateEnabled } from "./checkout-gate.ts";
 import {
   assertSuhuellaLiveStripeAccount,
   BUSINESS_PLAN_ID,
@@ -31,15 +34,6 @@ function formBody(fields: Record<string, string>): string {
   return Object.entries(fields)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join("&");
-}
-
-/** Public Business checkout runs only when catalog, brand, and PAID_CHECKOUT_ENABLED are on. */
-export function isBusinessCheckoutPubliclyEnabled(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  if (!STRIPE_CATALOG.business.checkoutEnabled) return false;
-  if (!isPaidCheckoutPubliclyEnabled(env)) return false;
-  return Boolean(configuredPriceId("business"));
 }
 
 export function validateBusinessSeatQuantity(value: unknown): BusinessSeatValidation {

@@ -4,7 +4,6 @@ import { brand } from "@suhuella/brand";
 import {
   commercialPlanCards,
   checkoutPath,
-  licenseJourneySteps,
   paidCheckoutClosedMessage,
   paidPlanUnavailableCta,
   unavailablePlanMessage,
@@ -20,11 +19,13 @@ import { SiteFooter } from "@/components/SiteFooter";
 export function LicensePlansPage({
   desktopDownloadAvailable = false,
   paidCheckoutEnabled = false,
+  businessCheckoutEnabled = false,
   embedded = false,
   onClose,
 }: {
   desktopDownloadAvailable?: boolean;
   paidCheckoutEnabled?: boolean;
+  businessCheckoutEnabled?: boolean;
   embedded?: boolean;
   onClose?: () => void;
 }) {
@@ -34,16 +35,26 @@ export function LicensePlansPage({
   const unavailablePlan = searchParams.get("plan") ?? "";
   const appLocale = locale === "es" ? "es" : "en";
   const plans = commercialPlanCards("free", "public", appLocale);
-  const journey = licenseJourneySteps(appLocale);
 
+  const paidClosedNote =
+    locale === "es"
+      ? " Los planes de pago aún no están disponibles."
+      : " Paid plans are not available yet.";
+  const desktopNote = desktopDownloadAvailable
+    ? locale === "es"
+      ? " Puedes descargar la app de escritorio."
+      : " You can download the desktop app."
+    : locale === "es"
+      ? " La app de escritorio aún no se puede descargar."
+      : " The desktop app is not available to download yet.";
   const intro =
     locale === "es"
-      ? paidCheckoutEnabled
-        ? `Puedes abrir ${brand.displayName} en este navegador ahora. La app de escritorio aún no se puede descargar.`
-        : `Puedes abrir ${brand.displayName} en este navegador ahora. Los planes de pago aún no están disponibles. La app de escritorio aún no se puede descargar.`
-      : paidCheckoutEnabled
-        ? `You can open ${brand.displayName} in this browser now. The desktop app is not available to download yet.`
-        : `You can open ${brand.displayName} in this browser now. Paid plans are not available yet. The desktop app is not available to download yet.`;
+      ? `Puedes abrir ${brand.displayName} en este navegador ahora.${
+          paidCheckoutEnabled ? "" : paidClosedNote
+        }${desktopNote}`
+      : `You can open ${brand.displayName} in this browser now.${
+          paidCheckoutEnabled ? "" : paidClosedNote
+        }${desktopNote}`;
 
   const planHref = (planId: string) => {
     const personalPaid = planId === "lifetime" || planId === "monthly";
@@ -51,7 +62,7 @@ export function LicensePlansPage({
       if (embedded && onClose) return null;
       return desktopDownloadAvailable ? "/download" : "/home";
     }
-    if (planId === "business" && paidCheckoutEnabled) {
+    if (planId === "business" && businessCheckoutEnabled) {
       return checkoutPath("business", { returnTo: "public" });
     }
     if (personalPaid && paidCheckoutEnabled) {
@@ -98,24 +109,14 @@ export function LicensePlansPage({
       ) : null}
 
       <p className={`rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm leading-relaxed text-slate-700 ${embedded ? "mt-4" : "mt-6"}`}>
-        {locale === "es"
-          ? "Antes de comprar: la licencia se activa en SuHuella Web. Los instaladores de escritorio pueden mostrar avisos de Windows o macOS porque aún no están firmados ni notarizados. Puedes continuar la instalación, o usar SuHuella en este navegador."
-          : "Before you buy: the license activates in SuHuella Web. Desktop installers may show Windows or macOS warnings because they are not signed or notarized yet. You can continue the install, or use SuHuella in this browser."}
+        {embedded
+          ? locale === "es"
+            ? "Antes de comprar: tras el pago, activa este dispositivo en Ajustes → Licencia con el código OTP del email. El mismo flujo funciona en web y en escritorio."
+            : "Before you buy: after payment, activate this device in Settings → License with the email OTP code. The same flow works on web and desktop."
+          : locale === "es"
+            ? "Antes de comprar: tras el pago, activa el dispositivo en Ajustes → Licencia con el código OTP del email — en web o en la app de escritorio. Los instaladores pueden mostrar avisos de Windows o macOS porque aún no están firmados ni notarizados."
+            : "Before you buy: after payment, activate the device in Settings → License with the email OTP code — in the browser or the desktop app. Installers may show Windows or macOS warnings because they are not signed or notarized yet."}
       </p>
-
-      <GlassCard className={embedded ? "mt-4 p-5" : "mt-8 p-5"}>
-        <h2 className="text-base font-semibold text-slate-900">
-          {locale === "es" ? "Cómo encaja la licencia" : "How licensing fits together"}
-        </h2>
-        <ol className="mt-3 space-y-3 text-sm leading-relaxed text-slate-600">
-          {journey.map((step) => (
-            <li key={step.id}>
-              <span className="font-semibold text-slate-900">{step.title}. </span>
-              {step.detail}
-            </li>
-          ))}
-        </ol>
-      </GlassCard>
 
       <div className={`grid gap-3 sm:grid-cols-2 ${embedded ? "mt-4" : "mt-6"}`}>
         {plans.map((plan) => {
@@ -123,7 +124,13 @@ export function LicensePlansPage({
           const paidPlan = personalPaid || plan.id === "business";
           const href = planHref(plan.id);
           const unavailable = paidPlan && !paidCheckoutEnabled;
-          const label = unavailable ? paidPlanUnavailableCta(appLocale) : plan.cta;
+          const label = unavailable
+            ? paidPlanUnavailableCta(appLocale)
+            : plan.id === "free" && desktopDownloadAvailable && !embedded
+              ? locale === "es"
+                ? "Descargar"
+                : "Download"
+              : plan.cta;
 
           return (
             <GlassCard key={plan.id} className="p-5">
@@ -160,20 +167,6 @@ export function LicensePlansPage({
             </GlassCard>
           );
         })}
-        <GlassCard className="p-5 sm:col-span-2">
-          <p className="text-sm font-semibold text-slate-900">Partner</p>
-          <p className="mt-1 text-sm leading-relaxed text-slate-500">
-            {locale === "es"
-              ? "Publica SuHuella con tu marca y tu dominio. La cuota anual es un programa aparte: no es Lifetime, Monthly ni Business."
-              : "Publish SuHuella under your brand and domain. The annual fee is a separate program: not Lifetime, Monthly, or Business."}
-          </p>
-          <Link
-            href="/partners"
-            className="mt-4 inline-flex rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            {locale === "es" ? "Ver programa partner" : "View partner program"}
-          </Link>
-        </GlassCard>
       </div>
 
       <GlassCard className={embedded ? "mt-4 p-5" : "mt-8 p-5"}>
@@ -181,9 +174,13 @@ export function LicensePlansPage({
           {locale === "es" ? "¿Ya la has comprado?" : "Already purchased?"}
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
-          {locale === "es"
-            ? `El pago en Stripe no activa solo el dispositivo. Abre ${brand.displayName}, verifica tu email con el código OTP y activa este dispositivo en Ajustes → Licencia.`
-            : `Stripe payment alone does not activate this device. Open ${brand.displayName}, verify your email with the OTP code, and activate this device in Settings → License.`}
+          {embedded
+            ? locale === "es"
+              ? "El pago en Stripe no activa solo el dispositivo. Cierra este panel, abre Ajustes → Licencia, verifica tu email con el código OTP y activa aquí."
+              : "Stripe payment alone does not activate this device. Close this panel, open Settings → License, verify your email with the OTP code, and activate here."
+            : locale === "es"
+              ? `El pago en Stripe no activa solo el dispositivo. Abre ${brand.displayName} en web o escritorio, verifica tu email con el código OTP y activa en Ajustes → Licencia.`
+              : `Stripe payment alone does not activate this device. Open ${brand.displayName} on web or desktop, verify your email with the OTP code, and activate in Settings → License.`}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {embedded && onClose ? (
@@ -192,7 +189,7 @@ export function LicensePlansPage({
               onClick={onClose}
               className="inline-flex rounded-full bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
-              {locale === "es" ? `Abrir ${brand.displayName}` : `Open ${brand.displayName}`}
+              {locale === "es" ? "Volver a la app" : "Back to the app"}
             </button>
           ) : (
             <Link

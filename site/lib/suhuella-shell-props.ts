@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { brand } from "@suhuella/brand";
 import { getInstallerUrls } from "@/lib/downloads";
 import { hasDownloadableInstaller } from "@/lib/installer-availability";
+import { isBusinessCheckoutPubliclyEnabled } from "@/lib/business/checkout";
 import { isPaidCheckoutPubliclyEnabled } from "@/lib/paid-checkout";
 import { getRequestLocale } from "@/lib/i18n/detect-locale-server";
 import {
@@ -53,6 +54,7 @@ export async function suhuellaShellProps(): Promise<{
   release: Awaited<ReturnType<typeof getReleaseManifest>>;
   installerUrls: ReturnType<typeof getInstallerUrls>;
   paidCheckoutEnabled: boolean;
+  businessCheckoutEnabled: boolean;
   desktopDownloadAvailable: boolean;
   presentationBrand: PublicPresentationBrand;
 }> {
@@ -63,6 +65,7 @@ export async function suhuellaShellProps(): Promise<{
     release,
     installerUrls,
     paidCheckoutEnabled: isPaidCheckoutPubliclyEnabled(),
+    businessCheckoutEnabled: isBusinessCheckoutPubliclyEnabled(),
     desktopDownloadAvailable: hasDownloadableInstaller(release),
     presentationBrand: toPresentationBrand(requestBrand),
   };

@@ -1,6 +1,12 @@
 import { brand } from "@suhuella/brand";
 import { productCopy } from '../../lib/product-copy'
-import { getBrowserComputerName, persistBrowserComputerName, upgradeGenericDeviceName } from "../../lib/device-identity";
+import {
+  clearLegacyBrowserComputerName,
+  getBrowserComputerName,
+  persistBrowserComputerName,
+  readLegacyBrowserComputerName,
+  upgradeGenericDeviceName,
+} from "../../lib/device-identity";
 import type { LicenseApiError, LicenseContext } from "./types";
 import type {
   BusinessOrganisationAction,
@@ -38,12 +44,14 @@ export async function getDevice(): Promise<StoredDevice> {
     }
     return existing;
   }
-  const deviceName = getBrowserComputerName();
+  const legacyName = readLegacyBrowserComputerName();
+  const deviceName = legacyName ?? getBrowserComputerName();
   const device: StoredDevice = {
     deviceId: createId(),
     deviceName,
   };
   persistBrowserComputerName(deviceName);
+  clearLegacyBrowserComputerName();
   await idbSet(STORE.meta, DEVICE_KEY, device);
   return device;
 }

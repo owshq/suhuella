@@ -1,7 +1,7 @@
 # LICENSE-ED25519-PRODUCTION-DEPLOY-001
 
 ```text
-STATUS = READY (operator checklist · no deploy until human approves)
+STATUS = DEPLOYED (2026-09-24 · Mac+Win published · notices sent via Worker Resend · HMAC self-check PASS)
 TYPE = Production deploy — Ed25519 signing + secret separation (Phase 2A)
 DEPENDS = SIGNED-LICENSE-RIGHTS-DELIVERY-006 · LICENSE-HMAC-RETIREMENT-2B · Phase 2A code merged and desktop release built
 BLOCKS = Retirada de LICENSE_SIGNING_SECRET (cierre 2B en LICENSE-HMAC-RETIREMENT-2B.md) hasta PASS de este deploy

@@ -78,6 +78,7 @@ import {
   renameDevice,
 } from './browser/license'
 import { checkoutPath } from '../lib/license-checkout'
+import { ACTIVATION_ATTEMPT_STORAGE_KEY } from '../lib/license-plans'
 import {
   browseCloudSourceChildren,
   disconnectCloudIntegration,
@@ -97,10 +98,17 @@ import { normalizePermissionPreferences } from '../lib/permissions-preferences.t
 import { assertHostExecutorGenerationRights } from './generation-executor-gate.ts'
 import { previewPlan } from './browser/plan'
 import { documentFilterForName, searchKnowledge } from './browser/search'
-import { isBrowserDevHost, isDevDemoHint } from './browser/dev-host'
+import { DEV_DEMO_SOURCE_ID, isBrowserDevHost, isDevDemoHint } from './browser/dev-host'
+import {
+  DEV_DEMO_VFS_HANDLE,
+  devDemoVfsEnabled,
+  isDevDemoVfsHandle,
+  transferDevDemoFile,
+} from './browser/dev-demo-vfs.ts'
 import {
   appStorageBytes,
   connectDemoSource,
+  syncDevDemoSourceFromVfs,
   connectLocalFolder,
   clearLocalKnowledge,
   deleteWorkflow,
@@ -841,7 +849,7 @@ export function installBrowserHost(): void {
           host: 'browser',
           platform,
           folderAccess,
-          organise: access === 'directory-picker' && fileWriteSupported(),
+          organise: devDemoVfsEnabled() || (access === 'directory-picker' && fileWriteSupported()),
         }),
       }
     },
@@ -867,7 +875,7 @@ export function installBrowserHost(): void {
         ...(resolvedAttemptId ? { activationAttemptId: resolvedAttemptId } : {}),
       })
       if (resolvedAttemptId) {
-        sessionStorage.setItem('suhuella_activation_attempt_id', resolvedAttemptId)
+        sessionStorage.setItem(ACTIVATION_ATTEMPT_STORAGE_KEY, resolvedAttemptId)
       }
       window.location.assign(path)
       return true
@@ -875,10 +883,10 @@ export function installBrowserHost(): void {
     activateFromCheckout: async (sessionId: string, activationAttemptId?: string) => {
       const attemptId =
         activationAttemptId?.trim() ||
-        sessionStorage.getItem('suhuella_activation_attempt_id') ||
+        sessionStorage.getItem(ACTIVATION_ATTEMPT_STORAGE_KEY) ||
         undefined
       const result = await activateFromCheckout(sessionId, attemptId)
-      if (result.ok) sessionStorage.removeItem('suhuella_activation_attempt_id')
+      sessionStorage.removeItem(ACTIVATION_ATTEMPT_STORAGE_KEY)
       const view = await licenseView(result.license as LicenseContext | null)
       return result.ok ? { ok: true as const, license: view } : { ok: false as const, error: result.error, license: view }
     },
@@ -1115,7 +1123,13 @@ export function installBrowserHost(): void {
           },
         }
       }
-      const canWrite = folderAccessKind() === 'directory-picker' && fileWriteSupported()
+      const webPlanItems = request.plan.items.map(fromPlanItem)
+      const devDemoPlan =
+        devDemoVfsEnabled() &&
+        webPlanItems.length > 0 &&
+        webPlanItems.every((item) => item.sourceId === DEV_DEMO_SOURCE_ID)
+      const canWriteFs = folderAccessKind() === 'directory-picker' && fileWriteSupported()
+      const canWrite = devDemoPlan || canWriteFs
       if (!canWrite) {
         return {
           ok: false as const,
@@ -1160,12 +1174,28 @@ export function installBrowserHost(): void {
       }
       const watchExecution = request.executionMode === 'watch'
       let progressCursor = 0
-      const executed = await executeGuardedPlan(request.plan.items.map(fromPlanItem), {
-        canWrite,
-        loadHandle,
-        ensurePermission: (handle) => ensurePermission(handle as FileSystemDirectoryHandle, 'readwrite'),
-        transfer: (handle, fromRelative, toRelative, allowCreateFolders) =>
-          moveOrRenameFile(handle as FileSystemDirectoryHandle, fromRelative, toRelative, allowCreateFolders),
+      const executed = await executeGuardedPlan(webPlanItems, {
+        canWrite: true,
+        loadHandle: async (sourceId) => {
+          if (devDemoVfsEnabled() && sourceId === DEV_DEMO_SOURCE_ID) return DEV_DEMO_VFS_HANDLE
+          return loadHandle(sourceId)
+        },
+        ensurePermission: async (handle) => {
+          if (isDevDemoVfsHandle(handle)) return true
+          return ensurePermission(handle as FileSystemDirectoryHandle, 'readwrite')
+        },
+        transfer: (handle, fromRelative, toRelative, allowCreateFolders) => {
+          if (isDevDemoVfsHandle(handle)) {
+            // Dev-data VFS has no real directories — allow parent paths on move/rename.
+            return transferDevDemoFile(fromRelative, toRelative, allowCreateFolders || true)
+          }
+          return moveOrRenameFile(
+            handle as FileSystemDirectoryHandle,
+            fromRelative,
+            toRelative,
+            allowCreateFolders,
+          )
+        },
         onJournal: async (snapshot) => {
           if (watchExecution && snapshot.phase === 'settled') {
             for (let index = progressCursor; index < snapshot.items.length; index += 1) {
@@ -1192,6 +1222,9 @@ export function installBrowserHost(): void {
         return { ok: false as const, error: executed.error }
       }
       const published = await publish(executed.items, new Date().toISOString())
+      if (devDemoPlan && published.appliedCount > 0) {
+        await syncDevDemoSourceFromVfs()
+      }
       const indexFailures: string[] = []
       for (const sourceId of executed.affectedSourceIds) {
         try {

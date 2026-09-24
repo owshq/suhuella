@@ -3,11 +3,13 @@ import { join } from "node:path";
 import {
   buildPendingOrganiseContext,
   consumePendingOrganiseContext,
+  isPendingOrganiseContextExpired,
   ORGANISE_THESE_FILES,
   ORGANISE_THIS_FOLDER,
   pendingContextToKnowledgeItems,
   pendingOrganiseUsesUrlPaths,
   PENDING_ORGANISE_KEY,
+  PENDING_ORGANISE_MAX_AGE_MS,
   readPendingOrganiseContext,
   sourceBrowseOrganiseCta,
   sourceBrowseShowsPlanUi,
@@ -74,6 +76,8 @@ function runOrganiseSourcesBridgeCheck(): void {
   assert(!sourceBrowseShowsPlanUi(organise) || organise.includes("PlanEditor"), "plan UI lives in organise only");
 
   assert(PENDING_ORGANISE_KEY === "suhuella-pending-organise", "session storage key is stable");
+  assert(PENDING_ORGANISE_MAX_AGE_MS > 0, "pending organise TTL is configured");
+  assert(!isPendingOrganiseContextExpired(context), "fresh context is not expired");
 
   if (typeof sessionStorage !== "undefined") {
     writePendingOrganiseContext(context);

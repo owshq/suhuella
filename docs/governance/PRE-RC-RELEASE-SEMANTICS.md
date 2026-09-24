@@ -70,9 +70,13 @@ It is not a product blocker. It is not a release-engineering blocker. It does no
 
 While `commercial-signing.json` status is `deferred`, **Gate 6** (Developer ID + notarization / Authenticode) is **not attempted** and **does not block publish** for `0.1.0-pre-rc`. `validate-release` runs **PreRcReleaseValidation** instead: artifact built, bundle integrity, SHA256 sidecar, and **Ed25519 license public keys embedded** at build time.
 
+**PreRcReleaseValidation PASS means partial technical validation only** — integrity and embed checks. It does **not** approve install/launch, Plan Mode smoke, or production license activation. OS warnings and functional smoke are separate concerns.
+
 **Gatekeeper (Mac) and SmartScreen (Windows) warnings are expected** on unsigned/adhoc installers. Document the install path (Right-click → Open / More info → Run anyway). They are **not** release gates for pre-rc. Optional operator smoke on any machine is welcome; it is not a prerequisite to publish.
 
-`SUHUELLA_DESKTOP_CI=1` skips only the site/wrangler version matrix in the release gate — it is **not** a publish bypass. Publishable builds require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS`. Compile-only smoke may use `SUHUELLA_DESKTOP_COMPILE_ONLY=1` without keys (not publishable).
+`SUHUELLA_DESKTOP_CI=1` skips only the site/wrangler version matrix in the release gate — it is **not** a publish bypass. Publishable builds require `SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS` matching production `LICENSE_SIGNING_PUBLIC_KEYS` on the Worker. **Ephemeral CI keys** (`SUHUELLA_LICENSE_KEYS_EPHEMERAL=1`) may compile and pass partial validation but **must not** reach `publish:desktop-*` or public download alias updates. Compile-only smoke may use `SUHUELLA_DESKTOP_COMPILE_ONLY=1` without keys (not publishable).
+
+Public download aliases (`download.suhuella.com/latest/*`) redirect to GitHub Release assets configured in Wrangler — **independent of whether `release.json` was updated**. Run `npm run audit:public-downloads` before assuming manifest and served bytes match.
 
 Pre-rc downloads may be public. Say honestly that the installer is not commercially signed or notarized. Gatekeeper/SmartScreen warnings are normal; document how to proceed. Do not present the install as “verified by Apple/Microsoft.”
 

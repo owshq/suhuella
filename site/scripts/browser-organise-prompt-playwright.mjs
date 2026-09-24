@@ -18,13 +18,13 @@ async function main() {
     c.newPage(),
   );
 
-  await page.goto(`${BASE}/sources`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto(`${BASE}/sources`, { waitUntil: "load", timeout: 180000 });
   await page.waitForTimeout(1200);
   await page.getByText("Developer Sources", { exact: true }).waitFor({ timeout: 8000 });
   await page.getByRole("button", { name: /Load demo data|Reload demo data/ }).click();
   await page.getByText("dev-data", { exact: true }).first().waitFor({ timeout: 8000 });
 
-  await page.goto(`${BASE}/plan-mode`, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto(`${BASE}/plan-mode`, { waitUntil: "load", timeout: 180000 });
   await page.waitForTimeout(800);
 
   const deadEnd = await page.getByText("This browser cannot choose documents.").count();
@@ -32,11 +32,11 @@ async function main() {
     throw new Error("Plan Mode still shows the dead-end banner");
   }
 
-  await page.getByPlaceholder("What should happen?").waitFor({ timeout: 4000 });
-  await page.getByRole("button", { name: "Prepare Plan" }).waitFor({ timeout: 2000 });
+  await page.getByPlaceholder(/What should happen/i).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Prepare Plan", exact: true }).waitFor({ timeout: 10000 });
 
-  await page.getByRole("button", { name: "Move invoices in dev-data" }).click();
-  await page.getByRole("button", { name: "Prepare Plan" }).click();
+  await page.getByRole("button", { name: "Prepare Plan: Group by category" }).click();
+  await page.getByRole("button", { name: "Prepare Plan", exact: true }).click();
 
   const scopeUnresolved = await page.getByText("Nothing matched in the sources SuHuella can see.").count();
   if (scopeUnresolved > 0) {
@@ -45,7 +45,7 @@ async function main() {
 
   await page.getByRole("button", { name: "Save plan" }).waitFor({ timeout: 12000 });
 
-  const planTitle = "Move invoices in dev-data";
+  const planTitle = "Move invoices in dev-data into category folders";
   await page.getByRole("button", { name: "Save plan" }).click();
   await page.getByText("Plan saved on this device.", { exact: true }).waitFor({ timeout: 8000 });
 

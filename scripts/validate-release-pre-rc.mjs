@@ -15,7 +15,16 @@ import { licenseVerifyPublicKeys } from "../desktop/scripts/license-build-env.mj
 import { fetchRemoteSha256, sha256File } from "./release-artifact-sha256.mjs";
 import { buildDistributionRecord, isPreRcUnsignedPublishChannel } from "./commercial-signing.mjs";
 import { detectMacCodesignState } from "./mac-codesign-detect.mjs";
+import {
+  assertGatekeeperAllowsPipeline,
+  assessMacGatekeeper,
+  logGatekeeperAssessment,
+} from "./mac-gatekeeper-assess.mjs";
 import { assertLicenseVerifyPublicKeysEnv } from "../desktop/scripts/license-verify-public-keys.mjs";
+import {
+  describeLicenseKeyProvenance,
+  formatLicenseKeyProvenanceSummary,
+} from "../desktop/scripts/license-key-provenance.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const desktopRoot = path.join(root, "desktop");
@@ -114,7 +123,10 @@ function validateMacPreRc() {
   const distribution = buildDistributionRecord(version, { mac: macSigning });
   console.log(`✓ Distribution metadata preview: ${JSON.stringify(distribution.commercialCodeSigning.mac)}`);
 
-  console.log("✓ Gatekeeper warning expected on pre-rc — does not block publish (Right-click → Open / System Settings)");
+  const gatekeeper = assessMacGatekeeper(appPath, { dmgPath, channel: "pre-rc-unsigned" });
+  logGatekeeperAssessment(gatekeeper, { prefix: "✓" });
+  assertGatekeeperAllowsPipeline(gatekeeper);
+  console.log("✓ Gatekeeper not PASS on pre-rc unsigned — EXPECTED_UNSIGNED_REJECTION does not block publish");
 }
 
 function resolveToken() {
@@ -216,8 +228,29 @@ async function main() {
     block("Usage: node scripts/validate-release-pre-rc.mjs --platform mac|windows");
   }
 
+  const provenance = describeLicenseKeyProvenance();
   console.log("");
-  console.log("PreRcReleaseValidation PASS — pre-rc publish allowed (OS warnings expected, not a gate)");
+  console.log(formatLicenseKeyProvenanceSummary(provenance));
+  console.log("");
+  if (provenance.ephemeral || !provenance.productionCompatible) {
+    console.log(
+      "PreRcReleaseValidation PASS — partial technical validation (integrity + embed only)",
+    );
+    console.log(
+      "NOT production license compatible — Worker tokens will not verify until production SPKI is deployed and embedded",
+    );
+    console.log("Do NOT run publish:desktop-* or update public download aliases with this candidate");
+  } else {
+    console.log(
+      "PreRcReleaseValidation PASS — partial technical validation (integrity + embed + production SPKI overlap)",
+    );
+    console.log(
+      "OS install warnings (Gatekeeper/SmartScreen) are expected and do not block pre-rc publish",
+    );
+    console.log(
+      "Functional smoke (install, launch, Plan Mode) is NOT implied — run separately before public download update",
+    );
+  }
 }
 
 main().catch((error) => {

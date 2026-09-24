@@ -2,7 +2,7 @@ import { brand } from '@suhuella/brand'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppLocale } from '../lib/app-locale'
 import { productCopy } from '../lib/product-copy'
-import { checkoutReturnFromLocation } from '../lib/app-routes'
+import { checkoutReturnFromLocation, stripCheckoutReturnFromLocation } from '../lib/app-routes'
 import { getSuhuellaApi } from '../lib/api'
 import {
   activateDeviceCopy,
@@ -405,6 +405,7 @@ export function LicenseStatusPanel({
             else if (result.license) setLicense(result.license)
           })
           .catch(() => undefined)
+        if (returned.checkout) stripCheckoutReturnFromLocation(window.location)
         return
       }
       if (handledSession.current === returned.sessionId) return
@@ -419,7 +420,7 @@ export function LicenseStatusPanel({
       void getSuhuellaApi()
         .activateFromCheckout(returned.sessionId, activationAttemptId)
         .then((result) => {
-          if (result.ok && typeof sessionStorage !== 'undefined') {
+          if (typeof sessionStorage !== 'undefined') {
             sessionStorage.removeItem(ACTIVATION_ATTEMPT_STORAGE_KEY)
           }
           if (result.license) setLicense(result.license)
@@ -433,8 +434,16 @@ export function LicenseStatusPanel({
           setPurchaseState('idle')
           setFeedback({ tone: 'error', text: licenseErrorMessage(result.error) })
         })
-        .catch(() => setFeedback({ tone: 'error', text: licenseErrorMessage('server_error') }))
-        .finally(() => setBusy(false))
+        .catch(() => {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem(ACTIVATION_ATTEMPT_STORAGE_KEY)
+          }
+          setFeedback({ tone: 'error', text: licenseErrorMessage('server_error') })
+        })
+        .finally(() => {
+          stripCheckoutReturnFromLocation(window.location)
+          setBusy(false)
+        })
     }
 
     applyCheckoutReturn()

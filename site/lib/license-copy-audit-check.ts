@@ -28,7 +28,7 @@ function read(relative: string): string {
 function runLicenseCopyAuditCheck(): void {
   const wrangler = read("wrangler.jsonc");
   assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "paid checkout is on");
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout stays off");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout is enabled in wrangler");
   assert(lifetimeUpgradeSaleEnabled() === false, "lifetime upgrade sale stays closed");
   assert(STRIPE_CATALOG.lifetime_upgrade.checkoutEnabled === false, "lifetime upgrade catalog off");
 
@@ -96,7 +96,8 @@ function runLicenseCopyAuditCheck(): void {
   );
 
   const licensePage = read("components/LicensePlansPage.tsx");
-  assert(licensePage.includes("licenseJourneySteps"), "public license page shows journey");
+  assert(licensePage.includes("desktopDownloadAvailable"), "license intro respects desktop download availability");
+  assert(licensePage.includes("desktopNote"), "license intro separates paid checkout from desktop download");
   assert(licensePage.includes("PlanFeatureList"), "public license page renders plan feature bullets");
   assert(!licensePage.includes("planCopy("), "public page uses centralized plan copy");
   assert(licensePanel.includes("PlanFeatureList"), "settings license renders plan feature bullets");

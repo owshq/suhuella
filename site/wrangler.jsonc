@@ -37,7 +37,8 @@
 		"NEXT_PUBLIC_APP_VERSION": "0.1.0-pre-rc",
 		"NEXT_PRIVATE_MINIMAL_MODE": "1",
 		"PAID_CHECKOUT_ENABLED": "true",
-		"PARTNER_CHECKOUT_ENABLED": "false",
+		"BUSINESS_CHECKOUT_ENABLED": "true",
+		"PARTNER_CHECKOUT_ENABLED": "true",
 		"CLOUD_INTEGRATIONS_ENABLED": "false",
 		"RESEND_FROM": "SuHuella <licenses@suhuella.com>"
 	}

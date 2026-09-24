@@ -39,10 +39,19 @@ export async function POST(request: Request) {
   }
 
   const result = await applyStripeBusinessWebhook(event);
-  if (!result.ok) return json({ ok: false, error: result.error }, 500);
+  if (!result.ok) {
+    const status = result.error === "busy" || result.error === "persistence_unavailable" ? 503 : 500;
+    return json({ ok: false, error: result.error }, status);
+  }
 
   const businessCheckout = await applyBusinessCheckoutWebhook(event, { secretKey });
-  if (!businessCheckout.ok) return json({ ok: false, error: businessCheckout.error }, 500);
+  if (!businessCheckout.ok) {
+    const status =
+      businessCheckout.error === "busy" || businessCheckout.error === "persistence_unavailable"
+        ? 503
+        : 500;
+    return json({ ok: false, error: businessCheckout.error }, status);
+  }
 
   let origin = "";
   try {

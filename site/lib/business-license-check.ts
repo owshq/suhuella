@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { SETTINGS_TAB_IDS } from "@suhuella/product/lib/settings-tabs.ts";
 import { getBusinessPricingConfig, monthlyAmountCents } from "./business-config.ts";
 import { organisationOverviewFromInspection } from "./business-organisation.ts";
 import {
@@ -325,10 +326,20 @@ export async function runBusinessLicenseCheck(): Promise<void> {
     join(process.cwd(), "../packages/product/src/lib/settings-tabs.ts"),
     "utf8",
   );
-  assert(settingsNav.includes("'general', 'ai', 'license', 'support'"), "Settings stays four tabs");
+  assert(
+    SETTINGS_TAB_IDS.join(",") === "general,permissions,ai,license,support",
+    "Settings keeps general, permissions, ai, license, support",
+  );
+  assert(settingsNav.includes("'permissions'"), "Permissions is a Settings tab");
   assert(!settingsNav.includes("'billing'"), "Billing is not a Settings tab");
   assert(!settingsNav.includes("'team'"), "Team is not a Settings tab");
   assert(!settingsNav.includes("'partner'"), "Partner is not a Settings tab");
+
+  const businessCheckoutPage = readFileSync(
+    join(process.cwd(), "app/(suhuella)/checkout/business/page.tsx"),
+    "utf8",
+  );
+  assert(businessCheckoutPage.includes("<Suspense"), "Business checkout page wraps useSearchParams client in Suspense");
 
   console.log("BUSINESS-LICENSE-001 check passed");
 }

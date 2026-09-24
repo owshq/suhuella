@@ -85,6 +85,8 @@ export function settingsPrefsFromLocation(location: {
   return query.get('prefs') || query.get('tab') || 'general'
 }
 
+const CHECKOUT_RETURN_QUERY_KEYS = ['session_id', 'checkout', 'plan', 'attempt'] as const
+
 export function checkoutReturnFromLocation(location: {
   pathname: string
   hash: string
@@ -98,9 +100,57 @@ export function checkoutReturnFromLocation(location: {
   }
 }
 
+/** Remove Stripe checkout return params from a query string (pure — safe for tests). */
+export function stripCheckoutReturnSearch(search: string): string {
+  const query = new URLSearchParams(search.replace(/^\?/, ''))
+  let changed = false
+  for (const key of CHECKOUT_RETURN_QUERY_KEYS) {
+    if (query.has(key)) {
+      query.delete(key)
+      changed = true
+    }
+  }
+  if (!changed) return search.replace(/^\?/, '')
+  return query.toString()
+}
+
+/** Drop checkout return params from the address bar so session_id does not linger in history. */
+export function stripCheckoutReturnFromLocation(
+  location: { pathname: string; hash: string; search: string } = browserWindow()?.location ?? {
+    pathname: '',
+    hash: '',
+    search: '',
+  },
+): void {
+  const win = browserWindow()
+  if (!win) return
+
+  const raw = location.hash.replace(/^#/, '')
+  const hashPath = raw.includes('?') ? raw.slice(0, raw.indexOf('?')) : raw
+  const hashQuery = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1) : ''
+  const searchStripped = stripCheckoutReturnSearch(location.search)
+  const hashStripped = hashQuery ? stripCheckoutReturnSearch(`?${hashQuery}`) : ''
+
+  const nextSearch = searchStripped ? `?${searchStripped}` : ''
+  const nextHash = hashPath
+    ? `#${hashPath}${hashStripped ? `?${hashStripped}` : ''}`
+    : hashStripped
+      ? `#?${hashStripped}`
+      : location.hash
+
+  const current = `${location.pathname}${location.search}${location.hash}`
+  const next = `${location.pathname}${nextSearch}${nextHash}`
+  if (current === next) return
+  win.history.replaceState(win.history.state, '', next)
+}
+
 type BrowserWindowLike = {
   location: { pathname: string; search: string; hash: string }
-  history: { pushState: (state: unknown, title: string, url: string) => void }
+  history: {
+    pushState: (state: unknown, title: string, url: string) => void
+    replaceState: (state: unknown, title: string, url: string) => void
+    state: unknown
+  }
 }
 
 function browserWindow(): BrowserWindowLike | null {

@@ -108,6 +108,7 @@ async function assertRawCardDataIsRejected(): Promise<void> {
     "app/api/license/activate-from-checkout/route.ts",
     "app/api/license/checkout-attempt/route.ts",
     "app/api/business/checkout/route.ts",
+    "app/api/business/reconcile/route.ts",
   ]) {
     const source = readFileSync(join(process.cwd(), relative), "utf8");
     assert(source.includes("rawCardRejection"), `${relative} rejects raw card fields`);
@@ -137,6 +138,7 @@ async function assertRawCardDataIsRejected(): Promise<void> {
     }
     if (
       file.endsWith("business-checkout-webhook.ts") ||
+      file.endsWith("business-reconciliation.ts") ||
       file.endsWith("business/checkout.ts") ||
       file.endsWith("partners/checkout.ts") ||
       file.endsWith("partners/stripe-fulfillment.ts")
@@ -607,8 +609,9 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     await assertRawCardDataIsRejected();
 
     const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial checkout switch is on in wrangler");
-    assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout switch is explicitly off");
+    assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
+    assert(wrangler.includes('"BUSINESS_CHECKOUT_ENABLED": "true"'), "business gate is on in wrangler");
+    assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout switch is on in wrangler");
     assert(wrangler.includes('"CLOUD_INTEGRATIONS_ENABLED": "false"'), "cloud integrations stay gated off");
     assertNoMatch(wrangler, /buy\.stripe\.com/, "wrangler has no Payment Links");
     assertNoMatch(wrangler, /sk_test_|sk_live_|whsec_/, "wrangler has no Stripe secrets");
@@ -632,8 +635,8 @@ async function runCheckoutEnablementCheck(): Promise<void> {
     assert(licensePlans.includes("disabled"), "gated lifetime/monthly CTAs are disabled buttons");
     assert(licensePlans.includes('checkoutPath(planId, { returnTo: "public" })'), "enabled plans navigate via checkoutPath");
     assert(licensePlans.includes('planId === "business"'), "Business uses its own checkout path");
-    assert(licensePlans.includes('href="/partners"'), "Partner stays on its own program, not personal checkout");
     assert(!licensePlans.includes('checkoutPath("partner"'), "Partner is not a personal Checkout plan");
+    assert(!licensePlans.includes('href="/partners"'), "license plans overlay does not embed partner program");
     assert(!licensePlans.includes("Coming soon"), "gated CTAs no longer say Coming soon");
 
     const licensePanel = readFileSync(

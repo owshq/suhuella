@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import { stripeLiveFixtureSecret, stripeTestFixtureSecret } from "./test/stripe-fixture-secret.ts";
 import { join } from "node:path";
 import { createMemoryBusinessBillingClient } from "./business-billing.ts";
@@ -21,6 +21,10 @@ import {
   lifetimeUpgradeCheckoutBlocked,
 } from "./lifetime-upgrade-audit.ts";
 import { lifetimeUpgradeSaleEnabled, STRIPE_CATALOG } from "./stripe-catalog.ts";
+import {
+  resetLicensePersistenceStoreForTests,
+  setLicensePersistenceDatabaseForTests,
+} from "./license-persistence/store.ts";
 import { isPaidCheckoutPubliclyEnabled } from "./paid-checkout.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -58,8 +62,17 @@ function businessEvent(input: {
 }
 
 async function runCheckoutCompleteByProductCheck(): Promise<void> {
+  const stripeEventStorePath = join(process.cwd(), ".data", "checkout-complete-by-product-stripe-events.json");
+  try {
+    unlinkSync(stripeEventStorePath);
+  } catch {
+    /* first run */
+  }
+  process.env.LICENSE_STORE_PATH = stripeEventStorePath;
+  setLicensePersistenceDatabaseForTests(null);
+  resetLicensePersistenceStoreForTests();
   assert(isPaidCheckoutPubliclyEnabled() === false, "checks run with checkout flags off");
-  assert(isBusinessCheckoutPubliclyEnabled() === false, "business checkout closed by default");
+  assert(isBusinessCheckoutPubliclyEnabled() === false, "business checkout closed by independent gate");
   assert(isPartnerCheckoutPubliclyEnabled() === false, "partner checkout closed by default");
   assert(lifetimeUpgradeSaleEnabled() === false, "lifetime upgrade stays closed");
   assert(STRIPE_CATALOG.business.checkoutEnabled === true, "business catalog prepared");
@@ -264,40 +277,56 @@ async function runCheckoutCompleteByProductCheck(): Promise<void> {
   }) as typeof fetch;
 
   globalThis.fetch = sessionFetch;
+  const businessCheckoutEventPrefix = "evt_business_checkout_complete_by_product";
   const unpaid = await applyBusinessCheckoutWebhook(
     businessEvent({
-      id: "evt_unpaid",
+      id: `${businessCheckoutEventPrefix}_unpaid`,
       sessionId: "cs_test_business_unpaid",
       email: "owner@acme.test",
       organisationName: "ACME",
       seats: 25,
       paymentStatus: "unpaid",
     }),
-    { secretKey: stripeTestFixtureSecret("CheckoutComplete001"), fetchImpl: sessionFetch, service },
+    {
+      secretKey: stripeTestFixtureSecret("CheckoutComplete001"),
+      fetchImpl: sessionFetch,
+      service,
+      skipPersistenceRequirement: true,
+    },
   );
   assert(unpaid.ok && unpaid.fulfilled === false, "unpaid business checkout grants nothing");
 
   const paid = await applyBusinessCheckoutWebhook(
     businessEvent({
-      id: "evt_paid",
+      id: `${businessCheckoutEventPrefix}_paid`,
       sessionId: "cs_test_business_paid",
       email: "owner@acme.test",
       organisationName: "ACME Ltd",
       seats: 25,
     }),
-    { secretKey: stripeTestFixtureSecret("CheckoutComplete001"), fetchImpl: sessionFetch, service },
+    {
+      secretKey: stripeTestFixtureSecret("CheckoutComplete001"),
+      fetchImpl: sessionFetch,
+      service,
+      skipPersistenceRequirement: true,
+    },
   );
   assert(paid.ok && paid.fulfilled === true, "paid business checkout provisions org");
 
   const duplicate = await applyBusinessCheckoutWebhook(
     businessEvent({
-      id: "evt_paid",
+      id: `${businessCheckoutEventPrefix}_paid`,
       sessionId: "cs_test_business_paid",
       email: "owner@acme.test",
       organisationName: "ACME Ltd",
       seats: 25,
     }),
-    { secretKey: stripeTestFixtureSecret("CheckoutComplete001"), fetchImpl: sessionFetch, service },
+    {
+      secretKey: stripeTestFixtureSecret("CheckoutComplete001"),
+      fetchImpl: sessionFetch,
+      service,
+      skipPersistenceRequirement: true,
+    },
   );
   assert(duplicate.ok && duplicate.duplicate === true, "duplicate business webhook is idempotent");
 
@@ -309,10 +338,15 @@ async function runCheckoutCompleteByProductCheck(): Promise<void> {
     searchParams: new URLSearchParams("card[number]=not-a-pan"),
   });
   assert(rejected?.status === 400, "PAN rejected on checkout routes");
+  const nestedPan = rawCardRejection({
+    body: { payment_method_data: { card: { number: "4242424242424242" } } },
+  });
+  assert(nestedPan?.status === 400, "nested PAN rejected on JSON checkout bodies");
 
   const wrangler = readFileSync(join(process.cwd(), "wrangler.jsonc"), "utf8");
-  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "commercial switch is on in wrangler");
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner switch stays off in wrangler");
+  assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
+  assert(wrangler.includes('"BUSINESS_CHECKOUT_ENABLED": "true"'), "business gate is on in wrangler");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout is on in wrangler");
 
   const doc = readFileSync(join(process.cwd(), "../CHECKOUT-COMPLETE-BY-PRODUCT-001.md"), "utf8");
   assert(doc.includes("Lifetime Upgrade"), "delivery doc covers upgrade status");

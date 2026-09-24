@@ -24,6 +24,7 @@ import {
   assertCommercialSigningEnabledForPublish,
   stampDistributionMetadata,
 } from "./commercial-signing.mjs";
+import { assertProductionLicenseKeysForPublish } from "../desktop/scripts/license-key-provenance.mjs";
 
 runBuildHealthGate();
 
@@ -216,6 +217,7 @@ async function smoke() {
 
 async function main() {
   assertCommercialSigningEnabledForPublish();
+  assertProductionLicenseKeysForPublish("publish:desktop-mac");
   console.log(`Publishing ${dmgName} → GitHub Release ${tag}`);
 
   run(process.execPath, ["scripts/validate-release.mjs", "--platform", "mac"]);

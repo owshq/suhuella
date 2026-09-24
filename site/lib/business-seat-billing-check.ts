@@ -2,8 +2,15 @@ import { createMemoryBusinessBillingClient } from "./business-billing.ts";
 import { getBusinessPricingConfig } from "./business-config.ts";
 import { organisationOverviewFromInspection } from "./business-organisation.ts";
 import { createBusinessService } from "./business-service.ts";
+import { unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { createMemoryBusinessStore } from "./business-store.ts";
 import { applyStripeBusinessWebhook } from "./business-webhooks.ts";
+import {
+  resetLicensePersistenceStoreForTests,
+  setLicensePersistenceDatabaseForTests,
+} from "./license-persistence/store.ts";
+import { resetStripeEventProcessingForTests } from "./stripe-event-processing.ts";
 import { canPerformOperationsAction } from "./operations/roles.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -43,6 +50,16 @@ function attachStripe(store: ReturnType<typeof createMemoryBusinessStore>, organ
 }
 
 export async function runBusinessSeatBillingCheck(): Promise<void> {
+  const stripeEventStorePath = join(process.cwd(), ".data", "business-seat-billing-check-stripe-events.json");
+  try {
+    unlinkSync(stripeEventStorePath);
+  } catch {
+    /* first run */
+  }
+  process.env.LICENSE_STORE_PATH = stripeEventStorePath;
+  setLicensePersistenceDatabaseForTests(null);
+  resetLicensePersistenceStoreForTests();
+  resetStripeEventProcessingForTests();
   assert(canPerformOperationsAction("ADMIN", "add_seats"), "Ops Admin may change seats");
   assert(canPerformOperationsAction("BILLING", "add_seats"), "Ops Billing may change seats");
   assert(!canPerformOperationsAction("SUPPORT", "add_seats"), "Ops Support cannot change seats");
@@ -137,8 +154,9 @@ export async function runBusinessSeatBillingCheck(): Promise<void> {
     quantity: 28,
     amountCents: 5600,
   };
+  const qtyEventId = "evt_qty_28_business_seat_billing_check";
   const webhook = await applyStripeBusinessWebhook({
-    id: "evt_qty_28",
+    id: qtyEventId,
     type: "customer.subscription.updated",
     created: Math.floor(Date.now() / 1000),
     data: {
@@ -159,15 +177,15 @@ export async function runBusinessSeatBillingCheck(): Promise<void> {
         },
       },
     },
-  }, service);
+  }, service, { skipPersistenceRequirement: true });
   assert(webhook.ok, "webhook reconciles subscription quantity");
   assert(service.findAccount(organisationId)?.seatLimit === 28, "purchased seats follow confirmed Stripe state");
 
   const duplicateEvent = await applyStripeBusinessWebhook({
-    id: "evt_qty_28",
+    id: qtyEventId,
     type: "customer.subscription.updated",
     data: { object: { id: "sub_acme" } },
-  }, service);
+  }, service, { skipPersistenceRequirement: true });
   assert(duplicateEvent.ok && duplicateEvent.duplicate === true, "duplicate webhook is idempotent");
 
   billing.current = null;

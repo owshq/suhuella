@@ -12,6 +12,7 @@ type SuhuellaOverlayAppProps = {
   release: ReleaseManifest | null;
   installerUrls: { windows: string; mac: string };
   paidCheckoutEnabled: boolean;
+  businessCheckoutEnabled: boolean;
   desktopDownloadAvailable: boolean;
   presentationBrand: PublicPresentationBrand;
 };
@@ -21,6 +22,7 @@ export function SuhuellaOverlayApp({
   release,
   installerUrls,
   paidCheckoutEnabled,
+  businessCheckoutEnabled,
   desktopDownloadAvailable,
   presentationBrand,
 }: SuhuellaOverlayAppProps) {
@@ -36,6 +38,7 @@ export function SuhuellaOverlayApp({
         release={release}
         installerUrls={installerUrls}
         paidCheckoutEnabled={paidCheckoutEnabled}
+        businessCheckoutEnabled={businessCheckoutEnabled}
         desktopDownloadAvailable={desktopDownloadAvailable}
       >
         <SuhuellaApp presentationBrand={presentationBrand} />

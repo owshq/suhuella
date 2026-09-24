@@ -172,3 +172,29 @@ export async function sendVerificationCodeEmail(
     return { ok: false, error: "delivery_failed" };
   }
 }
+
+export async function sendTransactionalEmail(
+  input: { to: string; subject: string; text: string; html: string },
+  deps: ResendMailDeps = {},
+): Promise<{ ok: true } | { ok: false; error: "not_configured" | "delivery_failed" }> {
+  const apiKey = process.env.RESEND_API_KEY?.trim() ?? "";
+  const from = process.env.RESEND_FROM?.trim() ?? "";
+  if (!apiKey || !from || !isResendFromAligned(from)) {
+    return { ok: false, error: "not_configured" };
+  }
+  const replyTo = licenseOtpReplyTo();
+  const response = await postResendEmail(
+    apiKey,
+    {
+      from,
+      to: [input.to],
+      ...(replyTo ? { reply_to: replyTo } : {}),
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+    },
+    deps.fetch ?? fetch,
+  );
+  if (!response?.ok) return { ok: false, error: "delivery_failed" };
+  return { ok: true };
+}

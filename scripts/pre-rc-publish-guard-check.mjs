@@ -13,9 +13,13 @@ function assert(condition, message) {
 }
 
 function runPackageCheck(env) {
+  const childEnv = { ...process.env, ...env };
+  delete childEnv.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS;
+  delete childEnv.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEY;
+  delete childEnv.LICENSE_SIGNING_PUBLIC_KEYS;
   return spawnSync(process.execPath, ["scripts/package-check.mjs"], {
     cwd: path.join(root, "desktop"),
-    env: { ...process.env, ...env },
+    env: childEnv,
     encoding: "utf8",
   });
 }
@@ -39,6 +43,21 @@ function main() {
   assert(!publishWin.includes("SUHUELLA_DESKTOP_COMPILE_ONLY"), "publish:desktop-win must not honor compile-only");
   assert(!publishMac.includes("SUHUELLA_DESKTOP_CI"), "publish:desktop-mac must not bypass via SUHUELLA_DESKTOP_CI");
   assert(!publishWin.includes("SUHUELLA_DESKTOP_CI"), "publish:desktop-win must not bypass via SUHUELLA_DESKTOP_CI");
+  assert(
+    publishMac.includes("assertProductionLicenseKeysForPublish"),
+    "publish:desktop-mac must block ephemeral / mismatched license keys",
+  );
+  assert(
+    publishWin.includes("assertProductionLicenseKeysForPublish"),
+    "publish:desktop-win must block ephemeral / mismatched license keys",
+  );
+
+  const ephemeralPublish = spawnSync(
+    process.execPath,
+    ["-e", "process.env.SUHUELLA_LICENSE_KEYS_EPHEMERAL='1';process.env.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS='test';import('./desktop/scripts/license-key-provenance.mjs').then(m=>m.assertProductionLicenseKeysForPublish('test'))"],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert(ephemeralPublish.status !== 0, "assertProductionLicenseKeysForPublish must fail when SUHUELLA_LICENSE_KEYS_EPHEMERAL=1");
 
   console.log("PRE-RC-PUBLISH-GUARD-001 check passed");
 }

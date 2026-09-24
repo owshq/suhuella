@@ -57,11 +57,13 @@ export function runPlanSemanticsCheck(): void {
   assert(organise.includes("previewOrganisationPlan"), "Plan preview stays separate from execution");
   assert(organise.includes("confirmed: true"), "execution requires explicit confirmation");
   assert(!organise.includes("confirmed: false"), "Organise must not execute without confirmation");
-  assert(organise.includes("PLAN_PROMPT_EXAMPLES"), "Plan Mode empty state offers prompt examples");
+  assert(organise.includes("PLAN_PROMPT_ACTIONS"), "Plan Mode offers Prepare Plan actions");
+  assert(!organise.includes("PLAN_PROMPT_EXAMPLES.map"), "Prepare Plan actions are not a plain example list");
   assert(organise.includes("plan.items.map"), "saved Plan Run restores stored plan items");
   assert(!organise.includes("await addItems(plan.knowledgeSet.items)"), "saved Plan Run does not re-analyse from scratch");
   assert(!organise.includes("FeaturePromoCard"), "Plan Mode empty state does not block on Connect source banner");
   assert(organise.includes("PLAN_PROMPT_PLACEHOLDER"), "Plan Mode composer stays anchored to the screen question");
+  assert(!organise.includes("ORGANISE_EMPTY_PLAN_PROMISE"), "Plan promise lives in the composer placeholder, not a second line");
   assert(organise.includes("resolvePlanComposerScope"), "Plan Mode resolves scope and candidate sources together");
   assert(organise.includes("PlanLocalModelPicker"), "Plan Mode composes local model discovery inline");
   assert(planLocalModelPicker.includes("PLAN_MODEL_MANUAL_TOGGLE"), "Plan Mode keeps manual local connection as advanced path");

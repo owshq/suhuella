@@ -91,10 +91,28 @@ export class LicensePersistenceUnavailableError extends Error {
   }
 }
 
+export type StripeEventHandlerStatus = "processing" | "completed" | "retryable";
+
+export type StripeEventProcessingDecision =
+  | { action: "process" }
+  | { action: "duplicate" }
+  | { action: "busy" };
+
 export type LicensePersistenceStore = {
   readonly kind: LicensePersistenceKind;
   read(): Promise<LicensePersistenceDocument>;
   write(document: LicensePersistenceDocument): Promise<void>;
+  /** D1-only: INSERT OR IGNORE into stripe_event. Returns true when this pass owns the event. */
+  claimStripeEvent?(eventId: string): Promise<boolean>;
+  isStripeEventHandlerReady?(): Promise<boolean>;
+  beginStripeEventHandler?(
+    eventId: string,
+    handler: string,
+    leaseMs: number,
+  ): Promise<StripeEventProcessingDecision>;
+  completeStripeEventHandler?(eventId: string): Promise<void>;
+  failStripeEventHandler?(eventId: string, error: string): Promise<void>;
+  readStripeEventHandlerStatus?(eventId: string): Promise<StripeEventHandlerStatus | null>;
 };
 
 export function emptyLicensePersistenceDocument(): LicensePersistenceDocument {

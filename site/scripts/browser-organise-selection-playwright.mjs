@@ -25,12 +25,12 @@ async function main() {
     throw new Error("Plan Mode still shows the dead-end banner");
   }
 
-  await page.getByPlaceholder("What should happen?").waitFor({ timeout: 4000 });
-  await page.getByRole("button", { name: "Prepare Plan" }).waitFor({ timeout: 2000 });
+  await page.getByPlaceholder(/What should happen/i).waitFor({ timeout: 20000 });
+  await page.getByRole("button", { name: "Prepare Plan", exact: true }).waitFor({ timeout: 10000 });
   await page.getByRole("button", { name: "Open Sources" }).waitFor({ timeout: 2000 });
 
-  await page.getByRole("button", { name: "Move invoices in dev-data" }).click();
-  await page.getByRole("button", { name: "Prepare Plan" }).click();
+  await page.getByRole("button", { name: "Prepare Plan: Group by category" }).click();
+  await page.getByRole("button", { name: "Prepare Plan", exact: true }).click();
 
   const planReady = await page
     .getByRole("button", { name: "Save plan" })

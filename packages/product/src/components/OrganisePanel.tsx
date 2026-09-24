@@ -9,11 +9,11 @@ import {
   joinFolderFile,
   knowledgeItemsFromDroppedFiles,
   organiseEmptyCopy,
-  ORGANISE_EMPTY_PLAN_PROMISE,
   ORGANISE_TRUST_LINE,
   ORGANISE_OPEN_SOURCES,
   ORGANISE_SAVED_WORKFLOWS,
   ORGANISE_WORKFLOW_PROMISE,
+  PLAN_PROMPT_ACTIONS,
 } from '../lib/organise-copy'
 import {
   recentWorkflows,
@@ -62,7 +62,6 @@ import {
   PLAN_DUPLICATE_LABEL,
   PLAN_LIBRARY_LABEL,
   PLAN_PREPARE_LABEL,
-  PLAN_PROMPT_EXAMPLES,
   PLAN_PROMPT_PLACEHOLDER,
   PLAN_RUN_LABEL,
   PLAN_SCOPE_UNRESOLVED,
@@ -1367,6 +1366,21 @@ export function OrganisePanel({
                 className="w-full resize-none rounded-2xl border border-[var(--sidebar-line)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--app-fg)] outline-none"
               />
             </label>
+            <div className="flex flex-wrap gap-1.5">
+              {PLAN_PROMPT_ACTIONS.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  disabled={busy}
+                  aria-label={`${PLAN_PREPARE_LABEL}: ${action.label}`}
+                  title={action.prompt}
+                  onClick={() => setPromptDraft(action.prompt)}
+                  className="rounded-full border border-[var(--sidebar-line)] bg-[var(--app-bg)] px-2.5 py-1 text-[12px] font-medium text-[var(--app-fg)] opacity-70 transition hover:border-[var(--brand-accent)] hover:opacity-100 disabled:opacity-40"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -1420,23 +1434,8 @@ export function OrganisePanel({
               </button>
             </div>
             {scopeNotice ? <p className="text-[13px] text-[var(--app-fg)] opacity-70">{scopeNotice}</p> : null}
-            <p className="text-[13px] text-[var(--app-fg)] opacity-55">{ORGANISE_EMPTY_PLAN_PROMISE}</p>
           </form>
           {savedPlanList}
-          <ul className="space-y-1 text-[13px] text-[var(--app-fg)] opacity-45">
-            {PLAN_PROMPT_EXAMPLES.map((example) => (
-              <li key={example}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => setPromptDraft(example)}
-                  className="text-left hover:text-[var(--app-fg)] hover:opacity-80 disabled:opacity-40"
-                >
-                  {example}
-                </button>
-              </li>
-            ))}
-          </ul>
           {onOpenSources ? (
             <button
               type="button"

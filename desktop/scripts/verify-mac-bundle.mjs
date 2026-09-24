@@ -4,11 +4,14 @@
  * Publish requires `npm run validate-release -- --platform mac` (commercial signing when enabled; pre-rc integrity when deferred).
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { brandIdentity, resolveBrandId } from "../../brands/select.mjs";
-import { isDeveloperIdIdentity, resolveMacCodesignIdentity } from "./mac-signing.mjs";
+import {
+  assertGatekeeperAllowsPipeline,
+  assessMacGatekeeper,
+  logGatekeeperAssessment,
+} from "../../scripts/mac-gatekeeper-assess.mjs";
 
 const desktopRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const brandId = resolveBrandId();
@@ -53,18 +56,6 @@ if (!new RegExp(`Identifier=${identity.desktopAppId.replace(/\./g, "\\.")}`).tes
   console.warn(details);
 }
 
-const assess = run("spctl", ["--assess", "--type", "execute", "-vv", appPath]);
-const assessOut = `${assess.stderr}\n${assess.stdout}`;
-console.log(assessOut.trim());
-
-const signingIdentity = resolveMacCodesignIdentity();
-if (isDeveloperIdIdentity(signingIdentity) && assess.status !== 0) {
-  fail("spctl --assess FAILED for Developer ID build");
-}
-if (!isDeveloperIdIdentity(signingIdentity)) {
-  console.log(
-    "OK   codesign verify PASS; spctl cannot PASS until Developer ID + notarization (no identity on this machine)",
-  );
-} else if (assess.status === 0) {
-  console.log("OK   spctl --assess");
-}
+const gatekeeper = assessMacGatekeeper(appPath);
+logGatekeeperAssessment(gatekeeper, { prefix: "OK   " });
+assertGatekeeperAllowsPipeline(gatekeeper);

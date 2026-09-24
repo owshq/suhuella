@@ -17,7 +17,7 @@ jobs:
     env:
       # Skips site/wrangler version matrix in brands/run-release-gate only — not a publish bypass.
       SUHUELLA_DESKTOP_CI: "1"
-      SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS: ${{ secrets.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS }}
+      # SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS: resolved in "Resolve license verify public keys" (repo secret or ephemeral CI).
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,12 +57,20 @@ jobs:
           "tag=v$($manifest.version)" >> $env:GITHUB_OUTPUT
 
       - name: Resolve license verify public keys
+        id: license_keys
+        env:
+          SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS: ${{ secrets.SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS }}
         shell: pwsh
         run: |
           if (-not $env:SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS) {
-            Write-Warning "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS secret unset — ephemeral test SPKI for candidate build only (not production Worker keys)"
+            Write-Warning "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS secret unset — ephemeral test SPKI for CI artifact only (NOT production Worker keys, NOT GitHub Release upload)"
             $pub = node desktop/scripts/emit-candidate-license-public-key.mjs
             "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS=$pub" >> $env:GITHUB_ENV
+            "SUHUELLA_LICENSE_KEYS_EPHEMERAL=1" >> $env:GITHUB_ENV
+            "ephemeral=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS=$env:SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS" >> $env:GITHUB_ENV
+            "ephemeral=false" >> $env:GITHUB_OUTPUT
           }
 
       - name: Build Windows installer
@@ -107,10 +115,59 @@ jobs:
           "path=$sidecar" >> $env:GITHUB_OUTPUT
           "digest=$hash" >> $env:GITHUB_OUTPUT
 
+      - name: Pre-rc validate Windows candidate
+        shell: pwsh
+        run: |
+          $exeName = "${{ steps.release.outputs.win_name }}"
+          $destDir = "desktop/.build/suhuella/release"
+          New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+          Copy-Item "${{ steps.installer.outputs.path }}" (Join-Path $destDir $exeName)
+          node scripts/validate-release.mjs --platform windows
+
+      - name: Write CANDIDATE-windows.json
+        shell: pwsh
+        run: |
+          $exePath = "${{ steps.installer.outputs.path }}"
+          $size = (Get-Item $exePath).Length
+          $hash = "${{ steps.sha.outputs.digest }}"
+          $ephemeral = "${{ steps.license_keys.outputs.ephemeral }}"
+          $reportDir = "desktop/.build/suhuella"
+          New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+          $report = @{
+            status = "candidate-ready-not-published"
+            platform = "windows"
+            version = "${{ steps.release.outputs.version }}"
+            filename = "${{ steps.release.outputs.win_name }}"
+            size = $size
+            sha256 = $hash
+            licenseKeysEphemeral = ($ephemeral -eq "true")
+            validation = "PreRcReleaseValidation PASS — partial technical validation only"
+            notes = @(
+              "Not published — release.json / download aliases unchanged",
+              "SmartScreen warning expected — More info → Run anyway",
+              "Functional smoke: gift license + Plan Mode on Windows machine or CI artifact install"
+            )
+          } | ConvertTo-Json -Depth 4
+          Set-Content -Path (Join-Path $reportDir "CANDIDATE-windows.json") -Value $report
+
+      - name: Upload candidate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuHuella-CANDIDATE-windows-report
+          path: desktop/.build/suhuella/CANDIDATE-windows.json
+          retention-days: 14
+
       - name: Attach to GitHub Release
+        if: steps.license_keys.outputs.ephemeral != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
           gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.installer.outputs.path }}" --clobber
           gh release upload "${{ steps.release.outputs.tag }}" "${{ steps.sha.outputs.path }}" --clobber
+
+      - name: Skip GitHub Release upload (ephemeral license keys)
+        if: steps.license_keys.outputs.ephemeral == 'true'
+        shell: pwsh
+        run: |
+          Write-Warning "Ephemeral license keys — installer kept as Actions artifact only. Configure SUHUELLA_LICENSE_VERIFY_PUBLIC_KEYS secret (production SPKI) before GitHub Release upload."

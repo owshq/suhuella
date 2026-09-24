@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { BusinessCheckoutPageContent } from "@/components/BusinessCheckoutPageContent";
 import { getBusinessPricingConfig, monthlyAmountCents } from "@/lib/business-config";
 import { isBusinessCheckoutPubliclyEnabled } from "@/lib/business/checkout";
@@ -13,12 +14,14 @@ export const metadata: Metadata = {
 export default function BusinessCheckoutPage() {
   const pricing = getBusinessPricingConfig();
   return (
-    <BusinessCheckoutPageContent
-      checkoutEnabled={isBusinessCheckoutPubliclyEnabled()}
-      pricing={{
-        ...pricing,
-        minMonthlyCents: monthlyAmountCents(pricing.minSeats, pricing),
-      }}
-    />
+    <Suspense fallback={null}>
+      <BusinessCheckoutPageContent
+        checkoutEnabled={isBusinessCheckoutPubliclyEnabled()}
+        pricing={{
+          ...pricing,
+          minMonthlyCents: monthlyAmountCents(pricing.minSeats, pricing),
+        }}
+      />
+    </Suspense>
   );
 }

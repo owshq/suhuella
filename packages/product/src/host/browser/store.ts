@@ -30,6 +30,11 @@ import {
   demoFolderDescriptors,
   isBrowserDevHost,
 } from "./dev-host";
+import {
+  buildDemoFoldersFromVfs,
+  devDemoVfsFiles,
+  resetDevDemoVfs,
+} from "./dev-demo-vfs";
 import { idbClear, idbDelete, idbGet, idbGetAll, idbKeys, idbSet, STORE } from "./idb";
 import type {
   IndexedFolderEntry,
@@ -369,10 +374,43 @@ async function finishSourceIndex(
   }
 }
 
+export async function syncDevDemoSourceFromVfs(): Promise<WebKnowledgeSource | null> {
+  if (!isBrowserDevHost()) return null;
+  const existing = (await listSources()).find(
+    (source) => source.id === DEV_DEMO_SOURCE_ID || source.wellKnownToken === DEV_DEMO_HINT,
+  );
+  if (!existing) return null;
+  const id = existing.id;
+  const files = devDemoVfsFiles().map((file) =>
+    file.sourceId === id ? file : { ...file, id: `${id}:${file.relativePath}`, sourceId: id },
+  );
+  const folders = buildDemoFoldersFromVfs(files, id);
+  const now = new Date().toISOString();
+  const source: WebKnowledgeSource = {
+    ...existing,
+    fileCount: files.length,
+    folderCount: folders.length,
+    bytes: files.reduce((sum, file) => sum + file.size, 0),
+    lastIndexed: now,
+    lastCheckedAt: now,
+    lastStateChangeAt: now,
+    status: "ready",
+    access: "limited",
+    permission: "granted",
+    availabilityReason: null,
+  };
+  rememberSource(source);
+  await idbSet(STORE.sources, id, source);
+  await replaceSourceKnowledge(id, folders, files);
+  notifySourcesChanged();
+  return source;
+}
+
 export async function connectDemoSource(): Promise<WebKnowledgeSource> {
   if (!isBrowserDevHost()) {
     throw new Error("Demo sources are only available on localhost.");
   }
+  resetDevDemoVfs();
   const existing = (await listSources()).find(
     (source) => source.id === DEV_DEMO_SOURCE_ID || source.wellKnownToken === DEV_DEMO_HINT,
   );
@@ -600,6 +638,9 @@ export async function refreshSource(sourceId: string): Promise<WebKnowledgeSourc
   const source = await idbGet<WebKnowledgeSource>(STORE.sources, sourceId);
   if (!source) return null;
   if (source.access === "limited") {
+    if (source.id === DEV_DEMO_SOURCE_ID || source.wellKnownToken === DEV_DEMO_HINT) {
+      return syncDevDemoSourceFromVfs();
+    }
     const limited = applySourceHealth(source, {
       status: "ready",
       availabilityReason: null,

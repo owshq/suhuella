@@ -43,7 +43,7 @@ function tryRemoteMigrationList(): { ok: true; output: string } | { ok: false; r
 
 function runPartnerProductionBlockersCheck(): void {
   const wrangler = readWrangler();
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout stays off in wrangler");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout is enabled in wrangler");
   assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on in wrangler");
 
   for (const migration of PARTNER_MIGRATIONS) {
@@ -56,7 +56,7 @@ function runPartnerProductionBlockersCheck(): void {
   console.log("B1 (D1 0009–0010 remote): operator must confirm `migrations list --remote` shows none pending.");
   console.log("");
   console.log("Checkout flags:");
-  console.log("  PARTNER_CHECKOUT_ENABLED=false (partner annual still gated)");
+  console.log("  PARTNER_CHECKOUT_ENABLED=true (partner annual live when Stripe verified)");
   console.log("  PAID_CHECKOUT_ENABLED=true (personal Lifetime/Monthly live on suhuella.com)");
   console.log("");
   console.log("Operator steps still manual:");

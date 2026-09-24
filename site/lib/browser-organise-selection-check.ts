@@ -29,7 +29,7 @@ function runBrowserOrganiseSelectionCheck(): void {
   const host = readFileSync(join(process.cwd(), "../packages/product/src/host/install-browser-host.ts"), "utf8");
 
   assert(!organise.includes("This browser cannot choose documents."), "Organise does not show the dead-end banner by default");
-  assert(organise.includes("PLAN_PROMPT_EXAMPLES"), "Plan Mode empty state offers prompt examples");
+  assert(organise.includes("PLAN_PROMPT_ACTIONS"), "Plan Mode empty state offers Prepare Plan actions");
   assert(organise.includes("ORGANISE_OPEN_SOURCES"), "Plan Mode keeps Open Sources secondary");
   assert(organise.includes("ORGANISE_OPEN_SOURCES"), "Organise offers Open Sources");
   assert(!organise.includes("Choose files"), "Organise empty state does not say Choose files");

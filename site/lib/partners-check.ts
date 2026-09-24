@@ -950,7 +950,7 @@ async function main() {
     "utf8",
   );
   assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout stays off");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout is enabled in wrangler");
   assert(isPartnerAdminCreateOrigin("gift") === true, "gift is an admin create origin");
   assert(isPartnerAdminCreateOrigin("stripe") === false, "stripe is not an admin create origin");
   assert(PartnerError.name === "PartnerError", "PartnerError exports");

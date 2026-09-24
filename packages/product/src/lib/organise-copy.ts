@@ -29,6 +29,43 @@ export const ORGANISE_EMPTY_LEAD_BROWSER =
 export const ORGANISE_EMPTY_PLAN_PROMISE = productCopy(
   'SuHuella will prepare a Plan first. Nothing moves until you confirm it.',
 )
+export const PLAN_COMPOSER_PLACEHOLDER = productCopy(
+  'What should happen? SuHuella prepares a Plan first — nothing moves until you confirm.',
+)
+
+export type PlanPromptAction = {
+  id: string
+  label: string
+  prompt: string
+}
+
+/** One-click starters for Prepare Plan — analyse granted sources, then review before Confirm. */
+export const PLAN_PROMPT_ACTIONS: PlanPromptAction[] = [
+  {
+    id: 'review-naming',
+    label: 'Review naming',
+    prompt:
+      'Review file names in dev-data — flag inconsistent names and suggest clearer ones',
+  },
+  {
+    id: 'group-by-type',
+    label: 'Group by file type',
+    prompt: 'Group files in dev-data by file type into folders',
+  },
+  {
+    id: 'group-by-category',
+    label: 'Group by category',
+    prompt: 'Move invoices in dev-data into category folders',
+  },
+  {
+    id: 'group-category-and-type',
+    label: 'Category and type',
+    prompt: 'Organise dev-data by document category, then by file type within each folder',
+  },
+]
+
+/** @deprecated Use PLAN_PROMPT_ACTIONS */
+export const PLAN_PROMPT_EXAMPLES = PLAN_PROMPT_ACTIONS.map((action) => action.prompt)
 export const ORGANISE_TRUST_LINE = 'Nothing moves until you confirm.'
 export { ORGANISE_ADD_SOURCE, ORGANISE_OPEN_SOURCES } from './browser-organise-selection.ts'
 /** @deprecated Use ORGANISE_ADD_SOURCE */
@@ -152,6 +189,15 @@ export function runOrganiseEmptyChecks(): void {
   }
   if (!ORGANISE_EMPTY_PLAN_PROMISE.includes('Plan') || !/confirm/i.test(ORGANISE_EMPTY_PLAN_PROMISE)) {
     throw new Error('empty Organise must say a Plan comes first and nothing moves until confirm')
+  }
+  if (!PLAN_COMPOSER_PLACEHOLDER.includes('What should happen') || !/confirm/i.test(PLAN_COMPOSER_PLACEHOLDER)) {
+    throw new Error('composer placeholder must combine the prompt and confirm promise')
+  }
+  if (PLAN_PROMPT_ACTIONS.length < 3 || !PLAN_PROMPT_ACTIONS.some((action) => /naming|name/i.test(action.prompt))) {
+    throw new Error('Prepare Plan actions must include naming review')
+  }
+  if (!PLAN_PROMPT_ACTIONS.some((action) => /file type|category/i.test(action.prompt))) {
+    throw new Error('Prepare Plan actions must include grouping by type or category')
   }
 }
 export const ORGANISE_PRIMARY_CTA = 'Confirm Plan'

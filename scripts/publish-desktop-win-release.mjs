@@ -15,6 +15,7 @@ import {
   assertCommercialSigningEnabledForPublish,
   stampDistributionMetadata,
 } from "./commercial-signing.mjs";
+import { assertProductionLicenseKeysForPublish } from "../desktop/scripts/license-key-provenance.mjs";
 
 runBuildHealthGate();
 
@@ -120,6 +121,7 @@ async function smoke() {
 
 async function main() {
   assertCommercialSigningEnabledForPublish();
+  assertProductionLicenseKeysForPublish("publish:desktop-win");
   console.log(`Publishing Windows → GitHub Release ${tag}`);
   run(process.execPath, ["scripts/validate-release.mjs", "--platform", "windows"]);
   const { winUrl, macUrl, winSha256, winSize, winName } = await releaseAssets();

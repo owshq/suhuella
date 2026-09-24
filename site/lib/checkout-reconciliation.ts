@@ -1,5 +1,9 @@
 import { fulfillLicenseFromCheckout, type FulfilledLicense } from "./license-fulfillment.ts";
-import { readLicensePersistence, withLicensePersistence } from "./license-persistence/store.ts";
+import {
+  getLicensePersistenceStore,
+  readLicensePersistence,
+  withLicensePersistence,
+} from "./license-persistence/store.ts";
 import {
   configuredPriceId,
   loadCatalogPrice,
@@ -77,4 +81,21 @@ export async function rememberStripeEvent(eventId: string): Promise<void> {
     if (document.stripeEvents.some((event) => event.id === id)) return;
     document.stripeEvents.push({ id, processedAt: new Date().toISOString() });
   });
+}
+
+/** D1-backed idempotency claim. Returns true only for the first handler pass on this event id. */
+export async function claimStripeEventId(eventId: string): Promise<boolean> {
+  const id = eventId.trim();
+  if (!id) return false;
+  const store = await getLicensePersistenceStore();
+  if (store.claimStripeEvent) {
+    return store.claimStripeEvent(id);
+  }
+  let claimed = false;
+  await withLicensePersistence((document) => {
+    if (document.stripeEvents.some((event) => event.id === id)) return;
+    document.stripeEvents.push({ id, processedAt: new Date().toISOString() });
+    claimed = true;
+  });
+  return claimed;
 }

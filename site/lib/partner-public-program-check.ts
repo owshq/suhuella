@@ -26,6 +26,7 @@ import {
 import { rejectClientAuthorityFields } from "./partners/http-actor.ts";
 import { legacyApplicationMigrationReport } from "./partners/legacy-application-migration.ts";
 import { isPlatformPublicPartnerApiHost } from "./partners/platform-public-api.ts";
+import { createPartnerCheckoutSession } from "./partners/checkout.ts";
 import { isPartnerCheckoutPubliclyEnabled } from "./partners/program-journey.ts";
 import {
   createMemoryPartnerStore,
@@ -111,6 +112,25 @@ async function runPartnerPublicProgramCheck(): Promise<void> {
       false,
     "personal checkout on does not open partner checkout",
   );
+
+  {
+    let stripeFetchCalls = 0;
+    const fetchImpl: typeof fetch = async (...args) => {
+      stripeFetchCalls += 1;
+      throw new Error("partner checkout must not call Stripe while flags are off");
+    };
+    process.env.PAID_CHECKOUT_ENABLED = "true";
+    process.env.PARTNER_CHECKOUT_ENABLED = "false";
+    const closed = await createPartnerCheckoutSession({
+      email: "verified-applicant@example.com",
+      origin: "https://suhuella.com",
+      fetchImpl,
+    });
+    assert(!closed.ok && closed.error === "checkout_closed", "authenticated partner email still blocked when flag off");
+    assert(stripeFetchCalls === 0, "partner checkout_closed does not call Stripe");
+    process.env.PAID_CHECKOUT_ENABLED = "false";
+    process.env.PARTNER_CHECKOUT_ENABLED = "false";
+  }
 
   {
     const headers = new Headers({ host: "app.partner.example" });
@@ -471,8 +491,14 @@ async function runPartnerPublicProgramCheck(): Promise<void> {
     assert(duplicateRejected, "local D1 enforces unique normalized_email");
   }
 
+  const partnerCheckoutRoute = readFileSync(
+    path.join(siteRoot, "app/api/partners/checkout/route.ts"),
+    "utf8",
+  );
+  assert(partnerCheckoutRoute.includes("rawCardRejection"), "partner checkout rejects PAN before Stripe session");
+
   const wrangler = readFileSync(path.join(siteRoot, "wrangler.jsonc"), "utf8");
-  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "false"'), "partner checkout flag stays false");
+  assert(wrangler.includes('"PARTNER_CHECKOUT_ENABLED": "true"'), "partner checkout flag is enabled in wrangler");
   assert(wrangler.includes('"PAID_CHECKOUT_ENABLED": "true"'), "personal checkout is on");
 
   if (previous.NODE_ENV === undefined) delete process.env.NODE_ENV;

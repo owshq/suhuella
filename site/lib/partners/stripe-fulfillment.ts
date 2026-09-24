@@ -1,4 +1,8 @@
-import { stripeEventAlreadyHandled, rememberStripeEvent } from "../checkout-reconciliation.ts";
+import {
+  beginStripeEventProcessing,
+  completeStripeEventProcessing,
+  failStripeEventProcessing,
+} from "../stripe-event-processing.ts";
 import { configuredPriceId, loadCatalogPrice } from "../stripe-catalog.ts";
 import { findPartnerApplication } from "./application-store.ts";
 import {
@@ -95,19 +99,22 @@ export async function applyPartnerStripeWebhook(
 
   const eventId = event.id?.trim() ?? "";
   if (!eventId) return { ok: false, error: "server_error" };
-  if (await stripeEventAlreadyHandled(eventId)) {
-    return { ok: true, fulfilled: false, duplicate: true };
-  }
+  const begun = await beginStripeEventProcessing(eventId, "partner");
+  if (begun.action === "duplicate") return { ok: true, fulfilled: false, duplicate: true };
+  if (begun.action === "busy") return { ok: false, error: "busy" };
 
   const secretKey = input.secretKey.trim();
   const fetchImpl = input.fetchImpl ?? fetch;
-  if (!secretKey) return { ok: false, error: "server_error" };
+  if (!secretKey) {
+    await failStripeEventProcessing(eventId, "missing_stripe_secret");
+    return { ok: false, error: "server_error" };
+  }
 
   const object = event.data?.object ?? {};
   const metadata = metadataOf(object);
 
   if (event.type === "invoice.payment_failed") {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: false };
   }
 
@@ -122,14 +129,14 @@ export async function applyPartnerStripeWebhook(
     if (ended && subscriptionId) {
       await suspendStripePartnerSubscription(subscriptionId);
     }
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: ended };
   }
 
   if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
     const subscriptionId = typeof object.subscription === "string" ? object.subscription : "";
     if (!subscriptionId) {
-      await rememberStripeEvent(eventId);
+      await completeStripeEventProcessing(eventId);
       return { ok: true, fulfilled: false };
     }
     const subscription = await stripeGet(
@@ -137,14 +144,17 @@ export async function applyPartnerStripeWebhook(
       `subscriptions/${encodeURIComponent(subscriptionId)}`,
       fetchImpl,
     );
-    if (!subscription) return { ok: false, error: "server_error" };
+    if (!subscription) {
+      await failStripeEventProcessing(eventId, "subscription_unavailable");
+      return { ok: false, error: "server_error" };
+    }
     const subMeta = metadataOf(subscription);
     if (!isPartnerMetadata(subMeta) && !isPartnerMetadata(metadata)) {
-      await rememberStripeEvent(eventId);
+      await completeStripeEventProcessing(eventId);
       return { ok: true, fulfilled: false };
     }
     if (subscription.status !== "active") {
-      await rememberStripeEvent(eventId);
+      await completeStripeEventProcessing(eventId);
       return { ok: true, fulfilled: false };
     }
     const email = subMeta.email || metadata.email || "";
@@ -154,7 +164,7 @@ export async function applyPartnerStripeWebhook(
     const existing = await ledger.findFulfillment(subscriptionId);
     if (!existing?.partnerId) {
       if (!email || !customerId) {
-        await rememberStripeEvent(eventId);
+        await completeStripeEventProcessing(eventId);
         return { ok: true, fulfilled: false };
       }
       const claim = await ledger.claimFulfillment({
@@ -182,41 +192,50 @@ export async function applyPartnerStripeWebhook(
     } else {
       await refreshStripePartnerPeriod({ stripeSubscriptionId: subscriptionId, validUntil });
     }
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: true };
   }
 
   if (event.type !== "checkout.session.completed") {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: false };
   }
 
   const sessionId = typeof object.id === "string" ? object.id : "";
-  if (!sessionId) return { ok: false, error: "server_error" };
+  if (!sessionId) {
+    await failStripeEventProcessing(eventId, "missing_session_id");
+    return { ok: false, error: "server_error" };
+  }
   const session = await stripeGet(
     secretKey,
     `checkout/sessions/${encodeURIComponent(sessionId)}?expand[]=subscription&expand[]=line_items`,
     fetchImpl,
   );
-  if (!session) return { ok: false, error: "server_error" };
+  if (!session) {
+    await failStripeEventProcessing(eventId, "stripe_session_unavailable");
+    return { ok: false, error: "server_error" };
+  }
   if (session.payment_status !== "paid") {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: false };
   }
   const sessionMeta = metadataOf(session);
   if (!isPartnerMetadata(sessionMeta)) {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: false };
   }
   const lineItems = session.line_items as { data?: Array<{ price?: { id?: string } | string }> } | undefined;
   const priceRef = lineItems?.data?.[0]?.price;
   const priceId = typeof priceRef === "string" ? priceRef : priceRef?.id ?? "";
   if (!priceId || priceId !== configuredPriceId("partner")) {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: false };
   }
   const catalog = await loadCatalogPrice("partner", secretKey);
-  if (!catalog.ok) return { ok: false, error: "server_error" };
+  if (!catalog.ok) {
+    await failStripeEventProcessing(eventId, "catalog_unavailable");
+    return { ok: false, error: "server_error" };
+  }
 
   const subscription = session.subscription as Record<string, unknown> | string | null | undefined;
   const subscriptionId = typeof subscription === "string" ? subscription : subscription?.id;
@@ -232,6 +251,7 @@ export async function applyPartnerStripeWebhook(
     (typeof session.customer_email === "string" ? session.customer_email : "") ||
     "";
   if (typeof subscriptionId !== "string" || !subscriptionId || !customerId || !email) {
+    await failStripeEventProcessing(eventId, "missing_partner_checkout_refs");
     return { ok: false, error: "server_error" };
   }
   let subscriptionStatus =
@@ -242,7 +262,7 @@ export async function applyPartnerStripeWebhook(
     const fetched = await stripeGet(secretKey, `subscriptions/${encodeURIComponent(subscriptionId)}`, fetchImpl);
     subscriptionStatus = typeof fetched?.status === "string" ? fetched.status : "";
     if (subscriptionStatus !== "active") {
-      await rememberStripeEvent(eventId);
+      await completeStripeEventProcessing(eventId);
       return { ok: true, fulfilled: false };
     }
   }
@@ -256,7 +276,7 @@ export async function applyPartnerStripeWebhook(
   });
   if (claim === "busy") return { ok: false, error: "busy" };
   if (claim === "fulfilled") {
-    await rememberStripeEvent(eventId);
+    await completeStripeEventProcessing(eventId);
     return { ok: true, fulfilled: true, duplicate: true };
   }
 
@@ -280,8 +300,9 @@ export async function applyPartnerStripeWebhook(
     await ledger.completeAttempt(email);
   } catch {
     await ledger.releaseUnfinishedClaim(subscriptionId);
+    await failStripeEventProcessing(eventId, "partner_provision_failed");
     return { ok: false, error: "server_error" };
   }
-  await rememberStripeEvent(eventId);
+  await completeStripeEventProcessing(eventId);
   return { ok: true, fulfilled: true };
 }
